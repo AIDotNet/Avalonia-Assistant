@@ -11,13 +11,8 @@ namespace Desktop.Assistant.Services
 
         IObservable<string> ParticipantLoggedOut { get; }
 
-        Task<SuccessfulLoginResponse> LoginAsync(string username, string passcode);
-
         Task<SuccessfulLoginResponse> RegisterAndLogIn(string username, string passcode);
 
-        Task LogoutAsync();
-
-        Task ConnectAsync();
 
         IObservable<MessagePayload> MessageReceived { get; }
 

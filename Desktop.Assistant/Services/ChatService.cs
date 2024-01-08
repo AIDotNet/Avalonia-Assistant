@@ -41,17 +41,6 @@ namespace Desktop.Assistant.Services
             newMessageReceivedSubject.OnNext(message);
         }
 
-        public async Task ConnectAsync()
-        {
-       
-        }
-
-        public async Task<SuccessfulLoginResponse> LoginAsync(string username, string passcode)
-        {
-            var result = new SuccessfulLoginResponse();
-            ProcessLogInResponse(result);
-            return result;
-        }
 
         public async Task<SuccessfulLoginResponse> RegisterAndLogIn(string username, string passcode)
         {
@@ -68,12 +57,7 @@ namespace Desktop.Assistant.Services
         
         }
 
-        public async Task LogoutAsync()
-        {
-           
-            Messages.Clear();
-        }
-
+   
         private void ProcessLogInResponse(SuccessfulLoginResponse slr)
         {
             currentUser = slr.User;
