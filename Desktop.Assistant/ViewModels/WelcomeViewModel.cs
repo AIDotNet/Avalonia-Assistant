@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using System.Windows.Input;
 using Desktop.Assistant.Domain.Models;
 using Desktop.Assistant.Services;
+using Desktop.Assistant.Views;
 using ReactiveUI;
 
 namespace Desktop.Assistant.ViewModels
@@ -45,7 +46,7 @@ namespace Desktop.Assistant.ViewModels
         {
             try
             {
-              
+                Router.Navigate.Execute(new ChatViewModel(chatService, Router));
             }
             catch (Exception e)
             {
@@ -55,7 +56,7 @@ namespace Desktop.Assistant.ViewModels
         }
 
         //Fields
-        private ChatService chatService;
+        private ChatService chatService = new ChatService();
         private string key;
         private string model;
         private string endpoint;

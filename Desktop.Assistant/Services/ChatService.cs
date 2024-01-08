@@ -24,10 +24,8 @@ namespace Desktop.Assistant.Services
         public ObservableCollection<MessagePayload> Messages { get; private set; } = new ObservableCollection<MessagePayload>();
 
 
-        public ChatService(string serverUrl)
+        public ChatService()
         {
-          
-
             ParticipantLoggedIn = participantLoggedInSubject.AsObservable();
             ParticipantLoggedOut = participantLoggedOutSubject.AsObservable();
             MessageReceived = newMessageReceivedSubject.AsObservable();

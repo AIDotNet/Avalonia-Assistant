@@ -46,61 +46,24 @@
     </DataTemplate>
 
   </UserControl.DataTemplates>
-  
-    <Grid RowDefinitions="*, Auto">
-        <ScrollViewer HorizontalScrollBarVisibility="Disabled">
-            <ItemsControl ItemsSource="{Binding Messages}" >
-            </ItemsControl>
-        </ScrollViewer>
 
-      <Grid ColumnDefinitions="*, Auto, Auto" Margin="20" Grid.Row="1">
-        <Border Grid.Column="0"
-              MinWidth="350"
-              Background="{DynamicResource EntryBackground}"
-              CornerRadius="5,0,0,5"
-              Padding="5">
+  <Grid RowDefinitions="*, Auto">
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+      <ItemsControl ItemsSource="{Binding Messages}" >
+      </ItemsControl>
+    </ScrollViewer>
 
-          <Grid ColumnDefinitions="Auto, *">
+    <Grid ColumnDefinitions="*, Auto, Auto" Margin="20" Grid.Row="1">
+      <Border Grid.Column="0"
+            MinWidth="350"
+            Background="{DynamicResource EntryBackground}"
+            CornerRadius="5,0,0,5"
+            Padding="5">
 
-            <Button Grid.Column="0"
-                    Command="{Binding DictateMessageCommand}"
-                    Classes="IconButton"
-                    VerticalContentAlignment="Center"
-                    HorizontalContentAlignment="Center"
-                    VerticalAlignment="Center"
-                    Background="Transparent"
-                    BorderBrush="Transparent"
-                    BorderThickness="0">
+        <Grid ColumnDefinitions="Auto, *">
 
-              <Path Fill="White"
-                    Data="{DynamicResource MicrophoneGeometry}"
-                    Margin="0,4,0,0"/>
-            </Button>
-
-            <TextBox TextWrapping="Wrap"
-                     Grid.Column="1"
-                     Classes="ChatMessageComposer"
-                     Text="{Binding NewMessageContent}"
-                     BorderBrush="Transparent"
-                     Background="Transparent"                     
-                     VerticalContentAlignment="Center"
-                     Watermark="说些什么吧..."/>
-          </Grid>
-
-
-
-        </Border>
-
-       
-
-
-        <Border Grid.Column="2" 
-                Background="{DynamicResource EntryBackground}"
-                Margin="2,0,0,0"
-                CornerRadius="0,5,5,0"
-                Padding="5">
-
-          <Button Command="{Binding SendMessageCommand}"
+          <Button Grid.Column="0"
+                  Command="{Binding DictateMessageCommand}"
                   Classes="IconButton"
                   VerticalContentAlignment="Center"
                   HorizontalContentAlignment="Center"
@@ -109,17 +72,75 @@
                   BorderBrush="Transparent"
                   BorderThickness="0">
 
-            <Path Fill="{DynamicResource SystemAccentColor}"
-                  Data="{DynamicResource SendMessageGeometry}"
-                  Margin="0,4,0,0"
-                  Stretch="Uniform"
-                  Height="22"
-                  VerticalAlignment="Center"/>
+            <Path Fill="{DynamicResource MicrophoneDefaultColor}"
+                  Data="{DynamicResource MicrophoneGeometry}"
+                  Margin="0,4,0,0"/>
           </Button>
 
-        </Border>
+          <TextBox TextWrapping="Wrap"
+                   Grid.Column="1"
+                   Classes="ChatMessageComposer"
+                   Text="{Binding NewMessageContent}"
+                   BorderBrush="Transparent"
+                   Background="Transparent"
+                   VerticalContentAlignment="Center"
+                   Watermark="Type something..."/>
+        </Grid>
 
-      </Grid>
+
+
+      </Border>
+
+      <Border Grid.Column="1"
+              Background="{DynamicResource EntryBackground}"
+              Margin="2,0,0,0"
+              Padding="5">
+
+        <Button Command="{Binding AttachImageCommand}"
+                Classes="IconButton"
+                VerticalContentAlignment="Center"
+                HorizontalContentAlignment="Center"
+                VerticalAlignment="Center"
+                Background="Transparent"
+                BorderBrush="Transparent"
+                BorderThickness="0">
+
+          <Path Fill="White"
+                Data="{DynamicResource ImageFileGeometry}"
+                Margin="0,4,0,0"
+                Stretch="Uniform"
+                Height="22"
+                VerticalAlignment="Center"/>
+        </Button>
+
+      </Border>
+
+
+      <Border Grid.Column="2"
+              Background="{DynamicResource EntryBackground}"
+              Margin="2,0,0,0"
+              CornerRadius="0,5,5,0"
+              Padding="5">
+
+        <Button Command="{Binding SendMessageCommand}"
+                Classes="IconButton"
+                VerticalContentAlignment="Center"
+                HorizontalContentAlignment="Center"
+                VerticalAlignment="Center"
+                Background="Transparent"
+                BorderBrush="Transparent"
+                BorderThickness="0">
+
+          <Path Fill="{DynamicResource SystemAccentColor}"
+                Data="{DynamicResource SendMessageGeometry}"
+                Margin="0,4,0,0"
+                Stretch="Uniform"
+                Height="22"
+                VerticalAlignment="Center"/>
+        </Button>
+
+      </Border>
+
     </Grid>
-    
+  </Grid>
 </UserControl>
