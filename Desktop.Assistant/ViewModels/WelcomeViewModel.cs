@@ -5,7 +5,6 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using Desktop.Assistant.Services;
-using Microsoft.AspNetCore.SignalR.Client;
 using ReactiveUI;
 
 namespace Desktop.Assistant.ViewModels

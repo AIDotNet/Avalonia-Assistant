@@ -1,5 +1,4 @@
 ﻿using Desktop.Assistant.Domain.Models;
-using Microsoft.AspNetCore.SignalR.Client;
 using System;
 using System.Threading.Tasks;
 
@@ -7,7 +6,6 @@ namespace Desktop.Assistant.Services
 {
     public interface IChatService
     {
-        IObservable<HubConnectionState> ConnectionState { get; }
 
         IObservable<string> ParticipantLoggedIn { get; }
 
