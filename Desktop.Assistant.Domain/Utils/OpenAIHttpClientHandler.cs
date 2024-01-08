@@ -16,19 +16,20 @@ namespace Desktop.Assistant.Domain.Utils
         {
             if (request.RequestUri.LocalPath == "/v1/chat/completions")
             {
-                string pattern = @"^(https?://)?([^/:]+)";
-
-                Match match = Regex.Match(OpenAIOption.EndPoint, pattern);
+                Regex regex = new Regex(@"(https?)://([^/]+)/(.*)");
+                Match match = regex.Match(OpenAIOption.EndPoint);
                 if (match.Success)
                 {
+                    string xieyi = match.Groups[1].Value;
                     string host = match.Groups[2].Value;
+                    string route = match.Groups[3].Value;
                     //替换代理
                     UriBuilder uriBuilder = new UriBuilder(request.RequestUri)
                     {
                         // 这里是你要修改的 URL
-                        Scheme = OpenAIOption.EndPoint,
+                        Scheme =$"{xieyi}://{host}/",
                         Host = host,
-                        Path = "v1/chat/completions",
+                        Path = route+"v1/chat/completions",
                     };
                     request.RequestUri = uriBuilder.Uri;
                 }
