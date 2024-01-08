@@ -36,10 +36,7 @@ namespace Desktop.Assistant.ViewModels
             set => this.RaiseAndSetIfChanged(ref model, value);
         }
 
-
         public ICommand CompleteCommand { get; private set; }
-
-      
 
         public WelcomeViewModel(RoutingState router) : base(router)
         {
@@ -65,6 +62,10 @@ namespace Desktop.Assistant.ViewModels
                 openAIModel.Model = Model;
                 var lines = JsonConvert.SerializeObject(openAIModel);
                 File.WriteAllText(file, lines);
+                //存储变量后面使用
+                OpenAIOption.EndPoint = Endpoint;
+                OpenAIOption.Key = Key;
+                OpenAIOption.Model = Model;
 
                 Router.Navigate.Execute(new ChatViewModel(chatService, Router));
             }

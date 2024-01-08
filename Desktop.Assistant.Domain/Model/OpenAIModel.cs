@@ -13,4 +13,11 @@ namespace Desktop.Assistant.Domain.Model
         public string Key { get; set; }
         public string Model { get; set; }
     }
+
+    public class OpenAIOption
+    {
+        public static string EndPoint { get; set; }
+        public static string Key { get; set; }
+        public static string Model { get; set; }
+    }
 }
