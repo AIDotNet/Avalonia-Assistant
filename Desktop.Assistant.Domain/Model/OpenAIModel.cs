@@ -9,8 +9,8 @@ namespace Desktop.Assistant.Domain.Model
 {
     public class OpenAIModel
     {
-        public static string EndPoint{ get; set; }
-        public static string Key { get; set; }
-        public static string Model { get; set; }
+        public string EndPoint{ get; set; }
+        public string Key { get; set; }
+        public string Model { get; set; }
     }
 }
