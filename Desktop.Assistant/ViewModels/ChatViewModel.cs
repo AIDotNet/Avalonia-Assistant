@@ -71,7 +71,7 @@ namespace Desktop.Assistant.ViewModels
 
         async Task SendMessage()
         {
-            await chatService.SendMessageAsync(new TextMessage(newMessageContent, chatService.CurrentUser.UserName).ToMessagePayload());
+            //await chatService.SendMessageAsync(new TextMessage(newMessageContent, chatService.CurrentUser.UserName).ToMessagePayload());
             NewMessageContent = string.Empty;
         }
 
