@@ -9,22 +9,22 @@
       
       <TextBlock Text="配置OpenAI"  FontSize="30" FontWeight="Medium" Margin ="50"/>
       
-      <StackPanel Orientation="Horizontal" Grid.Row="1" Spacing="10" Margin="0,5" IsVisible="{Binding !Connected}">
+      <StackPanel Orientation="Horizontal" Grid.Row="1" Spacing="10" Margin="0,5" >
           <TextBlock Text="Endpoint:" MinWidth="120" TextAlignment="Right" VerticalAlignment="Center"/>
           <TextBox Text="{Binding Endpoint}" MinWidth="170" Watermark="https://api.openai.com/" VerticalAlignment="Center"/>
       </StackPanel>
       
-      <StackPanel Orientation="Horizontal" Grid.Row="2" Spacing="10" Margin="0,5" IsVisible="{Binding Connected}">
+      <StackPanel Orientation="Horizontal" Grid.Row="2" Spacing="10" Margin="0,5"  >
           <TextBlock Text="Key:" MinWidth="120" TextAlignment="Right" VerticalAlignment="Center"/>
           <TextBox Text="{Binding Key}" MinWidth="170" VerticalAlignment="Center"/>
       </StackPanel>
       
-      <StackPanel Orientation="Horizontal" Grid.Row="3" Spacing="10" Margin="0,5" IsVisible="{Binding Connected}"> 
+      <StackPanel Orientation="Horizontal" Grid.Row="3" Spacing="10" Margin="0,5"  > 
           <TextBlock Text="Model:" MinWidth="120" TextAlignment="Right" VerticalAlignment="Center"/>
           <TextBox Text="{Binding Model}" MinWidth="170" PasswordChar="*" VerticalAlignment="Center"/>
       </StackPanel>
       
-      <StackPanel Orientation="Horizontal" Grid.Row="4" Spacing="10" Margin="0,8" HorizontalAlignment="Right" IsVisible="{Binding Connected}">
+      <StackPanel Orientation="Horizontal" Grid.Row="4" Spacing="10" Margin="0,8" HorizontalAlignment="Right"  >
          <Button Content="完成"    Click="ClickHandler"/> 
       </StackPanel>
       
