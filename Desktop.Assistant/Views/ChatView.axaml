@@ -55,7 +55,7 @@
 
     <Grid ColumnDefinitions="*, Auto, Auto" Margin="20" Grid.Row="1">
       <Border Grid.Column="0"
-            MinWidth="350"
+            MinWidth="270"
             Background="{DynamicResource EntryBackground}"
             CornerRadius="5,0,0,5"
             Padding="5">
