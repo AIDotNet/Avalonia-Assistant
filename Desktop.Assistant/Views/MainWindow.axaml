@@ -11,9 +11,10 @@
         Width="400" Height="700"
         CanResize="False"
         x:Class="Desktop.Assistant.Views.MainWindow"
-        x:DataType="vm:MainWindowViewModel"
+ 
         WindowStartupLocation="Manual"
         Icon="/Assets/avalonia-logo.ico"
         Title="Xzy">
-  <ContentControl x:Name="ContentArea"/>
+  <rxui:RoutedViewHost Router="{Binding Router}" Margin="0,30,0,0">
+  </rxui:RoutedViewHost>
 </Window>

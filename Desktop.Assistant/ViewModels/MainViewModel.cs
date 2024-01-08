@@ -13,10 +13,14 @@ namespace Desktop.Assistant.ViewModels
 {
     public class MainViewModel : ViewModelBase
     {
-
+        public ICommand GetStartedCommand { get; private set; }
         public MainViewModel(RoutingState router) : base(router) 
         {
-          
+            this.GetStartedCommand = ReactiveCommand.Create(NavigateToLogin);
+        }
+        public void NavigateToLogin()
+        {
+            Router.Navigate.Execute(new WelcomeViewModel(Router));
         }
     }
 }

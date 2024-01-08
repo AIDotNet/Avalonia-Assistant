@@ -26,7 +26,7 @@ namespace Desktop.Assistant.Views
         {
             this.WhenActivated(disposables => { /* Handle view activation etc. */ });
             AvaloniaXamlLoader.Load(this);
-            this.FindControl<ContentControl>("ContentArea").Content = new MainView();
+            //this.FindControl<ContentControl>("ContentArea").Content = new MainView();
         }
         private void OnOpened(object sender, EventArgs e)
         {

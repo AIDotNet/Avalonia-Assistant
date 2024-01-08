@@ -5,6 +5,7 @@ using Avalonia.ReactiveUI;
 using Desktop.Assistant.Services;
 using Desktop.Assistant.ViewModels;
 using Desktop.Assistant.Views;
+using Microsoft.Extensions.DependencyInjection;
 using ReactiveUI;
 using Splat;
 
@@ -35,6 +36,13 @@ namespace Desktop.Assistant
             // Load the saved view model state.
             new MainWindow { DataContext = Locator.Current.GetService<IScreen>() }.Show();
             base.OnFrameworkInitializationCompleted();
+        }
+
+        private void ConfigureServices(IServiceCollection services)
+        {
+            // 注册视图模型
+            //services.AddTransient<MainWindowViewModel>();
+
         }
     }
 }
