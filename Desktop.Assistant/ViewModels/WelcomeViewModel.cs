@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Input;
+using Desktop.Assistant.Domain.Models;
 using Desktop.Assistant.Services;
 using ReactiveUI;
 
@@ -29,18 +30,28 @@ namespace Desktop.Assistant.ViewModels
             set => this.RaiseAndSetIfChanged(ref model, value);
         }
 
-     
 
-        public bool Connected
-        {
-            get => connected;
-            set => this.RaiseAndSetIfChanged(ref connected, value);
-        }
+        public ICommand CompleteCommand { get; private set; }
+
+      
 
         public WelcomeViewModel(RoutingState router) : base(router)
         {
-            Endpoint = "https://bellowserver.azurewebsites.net/";
-         
+
+            CompleteCommand = ReactiveCommand.Create(Complete);
+        }
+
+        public void Complete()
+        {
+            try
+            {
+              
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+                throw;
+            }
         }
 
         //Fields
@@ -48,6 +59,5 @@ namespace Desktop.Assistant.ViewModels
         private string key;
         private string model;
         private string endpoint;
-        private bool connected;
     }
 }
