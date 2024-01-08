@@ -13,6 +13,13 @@ using Desktop.Assistant.Models;
 using Avalonia.Controls.Notifications;
 using Avalonia.Threading;
 using System.Reactive.Linq;
+using Desktop.Assistant.Domain.Model;
+using Microsoft.Extensions.Logging;
+using Microsoft.SemanticKernel;
+using System.Net.Http;
+using Desktop.Assistant.Domain.Utils;
+using Microsoft.SemanticKernel.Connectors.OpenAI;
+using Microsoft.SemanticKernel.ChatCompletion;
 
 namespace Desktop.Assistant.ViewModels
 {
@@ -71,6 +78,10 @@ namespace Desktop.Assistant.ViewModels
 
         async Task SendMessage()
         {
+            var handler = new OpenAIHttpClientHandler();
+            OpenAIChatCompletionService chatCompletionService = new(OpenAIOption.Model, OpenAIOption.Key, httpClient: new HttpClient(handler));
+
+            var msg=await chatCompletionService.GetChatMessageContentAsync(NewMessageContent);
             //await chatService.SendMessageAsync(new TextMessage(newMessageContent, chatService.CurrentUser.UserName).ToMessagePayload());
             NewMessageContent = string.Empty;
         }
