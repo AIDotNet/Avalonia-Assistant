@@ -1,0 +1,40 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+             x:Class="Desktop.Assistant.Views.MainView">
+
+  <Grid RowDefinitions="*, Auto" Margin="50">
+
+    <StackPanel Spacing="15" 
+                VerticalAlignment="Center">
+      
+      <Image Source="/Assets/gzh.png"
+             Width="128"
+             HorizontalAlignment="Center"/>
+      
+      <TextBlock Text="许泽宇的技术分享" 
+                 FontSize="30" 
+                 FontWeight="Medium" 
+                 HorizontalAlignment="Center"/>
+    </StackPanel>
+    
+    
+    <Button Grid.Row="1"
+            Content="开始"
+            Click="ClickHandler"
+            Background="{StaticResource SystemAccentColor}"
+            Foreground="White"
+            Height="35"
+            Width="150"
+            VerticalContentAlignment="Center"
+            HorizontalContentAlignment="Center"
+            HorizontalAlignment="Center" />
+            
+    
+    
+    
+  </Grid>
+  
+</UserControl>

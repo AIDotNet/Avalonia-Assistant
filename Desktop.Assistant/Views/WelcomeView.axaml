@@ -1,0 +1,33 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="700" d:DesignHeight="450"
+             x:Class="Desktop.Assistant.Views.WelcomeView">
+  
+  <Grid RowDefinitions="Auto, Auto, Auto, Auto, Auto" Margin="50" HorizontalAlignment="Center" VerticalAlignment="Center">
+      
+      <TextBlock Text="配置OpenAI"  FontSize="30" FontWeight="Medium" Margin ="50"/>
+      
+      <StackPanel Orientation="Horizontal" Grid.Row="1" Spacing="10" Margin="0,5" IsVisible="{Binding !Connected}">
+          <TextBlock Text="Endpoint:" MinWidth="120" TextAlignment="Right" VerticalAlignment="Center"/>
+          <TextBox Text="{Binding Endpoint}" MinWidth="170" Watermark="https://api.openai.com/" VerticalAlignment="Center"/>
+      </StackPanel>
+      
+      <StackPanel Orientation="Horizontal" Grid.Row="2" Spacing="10" Margin="0,5" IsVisible="{Binding Connected}">
+          <TextBlock Text="Key:" MinWidth="120" TextAlignment="Right" VerticalAlignment="Center"/>
+          <TextBox Text="{Binding Key}" MinWidth="170" VerticalAlignment="Center"/>
+      </StackPanel>
+      
+      <StackPanel Orientation="Horizontal" Grid.Row="3" Spacing="10" Margin="0,5" IsVisible="{Binding Connected}"> 
+          <TextBlock Text="Model:" MinWidth="120" TextAlignment="Right" VerticalAlignment="Center"/>
+          <TextBox Text="{Binding Model}" MinWidth="170" PasswordChar="*" VerticalAlignment="Center"/>
+      </StackPanel>
+      
+      <StackPanel Orientation="Horizontal" Grid.Row="4" Spacing="10" Margin="0,8" HorizontalAlignment="Right" IsVisible="{Binding Connected}">
+         <Button Content="完成"    Click="ClickHandler"/> 
+      </StackPanel>
+      
+  </Grid>
+  
+</UserControl>

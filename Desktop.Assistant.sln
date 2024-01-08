@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.8.34330.188
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Desktop.Assistant", "Desktop.Assistant\Desktop.Assistant.csproj", "{B86768BB-7A48-48C2-8427-F1434E1430AE}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Desktop.Assistant.Domain", "Desktop.Assistant.Domain\Desktop.Assistant.Domain.csproj", "{BD0777AD-35A4-49E4-A215-3946EC6E2202}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{B86768BB-7A48-48C2-8427-F1434E1430AE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B86768BB-7A48-48C2-8427-F1434E1430AE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B86768BB-7A48-48C2-8427-F1434E1430AE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B86768BB-7A48-48C2-8427-F1434E1430AE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BD0777AD-35A4-49E4-A215-3946EC6E2202}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BD0777AD-35A4-49E4-A215-3946EC6E2202}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BD0777AD-35A4-49E4-A215-3946EC6E2202}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BD0777AD-35A4-49E4-A215-3946EC6E2202}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {9353C1ED-C98C-4484-A4D0-8D5EC42CBD6A}
+	EndGlobalSection
+EndGlobal

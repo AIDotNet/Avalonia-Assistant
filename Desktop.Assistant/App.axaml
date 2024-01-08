@@ -1,0 +1,17 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Desktop.Assistant"
+             x:Class="Desktop.Assistant.App"
+             RequestedThemeVariant="Dark"
+             >
+    <Application.DataTemplates>
+        <local:ViewLocator/>
+    </Application.DataTemplates>
+
+    <Application.Styles>
+        <FluentTheme />
+        <StyleInclude Source="/Styles/Accents.axaml"/>
+        <StyleInclude Source="/Styles/MessageComposer.axaml"/>
+        <StyleInclude Source="/Styles/ChatBubble.axaml"/>
+    </Application.Styles>
+</Application>

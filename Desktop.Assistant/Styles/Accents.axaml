@@ -1,0 +1,14 @@
+﻿<Style xmlns="https://github.com/avaloniaui"
+       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+       xmlns:sys="clr-namespace:System;assembly=netstandard">
+  <Style.Resources>
+
+    
+    <Color x:Key="ChatBackground">#16191C</Color>
+    <Color x:Key="EntryBackground">#1E2126</Color>
+
+    
+
+
+  </Style.Resources>
+</Style>

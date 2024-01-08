@@ -1,0 +1,146 @@
+﻿<Styles xmlns="https://github.com/avaloniaui"
+       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+       xmlns:c="clr-namespace:Desktop.Assistant.Controls;assembly=Desktop.Assistant">
+
+  <Design.PreviewWith>    
+      <Grid ColumnDefinitions="*, Auto, Auto" Margin="20">
+        <Border Grid.Column="0"
+              MinWidth="350"
+              Background="{DynamicResource EntryBackground}"
+              CornerRadius="5,0,0,5"
+              Padding="5">
+
+          <Grid ColumnDefinitions="Auto, *">
+
+            <Button Grid.Column="0"
+                    Classes="IconButton"
+                    VerticalContentAlignment="Center"
+                    HorizontalContentAlignment="Center"
+                    VerticalAlignment="Center"
+                    Background="Transparent"
+                    BorderBrush="Transparent"
+                    BorderThickness="0">
+              
+                    <Path Fill="{DynamicResource MicrophoneDefaultColor}"
+                          Data="{DynamicResource MicrophoneGeometry}"
+                          Margin="0,4,0,0"/>
+            </Button>
+
+            <TextBox TextWrapping="Wrap"
+                     Grid.Column="1"
+                     Classes="ChatMessageComposer"
+                     Text="{Binding NewMessageContent}"
+                     BorderBrush="Transparent"
+                     Background="Transparent"
+                     VerticalContentAlignment="Center"
+                     Watermark="Type something..."/>            
+          </Grid>
+
+         
+
+        </Border>
+
+        <Border Grid.Column="1"               
+                Background="{DynamicResource EntryBackground}"
+                Margin="2,0,0,0"
+                Padding="5">
+
+          <Button Grid.Column="0"
+                  Classes="IconButton"
+                  VerticalContentAlignment="Center"
+                  HorizontalContentAlignment="Center"
+                  VerticalAlignment="Center"
+                  Background="Transparent"
+                  BorderBrush="Transparent"
+                  BorderThickness="0">
+
+                      <Path Fill="White"
+                            Data="{DynamicResource ImageFileGeometry}"
+                            Margin="0,4,0,0"
+                            Stretch="Uniform"
+                            Height="22"
+                            VerticalAlignment="Center"/>
+                    </Button>
+          
+        </Border>
+
+
+        <Border Grid.Column="2"
+        Background="{DynamicResource EntryBackground}"
+        Margin="2,0,0,0"
+                CornerRadius="0,5,5,0"
+        Padding="5">
+
+          <Button Grid.Column="0"
+                  Classes="IconButton"
+                  VerticalContentAlignment="Center"
+                  HorizontalContentAlignment="Center"
+                  VerticalAlignment="Center"
+                  Background="Transparent"
+                  BorderBrush="Transparent"
+                  BorderThickness="0">
+
+            <Path Fill="{DynamicResource SystemAccentColor}"
+                  Data="{DynamicResource SendMessageGeometry}"
+                  Margin="0,4,0,0"
+                  Stretch="Uniform"
+                  Height="22"
+                  VerticalAlignment="Center"/>
+          </Button>
+
+        </Border>
+       
+      </Grid>
+
+
+  </Design.PreviewWith>
+
+  
+  <Styles.Resources>
+     <StreamGeometry x:Key="SendMessageGeometry">M 26 3 A 1 1 0 0 0 25.716797 3.0429688 A 1 1 0 0 0 25.636719 3.0683594 L 3.6503906 10.060547 L 3.6503906 10.064453 A 1 1 0 0 0 3 11 A 1 1 0 0 0 3.4824219 11.853516 L 10.164062 17.154297 L 23.373047 6.6269531 L 12.845703 19.835938 L 18.142578 26.513672 A 1 1 0 0 0 19 27 A 1 1 0 0 0 19.935547 26.349609 L 19.939453 26.349609 L 26.9375 4.34375 A 1 1 0 0 0 26.957031 4.2832031 A 1 1 0 0 0 27 4 A 1 1 0 0 0 26 3 z</StreamGeometry>
+     <StreamGeometry x:Key="ImageFileGeometry">M20,4H4C2.895,4,2,4.895,2,6v12c0,1.105,0.895,2,2,2h16c1.105,0,2-0.895,2-2V6C22,4.895,21.105,4,20,4z M10,8 c0.552,0,1,0.448,1,1c0,0.552-0.448,1-1,1S9,9.552,9,9C9,8.448,9.448,8,10,8z M19,17H5l3.499-4.499L11,15.51l3.5-4.509L19,17z</StreamGeometry>
+     <StreamGeometry x:Key="MicrophoneGeometry">M 12 2 C 10.343 2 9 3.343 9 5 L 9 11 C 9 12.657 10.343 14 12 14 C 13.657 14 15 12.657 15 11 L 15 5 C 15 3.343 13.657 2 12 2 z M 6.0878906 11 C 5.4818906 11 4.9937969 11.537719 5.0917969 12.136719 C 5.5816755 15.136436 7.9811339 17.488992 11 17.921875 L 11 20 C 11 20.552 11.448 21 12 21 C 12.552 21 13 20.552 13 20 L 13 17.921875 C 16.018866 17.488992 18.418325 15.136436 18.908203 12.136719 C 19.006203 11.537719 18.518109 11 17.912109 11 C 17.418109 11 17.010734 11.363563 16.927734 11.851562 C 16.522734 14.206563 14.471 16 12 16 C 9.529 16 7.4772656 14.206563 7.0722656 11.851562 C 6.9892656 11.363563 6.5828906 11 6.0878906 11 z</StreamGeometry>
+
+    <SolidColorBrush x:Key="MicrophoneDefaultColor" Color="#4B4D51" />
+    <SolidColorBrush x:Key="MicrophoneListeningColor" Color="{DynamicResource SystemAccentColor}" />
+  </Styles.Resources>
+
+  <Style Selector="Button.IconButton">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderBrush" Value="Transparent"/>
+    <Setter Property="VerticalContentAlignment" Value="Center"/>
+    <Setter Property="HorizontalContentAlignment" Value="Center"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+    <Setter Property="BorderThickness" Value="0"/>
+  </Style>
+
+  <Style Selector="Button.IconButton:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderBrush" Value="Transparent"/>
+    <Setter Property="BorderThickness" Value="0"/>
+  </Style>
+  
+  
+  
+  
+  <Style Selector="TextBox.ChatMessageComposer">
+    <Setter Property="Foreground" Value="White"/>
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderBrush" Value="Transparent"/>    
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="VerticalContentAlignment" Value="Center"/>
+  </Style>
+
+  <Style Selector="TextBox.ChatMessageComposer:pointerover /template/ Border#PART_BorderElement">
+    <Setter Property="BorderBrush" Value="Transparent"/>
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <Style Selector="TextBox.ChatMessageComposer:focus /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderBrush" Value="Transparent"/>
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+  
+  
+</Styles>

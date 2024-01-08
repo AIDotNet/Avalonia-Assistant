@@ -1,0 +1,131 @@
+﻿<Styles xmlns="https://github.com/avaloniaui"
+       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+       xmlns:c="clr-namespace:Desktop.Assistant.Controls;assembly=Desktop.Assistant">
+
+  <Design.PreviewWith>
+    <Border Padding="20" >
+      <StackPanel Spacing="20" Width="500">
+        <c:ChatBubble Content="Click Me!" IsRead="True"/>
+        <c:ChatBubble  Role="Receiver" IsRead="True">
+          <Image Source="/Assets/avalonia-logo.ico" Width="100" Height="100" />
+        </c:ChatBubble>
+        <c:ChatBubble Content="Looks really like a really cool technology!" IsRead="False"/>
+      </StackPanel>
+    </Border>
+  </Design.PreviewWith>
+
+  <Styles.Resources>
+    <StreamGeometry x:Key="BubbleTailGeometry">M0,0L28,0 28,14.0000006258488 28,15.0010000765324 28.0151405334473,15.0010000765324 28.0455417633057,15.8010965883732C28.4084091186524,22.9596563875675,30.92209815979,29.5507589876652,34.9532623291016,34.9410597383976L34.9984359741211,34.9999815523624 34.0966339111328,34.9885679781437C15.1841707229614,34.5094191133976,2.0535663480814E-07,19.0279375612736,0,0z</StreamGeometry>
+    <StreamGeometry x:Key="SuccessGeometry">M512.66048 64.64c-247.424 0-448 200.57728-448 448s200.576 448 448 448 448-200.57728 448-448c0-247.424-200.57728-448-448-448z m250.71232 334.86336L480.98176 681.89312c-15.49568 15.49696-40.61952 15.49696-56.11648 0l-162.9184-162.9184c-15.49568-15.49568-15.49568-40.61824 0-56.1152s40.61952-15.49568 56.11648 0l134.85952 134.85952L707.25504 343.3856c15.49568-15.49568 40.61952-15.49568 56.11648 0s15.49696 40.6208 0.00128 56.11776z</StreamGeometry>
+
+    <SolidColorBrush x:Key="ChatBubbleSenderBackground" Color="{DynamicResource SystemAccentColor}" />
+    <SolidColorBrush x:Key="ChatBubbleReceiverBackground" Color="{DynamicResource SystemChromeMediumLowColor}" />
+    <SolidColorBrush x:Key="ChatBubbleForeground" Color="{DynamicResource SystemBaseHighColor}" />
+  </Styles.Resources>
+
+  <Style Selector="c|ChatBubble">
+    <Setter Property="Focusable" Value="False"/>
+    <Setter Property="Foreground" Value="{DynamicResource ChatBubbleForeground}"/>
+    <Setter Property="Padding" Value="10"/>
+    <Setter Property="Margin" Value="10"/>
+    <Setter Property="MaxWidth" Value="280"/>
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Panel>
+          <Path Name="PART_Tail"
+                Data="{StaticResource BubbleTailGeometry}"
+                Fill="{TemplateBinding Background}"
+                Stretch="Uniform"
+                VerticalAlignment="Bottom"
+                HorizontalAlignment="{TemplateBinding HorizontalAlignment}"
+                Width="15"
+                Height="15"/>
+
+          <Border Name="PART_Body"
+                  Background="{TemplateBinding Background}"
+                  CornerRadius="15"
+                  Padding="10">
+            <ContentPresenter x:Name="PART_ContentPresenter"
+                        Background="{TemplateBinding Background}"
+                        BorderBrush="{TemplateBinding BorderBrush}"
+                        BorderThickness="{TemplateBinding BorderThickness}"
+                        Content="{TemplateBinding Content}"
+                        ContentTemplate="{TemplateBinding ContentTemplate}"
+                        HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                        VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+          </Border>
+
+          <Path Name="PART_IsRead"
+                    Data="{StaticResource SuccessGeometry}"
+                    HorizontalAlignment="{TemplateBinding HorizontalAlignment}"
+                    Stretch="Uniform"
+                    VerticalAlignment="Bottom"
+                    Width="10"
+                    Height="10"/>
+
+
+
+        </Panel>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+
+
+  <!-- Shared -->
+
+  <!-- Sender Bubble Content -->
+  <Style Selector="c|ChatBubble[Role=0]">
+    <Setter Property="HorizontalAlignment" Value="Right"/>
+    <Setter Property="Background" Value="{DynamicResource ChatBubbleSenderBackground}"/>
+  </Style>
+
+  <!-- Sender Message Tail -->
+  <Style Selector="c|ChatBubble[Role=0] /template/ Path#PART_Tail">
+    <Setter Property="Margin" Value="0,0,15,0"/>
+    <Setter Property="RenderTransform">
+      <Setter.Value>
+        <ScaleTransform ScaleX="1" ScaleY="1" />
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- Sender Bubble Content -->
+  <Style Selector="c|ChatBubble[Role=0] /template/ Border#PART_Body">
+    <Setter Property="Margin" Value="0,0,18,0"/>
+  </Style>
+
+
+  <!-- Receiver Bubble Content -->
+  <Style Selector="c|ChatBubble[Role=1]">
+    <Setter Property="HorizontalAlignment" Value="Left"/>
+    <Setter Property="Background" Value="{DynamicResource ChatBubbleReceiverBackground}"/>
+  </Style>
+
+  <!-- Receiver Bubble Tail -->
+  <Style Selector="c|ChatBubble[Role=1] /template/ Path#PART_Tail">
+    <Setter Property="Margin" Value="12,0,0,0"/>
+    <Setter Property="RenderTransform">
+      <Setter.Value>
+        <ScaleTransform ScaleX="-1" ScaleY="1" />
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+
+  <!-- Receiver Bubble Content -->
+  <Style Selector="c|ChatBubble[Role=1] /template/ Border#PART_Body">
+    <Setter Property="Margin" Value="15,0,0,0"/>
+  </Style>
+
+
+
+  <Style Selector="c|ChatBubble[IsRead=False] /template/ Path#PART_IsRead">
+    <Setter Property="Fill" Value="{DynamicResource SystemChromeGrayColor}"/>
+  </Style>
+
+  <Style Selector="c|ChatBubble[IsRead=True] /template/ Path#PART_IsRead">
+    <Setter Property="Fill" Value="{DynamicResource SystemAccentColor}"/>
+  </Style>
+
+
+</Styles>
