@@ -70,9 +70,6 @@
                    VerticalContentAlignment="Center"
                    Watermark="发送点什么..."/>
         </Grid>
-
-
-
       </Border>
 
       <Border Grid.Column="2"
