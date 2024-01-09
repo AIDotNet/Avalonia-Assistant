@@ -13,7 +13,8 @@
         x:Class="Desktop.Assistant.Views.MainWindow"
         WindowStartupLocation="Manual"
         Icon="/Assets/avalonia-logo.ico"
-        Title="Xzy">
+        Title="许泽宇的技术分享"
+        >
   <rxui:RoutedViewHost Router="{Binding Router}" Margin="0,30,0,0">
   </rxui:RoutedViewHost>
 </Window>

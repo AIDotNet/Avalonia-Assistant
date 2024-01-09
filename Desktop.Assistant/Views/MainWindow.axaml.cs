@@ -13,10 +13,6 @@ namespace Desktop.Assistant.Views
         public MainWindow()
         {
             InitializeComponent();
-#if DEBUG
-            this.AttachDevTools();
-#endif
-            this.WindowStartupLocation = WindowStartupLocation.Manual;
 
             // 订阅窗体打开事件
             this.Opened += OnOpened;
@@ -43,6 +39,7 @@ namespace Desktop.Assistant.Views
 
             // 应用计算出的位置
             this.Position = new PixelPoint((int)xPosition, yPosition);
+            this.Title = "许泽宇的技术分享";
         }
     }
 }
