@@ -2,7 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="using:Desktop.Assistant"
              x:Class="Desktop.Assistant.App"
-           
+             RequestedThemeVariant="Dark"
              >
     <Application.DataTemplates>
         <local:ViewLocator/>
