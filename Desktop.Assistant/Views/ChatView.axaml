@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:i="clr-namespace:Avalonia.Xaml.Interactivity;assembly=Avalonia.Xaml.Interactivity"
              xmlns:c="clr-namespace:Desktop.Assistant.Controls;assembly=Desktop.Assistant"
              xmlns:models="clr-namespace:Desktop.Assistant.Models;assembly=Desktop.Assistant"
              Background="{DynamicResource ChatBackground}"
@@ -61,14 +62,19 @@
                   Margin="0,4,0,0"/>
           </Button>
 
-          <TextBox TextWrapping="Wrap"
+          <TextBox x:Name="InputText"
+                   TextWrapping="Wrap"
                    Grid.Column="1"
                    Classes="ChatMessageComposer"
                    Text="{Binding NewMessageContent}"
                    BorderBrush="Transparent"
                    Background="Transparent"
                    VerticalContentAlignment="Center"
-                   Watermark="发送点什么..."/>
+                   Watermark="发送点什么...">
+            <i:Interaction.Behaviors>
+              <c:KeyBindingBehavior Key="Enter" Command="{Binding EnterKeyPressedCommand}" />
+            </i:Interaction.Behaviors>
+          </TextBox>
         </Grid>
       </Border>
 

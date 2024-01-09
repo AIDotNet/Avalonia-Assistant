@@ -41,6 +41,8 @@ namespace Desktop.Assistant.ViewModels
 
         public ICommand SendMessageCommand { get; private set; }
 
+        public ICommand EnterKeyPressedCommand { get; private set; }
+
         public ChatViewModel(ChatService chatService, RoutingState router) : base(router)
         {
             this.Messages = new ObservableCollection<MessageBase>();
@@ -50,6 +52,13 @@ namespace Desktop.Assistant.ViewModels
             SendMessageCommand = ReactiveCommand.CreateFromTask(SendMessage, canSendMessage);
             AttachImageCommand = ReactiveCommand.CreateFromTask(AttachImage);
             DictateMessageCommand = ReactiveCommand.CreateFromTask(DictateMessage);
+            EnterKeyPressedCommand = ReactiveCommand.CreateFromTask(EnterKeyPressed);
+
+        }
+
+        async Task EnterKeyPressed()
+        {
+            await SendMessage();
         }
 
         async Task SendMessage()
