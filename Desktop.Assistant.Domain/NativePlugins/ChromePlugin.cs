@@ -10,7 +10,8 @@ using System.Threading.Tasks;
 
 namespace Desktop.Assistant.Domain.NativePlugins
 {
-    [OS(OSType.Windows)]
+    
+    [OS(OSType.Windows)] //插件导入平台，由于SK是根据类导入，所以这个特性要放在类上，本想放在方法上。
     public class ChromePlugin
     {
 
