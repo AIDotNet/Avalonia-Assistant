@@ -20,6 +20,8 @@ using System.Net.Http;
 using Desktop.Assistant.Domain.Utils;
 using Microsoft.SemanticKernel.Connectors.OpenAI;
 using Microsoft.SemanticKernel.ChatCompletion;
+using System.Data;
+using System.Reflection.Metadata;
 
 namespace Desktop.Assistant.ViewModels
 {
@@ -81,8 +83,8 @@ namespace Desktop.Assistant.ViewModels
             var handler = new OpenAIHttpClientHandler();
             OpenAIChatCompletionService chatCompletionService = new(OpenAIOption.Model, OpenAIOption.Key, httpClient: new HttpClient(handler));
             var msg=await chatCompletionService.GetChatMessageContentAsync(NewMessageContent);
-
-
+            this.Messages.Add(new TextMessage(NewMessageContent) { Role = ChatRoleType.Sender });
+            this.Messages.Add(new TextMessage(msg?.Content) { Role = ChatRoleType.Receiver });
             NewMessageContent = string.Empty;
         }
 

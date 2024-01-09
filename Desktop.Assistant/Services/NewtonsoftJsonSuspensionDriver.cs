@@ -35,6 +35,7 @@ namespace Desktop.Assistant.Services
             if (!File.Exists(_file))
             {
                 var obj = Locator.Current.GetService<IScreen>();
+                //string obj = "{\"$type\":\"Desktop.Assistant.ViewModels.MainWindowViewModel, Desktop.Assistant\"}";
                 SaveState(obj);
             }
 

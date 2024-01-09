@@ -7,9 +7,8 @@ namespace Desktop.Assistant.Models
     {
         public string Content { get; init; }
 
-        public TextMessage(string content, string authorUsername)
+        public TextMessage(string content)
         {
-            AuthorUsername = authorUsername;
             Content = content;
         }
 
@@ -17,13 +16,12 @@ namespace Desktop.Assistant.Models
 
         internal override MessagePayload ToMessagePayload()
         {
-            return new MessagePayload(ObjectToString(Content), MessageType.Text) { AuthorUsername = AuthorUsername };
+            return new MessagePayload(ObjectToString(Content), MessageType.Text) { AuthorUsername = "你" };
         }
 
         internal TextMessage(MessagePayload payload)
         {
-            AuthorUsername = payload.AuthorUsername;
-            Content = StringToObject<string>(payload.Base64Payload);
+              Content = StringToObject<string>(payload.Base64Payload);
         }
              
     }
