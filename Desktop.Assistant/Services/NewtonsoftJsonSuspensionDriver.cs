@@ -35,19 +35,23 @@ namespace Desktop.Assistant.Services
             if (!File.Exists(_file))
             {
                 var obj = Locator.Current.GetService<IScreen>();
-                //string obj = "{\"$type\":\"Desktop.Assistant.ViewModels.MainWindowViewModel, Desktop.Assistant\"}";
                 SaveState(obj);
             }
 
             var lines = File.ReadAllText(_file);
             var state = JsonConvert.DeserializeObject<object>(lines, _settings);
+            if (state == null)
+            {
+                // return a default empty object to avoid black screen
+                return Observable.Return(new MainWindowViewModel());
+            }
             return Observable.Return(state);
         }
 
         public IObservable<Unit> SaveState(object state)
         {
-            //var lines = JsonConvert.SerializeObject(state, _settings);
-            //File.WriteAllText(_file, lines);
+            var lines = JsonConvert.SerializeObject(state, _settings);
+            File.WriteAllText(_file, lines);
             return Observable.Return(Unit.Default);
         }
     }
