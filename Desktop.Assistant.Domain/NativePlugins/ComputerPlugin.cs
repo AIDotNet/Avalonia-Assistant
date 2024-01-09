@@ -14,6 +14,7 @@ namespace Desktop.Assistant.Domain.NativePlugins
 {
     public class ComputerPlugin
     {
+        [Windows]
         [KernelFunction, Description("查询计算机系统信息")]
         public string QueryComputerSystemInformation()
         {
@@ -30,6 +31,7 @@ namespace Desktop.Assistant.Domain.NativePlugins
             return info.ToString();
         }
 
+        [Windows]
         [KernelFunction, Description("查询处理器信息")]
         public string QueryCPUInformation()
         {
@@ -45,7 +47,7 @@ namespace Desktop.Assistant.Domain.NativePlugins
             return info.ToString();
         }
 
-
+        [Windows]
         [KernelFunction, Description("查询物理内存信息")]
         public string QueryMemroyInformation()
         {
@@ -61,6 +63,7 @@ namespace Desktop.Assistant.Domain.NativePlugins
             return info.ToString();
         }
 
+        [Windows]
         [KernelFunction, Description("查询磁盘驱动器信息")]
         public string QueryDiskInformation()
         {

@@ -12,9 +12,9 @@ using System.Runtime.InteropServices;
 namespace Desktop.Assistant.Domain.NativePlugins
 {
     /// <summary>
-    /// windows相关插件
+    /// 系统相关插件
     /// </summary>
-    public class WindowsPlugin
+    public class SystemPlugin
     {
 
         [KernelFunction, Description("清理垃圾文件")]
@@ -70,7 +70,7 @@ namespace Desktop.Assistant.Domain.NativePlugins
             }
         }
 
-
+        [AllOS]
         [KernelFunction, Description("打开文件夹")]
         public string StartDir([Description(@"文件夹路径，例如：D:\ ")] string folderPath) {
             try
