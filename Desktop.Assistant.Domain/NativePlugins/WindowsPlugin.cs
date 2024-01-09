@@ -7,6 +7,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Runtime.InteropServices;
 
 namespace Desktop.Assistant.Domain.NativePlugins
 {
@@ -74,7 +75,17 @@ namespace Desktop.Assistant.Domain.NativePlugins
         public string StartDir([Description(@"文件夹路径，例如：D:\ ")] string folderPath) {
             try
             {
-                Process.Start("explorer.exe", folderPath);
+                
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+                {
+                    Process.Start("open", folderPath);
+                }
+
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                {
+                    Process.Start("explorer.exe", folderPath);
+                }
+                
                 return $"打开成功:{folderPath}";
             }
             catch (Exception ex)
