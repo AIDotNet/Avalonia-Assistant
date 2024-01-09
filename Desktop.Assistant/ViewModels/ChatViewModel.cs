@@ -44,32 +44,6 @@ namespace Desktop.Assistant.ViewModels
         public ChatViewModel(ChatService chatService, RoutingState router) : base(router)
         {
             this.Messages = new ObservableCollection<MessageBase>();
-            this.chatService = chatService;
-            this.chatService.Messages.CollectionChanged += (sender, args) =>
-            {                
-                foreach (MessagePayload newMsg in args.NewItems)
-                {
-                    ChatRoleType role = ChatRoleType.Receiver;
-                    if (newMsg.AuthorUsername == chatService.CurrentUser.UserName)
-                        role = ChatRoleType.Sender;
-
-                    switch (newMsg.Type)
-                    {
-                        case MessageType.Text:
-                            Messages.Add(new TextMessage(newMsg) { Role = role });
-                            break;
-                        case MessageType.Link:
-                            Messages.Add(new LinkMessage(newMsg) { Role = role });
-                            break;
-                        case MessageType.Image:
-                            Messages.Add(new ImageMessage(newMsg) { Role = role });
-                            break;
-                    }
-                }
-            };
-
-            this.chatService.ParticipantLoggedIn.Subscribe(x => { Messages.Add(new UserConnectedMessage(x)); });
-            this.chatService.ParticipantLoggedOut.Subscribe(x => { Messages.Add(new UserDisconnectedMessage(x)); });
 
             canSendMessage = this.WhenAnyValue(x => x.NewMessageContent).Select(x => !string.IsNullOrEmpty(x));
 

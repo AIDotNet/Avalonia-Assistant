@@ -12,7 +12,7 @@
   <UserControl.DataTemplates>
 
     <DataTemplate DataType="models:TextMessage">
-      <c:ChatBubble IsRead="{Binding IsRead}" Role="{Binding Role}">
+      <c:ChatBubble IsRead="True" Role="{Binding Role}">
         <TextBlock Text="{Binding Content}" TextWrapping="Wrap" />
       </c:ChatBubble>
     </DataTemplate>
@@ -27,22 +27,6 @@
       <c:ChatBubble IsRead="{Binding IsRead}" Role="{Binding Role}">
         <Button Content="{Binding Content}" Background="Transparent"/>
       </c:ChatBubble>
-    </DataTemplate>
-
-    <DataTemplate DataType="models:UserConnectedMessage">
-      <Grid ColumnDefinitions="*, Auto, *">
-        <Border Height="1" Background="Gray" Opacity="0.5" HorizontalAlignment="Stretch" Margin="20"/>
-        <TextBlock Text="{Binding Content}" Foreground="Green" Opacity="0.7" FontSize="10" Grid.Column="1" HorizontalAlignment="Center"/>
-        <Border Height="1" Background="Gray" Grid.Column="2" Opacity="0.5" HorizontalAlignment="Stretch" Margin="20,5"/>
-      </Grid>
-    </DataTemplate>
-
-    <DataTemplate DataType="models:UserDisconnectedMessage">
-      <Grid ColumnDefinitions="*, Auto, *">
-        <Border Height="1" Background="Gray" Opacity="0.3" HorizontalAlignment="Stretch" Margin="20"/>
-        <TextBlock Text="{Binding Content}" Foreground="Red" Opacity="0.7" Grid.Column="1" FontSize="10" HorizontalAlignment="Center"/>
-        <Border Height="1" Background="Gray" Grid.Column="2" Opacity="0.3" HorizontalAlignment="Stretch" Margin="20,5"/>
-      </Grid>
     </DataTemplate>
 
   </UserControl.DataTemplates>
