@@ -26,6 +26,7 @@ using Microsoft.SemanticKernel.Planning.Handlebars;
 using Desktop.Assistant.Domain.NativePlugins;
 using Newtonsoft.Json;
 using System.Runtime.InteropServices;
+using Desktop.Assistant.Domain.NativePlugins.Attributes;
 
 namespace Desktop.Assistant.ViewModels
 {
@@ -67,9 +68,7 @@ namespace Desktop.Assistant.ViewModels
                   httpClient: new HttpClient(handler)
                      )
                 .Build();
-            kernel.ImportPluginFromObject(new SystemPlugin(), "WindowsPlugin");
-            kernel.ImportPluginFromObject(new ChromePlugin(), "ChromePlugin");
-            kernel.ImportPluginFromObject(new ComputerPlugin(), "ComputerPlugin");
+            OSExtensions.ImportPluginFromObjectByOs(kernel);
         }
 
         async Task EnterKeyPressed()

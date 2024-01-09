@@ -14,6 +14,7 @@ namespace Desktop.Assistant.Domain.NativePlugins
     /// <summary>
     /// 系统相关插件
     /// </summary>
+    [OS(OSType.All)]
     public class SystemPlugin
     {
 
@@ -70,7 +71,6 @@ namespace Desktop.Assistant.Domain.NativePlugins
             }
         }
 
-        [AllOS]
         [KernelFunction, Description("打开文件夹")]
         public string StartDir([Description(@"文件夹路径，例如：D:\ ")] string folderPath) {
             try

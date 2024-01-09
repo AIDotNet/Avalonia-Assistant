@@ -10,8 +10,10 @@ using System.Threading.Tasks;
 
 namespace Desktop.Assistant.Domain.NativePlugins
 {
+    [OS(OSType.Windows)]
     public class ChromePlugin
     {
+
         [KernelFunction, Description("打开Chrome浏览器")]
         public string OpenChrome([Description("url地址")] string url)
         {
@@ -41,6 +43,5 @@ namespace Desktop.Assistant.Domain.NativePlugins
                 return "Chrome浏览器未找到！";
             }
         }
-
     }
 }
