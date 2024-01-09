@@ -67,8 +67,9 @@ namespace Desktop.Assistant.ViewModels
                   httpClient: new HttpClient(handler)
                      )
                 .Build();
-            kernel.ImportPluginFromObject(new WindowsPlugin(kernel), "WindowsPlugin");
-            kernel.ImportPluginFromObject(new ChromePlugin(kernel), "ChromePlugin");
+            kernel.ImportPluginFromObject(new WindowsPlugin(), "WindowsPlugin");
+            kernel.ImportPluginFromObject(new ChromePlugin(), "ChromePlugin");
+            kernel.ImportPluginFromObject(new ComputerPlugin(), "ComputerPlugin");
         }
 
         async Task EnterKeyPressed()

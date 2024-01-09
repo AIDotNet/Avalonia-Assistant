@@ -12,13 +12,6 @@ namespace Desktop.Assistant.Domain.NativePlugins
 {
     public class ChromePlugin
     {
-        private readonly Kernel _kernel;
-
-        public ChromePlugin(Kernel kernel)
-        {
-            _kernel = kernel;
-        }
-
         [KernelFunction, Description("打开Chrome浏览器")]
         public string OpenChrome([Description("url地址")] string url)
         {

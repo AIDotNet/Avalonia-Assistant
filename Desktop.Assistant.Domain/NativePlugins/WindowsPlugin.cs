@@ -15,12 +15,6 @@ namespace Desktop.Assistant.Domain.NativePlugins
     /// </summary>
     public class WindowsPlugin
     {
-        private readonly Kernel _kernel;
-      
-        public WindowsPlugin(Kernel kernel)
-        {
-            _kernel = kernel;
-        }
 
         [KernelFunction, Description("清理垃圾文件")]
         public void ClearJunkFile()
@@ -77,7 +71,7 @@ namespace Desktop.Assistant.Domain.NativePlugins
 
 
         [KernelFunction, Description("打开文件夹")]
-        public string StartProcess([Description(@"文件夹路径，例如：D:\ ")] string folderPath) {
+        public string StartDir([Description(@"文件夹路径，例如：D:\ ")] string folderPath) {
             try
             {
                 Process.Start("explorer.exe", folderPath);
@@ -86,6 +80,28 @@ namespace Desktop.Assistant.Domain.NativePlugins
             catch (Exception ex)
             {
                 return $"打开失败：{ex.Message}";
+            }
+        }
+
+        [KernelFunction, Description("关闭进程")]
+        public string StopProcess([Description(@"应用程序名，例如： WeChat ")] string processesName)
+        {
+            try
+            {
+                // 查找微信进程
+                Process[] processes = Process.GetProcessesByName(processesName);
+
+                // 关闭找到的微信进程
+                foreach (Process process in processes)
+                {
+                    process.CloseMainWindow();
+                    process.WaitForExit();    
+                }
+                return $"关闭成功:{processesName}";
+            }
+            catch (Exception ex)
+            {
+                return $"无法关闭：{ex.Message}";
             }
         }
     }
