@@ -67,7 +67,8 @@ namespace Desktop.Assistant.ViewModels
                   httpClient: new HttpClient(handler)
                      )
                 .Build();
-
+            kernel.ImportPluginFromObject(new WindowsPlugin(kernel), "WindowsPlugin");
+            kernel.ImportPluginFromObject(new ChromePlugin(kernel), "ChromePlugin");
         }
 
         async Task EnterKeyPressed()
@@ -77,20 +78,23 @@ namespace Desktop.Assistant.ViewModels
 
         async Task SendMessage()
         {
-        
-            //OpenAIChatCompletionService chatCompletionService = new(OpenAIOption.Model, OpenAIOption.Key, httpClient: new HttpClient(handler));
-            //var msg=await chatCompletionService.GetChatMessageContentAsync(NewMessageContent); 
-            var planner = new HandlebarsPlanner(
-               new HandlebarsPlannerOptions()
-               {
-                   AllowLoops = true
-               });
-             kernel.ImportPluginFromObject(new WindowsPlugin(kernel), "WindowsPlugin");
-
-            var plan = await planner.CreatePlanAsync(kernel, NewMessageContent);
-
-            var msg = await plan.InvokeAsync(kernel);
-
+            string msg = "";
+            try
+            {
+                //OpenAIChatCompletionService chatCompletionService = new(OpenAIOption.Model, OpenAIOption.Key, httpClient: new HttpClient(handler));
+                //var msg=await chatCompletionService.GetChatMessageContentAsync(NewMessageContent); 
+                var planner = new HandlebarsPlanner(
+                   new HandlebarsPlannerOptions()
+                   {
+                       AllowLoops = true
+                   });
+                var plan = await planner.CreatePlanAsync(kernel, NewMessageContent);
+                msg = await plan.InvokeAsync(kernel);           
+            }
+            catch (Exception ex)
+            {
+                msg = "执行异常";
+            }
             this.Messages.Add(new TextMessage(NewMessageContent) { Role = ChatRoleType.Sender });
             this.Messages.Add(new TextMessage(msg) { Role = ChatRoleType.Receiver });
             NewMessageContent = string.Empty;
