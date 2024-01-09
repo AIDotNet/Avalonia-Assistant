@@ -80,9 +80,9 @@ namespace Desktop.Assistant.ViewModels
         {
             var handler = new OpenAIHttpClientHandler();
             OpenAIChatCompletionService chatCompletionService = new(OpenAIOption.Model, OpenAIOption.Key, httpClient: new HttpClient(handler));
-
             var msg=await chatCompletionService.GetChatMessageContentAsync(NewMessageContent);
-            //await chatService.SendMessageAsync(new TextMessage(newMessageContent, chatService.CurrentUser.UserName).ToMessagePayload());
+
+
             NewMessageContent = string.Empty;
         }
 
