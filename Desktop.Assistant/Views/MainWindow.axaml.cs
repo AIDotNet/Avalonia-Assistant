@@ -39,7 +39,6 @@ namespace Desktop.Assistant.Views
 
             // 应用计算出的位置
             this.Position = new PixelPoint((int)xPosition, yPosition);
-            this.Title = "许泽宇的技术分享";
         }
     }
 }
