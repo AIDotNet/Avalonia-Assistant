@@ -11,6 +11,10 @@
     <PackageReference Include="Microsoft.SemanticKernel" Version="1.0.1" />
     <PackageReference Include="Microsoft.SemanticKernel.Connectors.OpenAI" Version="1.0.1" />
     <PackageReference Include="Microsoft.SemanticKernel.Core" Version="1.0.1" />
+    <PackageReference Include="Microsoft.SemanticKernel.Planners.Handlebars" Version="1.0.1-preview" />
+    <PackageReference Include="Microsoft.SemanticKernel.Planners.OpenAI" Version="1.0.1-preview" />
+    <PackageReference Include="Microsoft.SemanticKernel.Plugins.Core" Version="1.0.1-alpha" />
+    <PackageReference Include="Microsoft.SemanticKernel.Plugins.Memory" Version="1.0.1-alpha" />
 
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>

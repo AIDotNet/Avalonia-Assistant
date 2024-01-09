@@ -22,12 +22,17 @@ using Microsoft.SemanticKernel.Connectors.OpenAI;
 using Microsoft.SemanticKernel.ChatCompletion;
 using System.Data;
 using System.Reflection.Metadata;
+using Microsoft.SemanticKernel.Planning.Handlebars;
+using Desktop.Assistant.Domain.NativePlugins;
+using Newtonsoft.Json;
+using System.Runtime.InteropServices;
 
 namespace Desktop.Assistant.ViewModels
 {
     public class ChatViewModel : ViewModelBase
     {        
         public ObservableCollection<MessageBase> Messages { get; private set; }
+        private Kernel kernel;
 
         public string NewMessageContent
         {
@@ -54,6 +59,15 @@ namespace Desktop.Assistant.ViewModels
             DictateMessageCommand = ReactiveCommand.CreateFromTask(DictateMessage);
             EnterKeyPressedCommand = ReactiveCommand.CreateFromTask(EnterKeyPressed);
 
+            var handler = new OpenAIHttpClientHandler();
+            kernel = Kernel.CreateBuilder()
+                .AddOpenAIChatCompletion(
+                  modelId: OpenAIOption.Model,
+            apiKey: OpenAIOption.Key,
+                  httpClient: new HttpClient(handler)
+                     )
+                .Build();
+
         }
 
         async Task EnterKeyPressed()
@@ -63,11 +77,22 @@ namespace Desktop.Assistant.ViewModels
 
         async Task SendMessage()
         {
-            var handler = new OpenAIHttpClientHandler();
-            OpenAIChatCompletionService chatCompletionService = new(OpenAIOption.Model, OpenAIOption.Key, httpClient: new HttpClient(handler));
-            var msg=await chatCompletionService.GetChatMessageContentAsync(NewMessageContent);
+        
+            //OpenAIChatCompletionService chatCompletionService = new(OpenAIOption.Model, OpenAIOption.Key, httpClient: new HttpClient(handler));
+            //var msg=await chatCompletionService.GetChatMessageContentAsync(NewMessageContent); 
+            var planner = new HandlebarsPlanner(
+               new HandlebarsPlannerOptions()
+               {
+                   AllowLoops = true
+               });
+             kernel.ImportPluginFromObject(new WindowsPlugin(kernel), "WindowsPlugin");
+
+            var plan = await planner.CreatePlanAsync(kernel, NewMessageContent);
+
+            var msg = await plan.InvokeAsync(kernel);
+
             this.Messages.Add(new TextMessage(NewMessageContent) { Role = ChatRoleType.Sender });
-            this.Messages.Add(new TextMessage(msg?.Content) { Role = ChatRoleType.Receiver });
+            this.Messages.Add(new TextMessage(msg) { Role = ChatRoleType.Receiver });
             NewMessageContent = string.Empty;
         }
 

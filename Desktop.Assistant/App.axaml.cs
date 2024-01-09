@@ -40,8 +40,8 @@ namespace Desktop.Assistant
 
         private void ConfigureServices(IServiceCollection services)
         {
-            // 注册视图模型
-            //services.AddTransient<MainWindowViewModel>();
+            //依赖注入
+            //services.AddTransient<ICommandPlugin, WindowsPlugin>();
 
         }
     }

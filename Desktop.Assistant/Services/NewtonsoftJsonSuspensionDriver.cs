@@ -46,8 +46,8 @@ namespace Desktop.Assistant.Services
 
         public IObservable<Unit> SaveState(object state)
         {
-            var lines = JsonConvert.SerializeObject(state, _settings);
-            File.WriteAllText(_file, lines);
+            //var lines = JsonConvert.SerializeObject(state, _settings);
+            //File.WriteAllText(_file, lines);
             return Observable.Return(Unit.Default);
         }
     }

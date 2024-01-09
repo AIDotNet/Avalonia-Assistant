@@ -4,6 +4,7 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
+    <NoWarn>SKEXP0060</NoWarn>
   </PropertyGroup>
   <ItemGroup>
     <AvaloniaResource Include="Assets\**" />
