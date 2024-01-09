@@ -25,6 +25,32 @@ Avalonia-Assistant 是一个开源的桌面智能助理，旨在提供一个基�
 填入你的OpenAI Key
 
 然后开始使用吧！
+
+## 示例
+![界面](https://github.com/xuzeyu91/Avalonia-Assistant/blob/main/img/cpu.png?raw=true)
+
+例如这个图，通过本地插件就能获取我的电脑相关信息。
+```
+ [KernelFunction, Description("查询计算机系统信息")]
+ public string QueryComputerSystemInformation()
+ {
+     StringBuilder info = new StringBuilder(); 
+     // 查询计算机系统信息
+     ManagementObjectSearcher osSearcher = new ManagementObjectSearcher("SELECT * FROM Win32_OperatingSystem");
+     foreach (ManagementObject os in osSearcher.Get())
+     {
+         info.AppendLine("操作系统版本: " + os["Caption"]);
+         info.AppendLine("操作系统位数: " + os["OSArchitecture"]);
+         info.AppendLine("注册人: " + os["RegisteredUser"]);
+         info.AppendLine("安装日期: " + ManagementDateTimeConverter.ToDateTime(os["InstallDate"].ToString()).ToString("yyyy-MM-dd HH:mm:ss"));
+     }
+     return info.ToString();
+ }
+……
+```
+
+我还会继续探索，客户端助手有哪些有趣的场景！
+
 ## 如何贡献
 我们欢迎任何形式的贡献，无论是通过提供反馈、报告问题还是通过发送拉取请求来添加新功能或修复错误。如果你想为 Avalonia-Assistant 做出贡献，请遵循以下步骤：
 Fork 这个仓库。
