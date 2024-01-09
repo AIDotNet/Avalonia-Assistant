@@ -23,7 +23,7 @@ namespace Desktop.Assistant.Domain.NativePlugins
         }
 
         [KernelFunction, Description("清理垃圾文件")]
-        public void ClearJunkFile( )
+        public void ClearJunkFile()
         {
             // 设定你想要创建和运行的BAT文件的路径和名称
             string batFileName = $"batfile.bat";
@@ -72,6 +72,20 @@ namespace Desktop.Assistant.Domain.NativePlugins
             catch (Exception exc)
             {
                 Console.WriteLine($"An error occurred: {exc.Message}");
+            }
+        }
+
+
+        [KernelFunction, Description("打开文件夹")]
+        public string StartProcess([Description(@"文件夹路径，例如：D:\ ")] string folderPath) {
+            try
+            {
+                Process.Start("explorer.exe", folderPath);
+                return $"打开成功:{folderPath}";
+            }
+            catch (Exception ex)
+            {
+                return $"打开失败：{ex.Message}";
             }
         }
     }
