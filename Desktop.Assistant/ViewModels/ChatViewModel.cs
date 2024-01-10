@@ -44,7 +44,7 @@ namespace Desktop.Assistant.ViewModels
 
         public ICommand EnterKeyPressedCommand { get; private set; }
 
-        public ChatViewModel(ChatService chatService, RoutingState router) : base(router)
+        public ChatViewModel( RoutingState router) : base(router)
         {
             this.Messages = new ObservableCollection<MessageBase>();
             this.audioRecorder = new AudioRecorder();
@@ -151,7 +151,6 @@ namespace Desktop.Assistant.ViewModels
 
 
         //Fields
-        private ChatService chatService;
         private string newMessageContent;
         private WindowNotificationManager windowNotificationManager;
         private IObservable<bool> canSendMessage;

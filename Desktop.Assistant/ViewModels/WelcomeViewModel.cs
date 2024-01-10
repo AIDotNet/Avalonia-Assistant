@@ -67,7 +67,7 @@ namespace Desktop.Assistant.ViewModels
                 OpenAIOption.Key = Key;
                 OpenAIOption.Model = Model;
 
-                Router.Navigate.Execute(new ChatViewModel(chatService, Router));
+                Router.Navigate.Execute(new ChatViewModel( Router));
             }
             catch (Exception e)
             {
@@ -78,7 +78,6 @@ namespace Desktop.Assistant.ViewModels
 
         //Fields
         private string file = "openai.json";
-        private ChatService chatService = new ChatService();
         private string key;
         private string model;
         private string endpoint;
