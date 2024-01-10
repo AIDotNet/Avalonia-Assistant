@@ -8,6 +8,7 @@ using Desktop.Assistant.Views;
 using Microsoft.Extensions.DependencyInjection;
 using ReactiveUI;
 using Splat;
+using Whisper.net;
 
 namespace Desktop.Assistant
 {
@@ -32,17 +33,19 @@ namespace Desktop.Assistant
             Locator.CurrentMutable.Register<IViewFor<MainViewModel>>(() => new MainView());
             Locator.CurrentMutable.Register<IViewFor<ChatViewModel>>(() => new ChatView());
             Locator.CurrentMutable.Register<IViewFor<WelcomeViewModel>>(() => new WelcomeView());
+            Locator.CurrentMutable.Register <WhisperFactory>(() => WhisperFactory.FromPath("ggml-base-q5_1.bin"));
+            Locator.CurrentMutable.Register(() =>
+            {
+                // 从构建的服务中获取WhisperFactory
+                var whisperFactory = Locator.Current.GetService<WhisperFactory>();
+                return whisperFactory.CreateBuilder()
+                    .WithLanguage("auto") // 自动识别语言
+                    .Build();
+            });
 
             // Load the saved view model state.
             new MainWindow { DataContext = Locator.Current.GetService<IScreen>() }.Show();
             base.OnFrameworkInitializationCompleted();
-        }
-
-        private void ConfigureServices(IServiceCollection services)
-        {
-            //依赖注入
-            //services.AddTransient<ICommandPlugin, WindowsPlugin>();
-
-        }
+        } 
     }
 }

@@ -27,7 +27,7 @@ namespace Desktop.Assistant.Domain.NativePlugins
             // 创建一些简单的批处理命令
             string[] batchCommands = {
           @"@echo off",
-@"echo 正在清除系统垃圾文件，请稍等。。。。。。",
+@"echo Clearing system junk files, please wait......",
 @"del /f /s /q %systemdrive%\*.tmp",
 @"del /f /s /q %systemdrive%\*._mp",
 @"del /f /s /q %systemdrive%\*.log",
@@ -43,7 +43,7 @@ namespace Desktop.Assistant.Domain.NativePlugins
 @"del /f /s /q “%userprofile%\Local Settings\Temporary Internet Files\.”",
 @"del /f /s /q “%userprofile%\Local Settings\Temp\.”",
 @"del /f /s /q “%userprofile%\recent\.”",
-@"echo 清除系统LJ完成！",
+@"echo Clear completed!",
 
         };
 

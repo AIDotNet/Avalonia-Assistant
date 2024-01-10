@@ -1,39 +1,34 @@
 ﻿using ReactiveUI;
 using System;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using Desktop.Assistant.Services;
-using Desktop.Assistant.Domain.MessageTypes;
-using Desktop.Assistant.Domain.Models;
 using Desktop.Assistant.Models;
 using Avalonia.Controls.Notifications;
-using Avalonia.Threading;
 using System.Reactive.Linq;
 using Desktop.Assistant.Domain.Model;
-using Microsoft.Extensions.Logging;
 using Microsoft.SemanticKernel;
 using System.Net.Http;
 using Desktop.Assistant.Domain.Utils;
-using Microsoft.SemanticKernel.Connectors.OpenAI;
-using Microsoft.SemanticKernel.ChatCompletion;
 using System.Data;
-using System.Reflection.Metadata;
 using Microsoft.SemanticKernel.Planning.Handlebars;
-using Desktop.Assistant.Domain.NativePlugins;
-using Newtonsoft.Json;
-using System.Runtime.InteropServices;
 using Desktop.Assistant.Domain.NativePlugins.Attributes;
+using System.IO;
+using Whisper.net;
+using System.Diagnostics;
+using Avalonia;
+using Splat;
 
 namespace Desktop.Assistant.ViewModels
 {
     public class ChatViewModel : ViewModelBase
-    {        
+    {
         public ObservableCollection<MessageBase> Messages { get; private set; }
         private Kernel kernel;
+        private AudioRecorder audioRecorder;
+        private bool _isRecording = false;
 
         public string NewMessageContent
         {
@@ -52,6 +47,7 @@ namespace Desktop.Assistant.ViewModels
         public ChatViewModel(ChatService chatService, RoutingState router) : base(router)
         {
             this.Messages = new ObservableCollection<MessageBase>();
+            this.audioRecorder = new AudioRecorder();
 
             canSendMessage = this.WhenAnyValue(x => x.NewMessageContent).Select(x => !string.IsNullOrEmpty(x));
 
@@ -71,16 +67,27 @@ namespace Desktop.Assistant.ViewModels
             OSExtensions.ImportPluginFromObjectByOs(kernel);
         }
 
+        /// <summary>
+        /// 回车
+        /// </summary>
+        /// <returns></returns>
         async Task EnterKeyPressed()
         {
             await SendMessage();
         }
 
+        /// <summary>
+        /// 按钮发送消息
+        /// </summary>
+        /// <returns></returns>
         async Task SendMessage()
         {
-            string msg = "";
+            string outMsg = "";
             try
             {
+                string inputMsg = NewMessageContent;
+                NewMessageContent = string.Empty;
+                this.Messages.Add(new TextMessage(inputMsg) { Role = ChatRoleType.Sender });
                 //OpenAIChatCompletionService chatCompletionService = new(OpenAIOption.Model, OpenAIOption.Key, httpClient: new HttpClient(handler));
                 //var msg=await chatCompletionService.GetChatMessageContentAsync(NewMessageContent); 
                 var planner = new HandlebarsPlanner(
@@ -88,16 +95,16 @@ namespace Desktop.Assistant.ViewModels
                    {
                        AllowLoops = true
                    });
-                var plan = await planner.CreatePlanAsync(kernel, NewMessageContent);
-                msg = await plan.InvokeAsync(kernel);           
+                var plan = await planner.CreatePlanAsync(kernel, inputMsg);
+                outMsg = await plan.InvokeAsync(kernel);           
             }
             catch (Exception ex)
             {
-                msg = "执行异常";
+                outMsg = "执行异常";
             }
-            this.Messages.Add(new TextMessage(NewMessageContent) { Role = ChatRoleType.Sender });
-            this.Messages.Add(new TextMessage(msg) { Role = ChatRoleType.Receiver });
-            NewMessageContent = string.Empty;
+    
+            this.Messages.Add(new TextMessage(outMsg) { Role = ChatRoleType.Receiver });
+
         }
 
         async Task AttachImage()
@@ -107,6 +114,39 @@ namespace Desktop.Assistant.ViewModels
 
         async Task DictateMessage()
         {
+            try
+            {
+                var outputFolder = Path.Combine(AppContext.BaseDirectory, "NAudio");
+                Directory.CreateDirectory(outputFolder);
+                var outputFilePath = Path.Combine(outputFolder, "recorded.wav");
+                // 检查是否正在录音
+                if (!_isRecording)
+                {
+                    audioRecorder.StartRecording(outputFilePath);
+                }
+                else
+                {
+                    audioRecorder.StopRecording();
+                    await Task.Delay(500);
+                    //结束后解析文字
+                    WhisperProcessor processor = Locator.Current.GetService<WhisperProcessor>();
+                    var audioStr = string.Empty;
+                    using (var fileStream = File.OpenRead(outputFilePath))
+                    {
+                        await foreach (var result in processor.ProcessAsync(fileStream))
+                        {
+                            audioStr += result.Text;
+                        }
+                    }
+                    NewMessageContent = audioStr;
+                    await SendMessage();
+                }
+                _isRecording = !_isRecording;
+            }
+            catch (Exception ex)
+            { 
+                
+            }
         }
 
 

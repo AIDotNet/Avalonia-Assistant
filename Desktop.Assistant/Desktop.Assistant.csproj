@@ -10,7 +10,13 @@
     <AvaloniaResource Include="Assets\**" />
   </ItemGroup>
   <ItemGroup>
+    <None Remove="Assets\ggml-base-q5_1.bin" />
     <None Remove="Assets\gzh.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <AvaloniaResource Include="ggml-base-q5_1.bin">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </AvaloniaResource>
   </ItemGroup>
 
   <ItemGroup>
