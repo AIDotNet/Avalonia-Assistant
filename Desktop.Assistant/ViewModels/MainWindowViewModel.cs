@@ -21,6 +21,5 @@ namespace Desktop.Assistant.ViewModels
             Router.Navigate.Execute(new MainViewModel(Router));
         }
 
-        private ChatService chatService;
     }
 }
