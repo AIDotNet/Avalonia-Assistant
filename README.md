@@ -22,11 +22,19 @@ Avalonia-Assistant 是一个开源的桌面智能助理，旨在提供一个基�
   ```
 使用IDE打开，启动。
 
-或者执行命令 `dotnet build && dotnet run --project Desktop.Assistant/Desktop.Assistant.csproj` 
+或者执行命令
+
+`dotnet build && dotnet run --project Desktop.Assistant/Desktop.Assistant.csproj` 
 
 填入你的OpenAI Key 
 
 然后开始使用吧！
+
+假如你没有OpenAI,想用国内模型，那么你需要另一个项目
+```
+https://github.com/songquanpeng/one-api
+```
+
 
 ## 示例
 ![界面](https://github.com/xuzeyu91/Avalonia-Assistant/blob/main/img/cpu.png?raw=true)
