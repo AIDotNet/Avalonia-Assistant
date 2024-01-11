@@ -22,6 +22,10 @@ using Avalonia;
 using Splat;
 using Desktop.Assistant.Utils;
 using Avalonia.Media.Imaging;
+using Microsoft.SemanticKernel.Connectors.OpenAI;
+using Microsoft.SemanticKernel.ChatCompletion;
+using Microsoft.SemanticKernel.Plugins.Core;
+using System.Text;
 
 namespace Desktop.Assistant.ViewModels
 {
@@ -32,6 +36,7 @@ namespace Desktop.Assistant.ViewModels
         private bool _isRecording = false;
         private AudioRecorder audioRecorder;
         private WhisperProcessor processor;
+        private OpenAIChatCompletionService chatCompletionService;
         //Fields
         private string newMessageContent;
         private Bitmap? micImageBinding = ImageHelper.LoadFromResource(new Uri("avares://Desktop.Assistant/Assets/mic.png"));
@@ -89,13 +94,14 @@ namespace Desktop.Assistant.ViewModels
             kernel = Kernel.CreateBuilder()
                 .AddOpenAIChatCompletion(
                   modelId: OpenAIOption.Model,
-            apiKey: OpenAIOption.Key,
+                  apiKey: OpenAIOption.Key,
                   httpClient: new HttpClient(handler)
                      )
                 .Build();
             //注入SK插件
+            kernel.ImportPluginFromObject(new ConversationSummaryPlugin(), "ConversationSummaryPlugin");
             OSExtensions.ImportPluginFromObjectByOs(kernel);
-
+            chatCompletionService = new(OpenAIOption.Model, OpenAIOption.Key, httpClient: new HttpClient(handler));
             //录音
             processor = Locator.Current.GetService<WhisperProcessor>();
             audioRecorder = new AudioRecorder();
@@ -116,28 +122,66 @@ namespace Desktop.Assistant.ViewModels
         /// <returns></returns>
         async Task SendMessage()
         {
+            string inputMsg = NewMessageContent;
+            NewMessageContent = string.Empty;
+            this.Messages.Add(new TextMessage(inputMsg) { Role = ChatRoleType.Sender });
+            string outMsg = "";
+            //判断是GPT还是Agent
+            if (IsCheckGPT==true)
+            {
+                outMsg= await ChatGPT(inputMsg);
+            }
+            else {
+                outMsg= await AIAgent(inputMsg);
+            }
+            this.Messages.Add(new TextMessage(outMsg) { Role = ChatRoleType.Receiver });
+        }
+        private async Task<string> ChatGPT(string inputMsg)
+        {
             string outMsg = "";
             try
             {
-                string inputMsg = NewMessageContent;
-                NewMessageContent = string.Empty;
-                this.Messages.Add(new TextMessage(inputMsg) { Role = ChatRoleType.Sender });
-                //OpenAIChatCompletionService chatCompletionService = new(OpenAIOption.Model, OpenAIOption.Key, httpClient: new HttpClient(handler));
-                //var msg=await chatCompletionService.GetChatMessageContentAsync(NewMessageContent); 
+                StringBuilder hisList=new StringBuilder();
+                foreach (var msg in Messages)
+                { 
+                   string role= msg.Role == ChatRoleType.Sender ? "user" : "assistant";
+                    hisList.AppendLine( $"{role}:{((TextMessage)msg).Content }");
+                }
+                KernelFunction SummarizeConversationFunction = kernel.Plugins.GetFunction("ConversationSummaryPlugin", "SummarizeConversation");
+                var hisMsg  = (await kernel.InvokeAsync(SummarizeConversationFunction, new KernelArguments() { ["input"] = $"内容是：{hisList.ToString()} \r\n 请注意用中文总结。" })).GetValue<string>();
+                string prompt = @$"历史会话概要:{hisMsg}\n
+                                   用户：{inputMsg}";
+                var result= await chatCompletionService.GetChatMessageContentAsync(prompt);
+                if (result != null)
+                {
+                    outMsg = result.Content;
+                }
+            }
+            catch (Exception ex)
+            {
+                outMsg = $"执行异常:{ex.Message}";
+            }
+            return outMsg;
+        }
+
+        private async Task<string> AIAgent(string inputMsg)
+        {
+            string outMsg = "";
+            try
+            {       
                 var planner = new HandlebarsPlanner(
                    new HandlebarsPlannerOptions()
                    {
                        AllowLoops = true
                    });
                 var plan = await planner.CreatePlanAsync(kernel, inputMsg);
-                outMsg = await plan.InvokeAsync(kernel);           
+                outMsg = await plan.InvokeAsync(kernel);
             }
             catch (Exception ex)
             {
-                outMsg = "执行异常";
+                outMsg = $"执行异常:{ex.Message}";
             }
-  
-            this.Messages.Add(new TextMessage(outMsg) { Role = ChatRoleType.Receiver });
+            return outMsg;        
         }
 
         async Task DictateMessage()
