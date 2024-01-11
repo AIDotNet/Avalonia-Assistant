@@ -12,6 +12,8 @@
   <ItemGroup>
     <None Remove="Assets\ggml-base-q5_1.bin" />
     <None Remove="Assets\gzh.png" />
+    <None Remove="Assets\mic-red.png" />
+    <None Remove="Assets\mic.png" />
   </ItemGroup>
   <ItemGroup>
     <AvaloniaResource Include="ggml-base-q5_1.bin">

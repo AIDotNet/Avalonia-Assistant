@@ -56,10 +56,12 @@
                   Background="Transparent"
                   BorderBrush="Transparent"
                   BorderThickness="0">
-
-            <Path Fill="{DynamicResource MicrophoneDefaultColor}"
-                  Data="{DynamicResource MicrophoneGeometry}"
-                  Margin="0,4,0,0"/>
+            
+            <Image Source="{Binding MicImageBinding}"
+                  VerticalAlignment="Center"
+                  HorizontalAlignment="Center"
+                   MaxWidth="24"
+                 />
           </Button>
 
           <TextBox x:Name="InputText"

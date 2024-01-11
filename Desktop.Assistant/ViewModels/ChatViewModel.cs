@@ -20,6 +20,8 @@ using Whisper.net;
 using System.Diagnostics;
 using Avalonia;
 using Splat;
+using Desktop.Assistant.Utils;
+using Avalonia.Media.Imaging;
 
 namespace Desktop.Assistant.ViewModels
 {
@@ -31,6 +33,11 @@ namespace Desktop.Assistant.ViewModels
         private bool _isRecording = false;
         private AudioRecorder audioRecorder;
         private WhisperProcessor processor;
+        public Bitmap? MicImageBinding
+        {
+            get => micImageBinding;
+            set => this.RaiseAndSetIfChanged(ref micImageBinding, value);
+        }
 
         public string NewMessageContent
         {
@@ -118,8 +125,11 @@ namespace Desktop.Assistant.ViewModels
                 var outputFolder = Path.Combine(AppContext.BaseDirectory, "NAudio");
                 Directory.CreateDirectory(outputFolder);
                 var outputFilePath = Path.Combine(outputFolder, "recorded.wav");
+                _isRecording = !_isRecording;
+                //改变mic图标
+                await ChangeMicImage();
                 // 检查是否正在录音
-                if (!_isRecording)
+                if (_isRecording)
                 {
                     audioRecorder.StartRecording(outputFilePath);
                 }
@@ -128,7 +138,7 @@ namespace Desktop.Assistant.ViewModels
                     audioRecorder.StopRecording();
                     await Task.Delay(500);
                     //结束后解析文字
-                    
+
                     var audioStr = string.Empty;
                     using (var fileStream = File.OpenRead(outputFilePath))
                     {
@@ -139,8 +149,7 @@ namespace Desktop.Assistant.ViewModels
                     }
                     NewMessageContent = audioStr;
                     await SendMessage();
-                }
-                _isRecording = !_isRecording;
+                }       
             }
             catch (Exception ex)
             { 
@@ -148,9 +157,26 @@ namespace Desktop.Assistant.ViewModels
             }
         }
 
+        /// <summary>
+        /// 改变图标颜色
+        /// </summary>
+        /// <returns></returns>
+        private async Task ChangeMicImage()
+        {
+            if (_isRecording)
+            {
+                MicImageBinding = ImageHelper.LoadFromResource(new Uri("avares://Desktop.Assistant/Assets/mic-red.png"));
+            }
+            else
+            {
+                MicImageBinding = ImageHelper.LoadFromResource(new Uri("avares://Desktop.Assistant/Assets/mic.png"));
+            }
+        }
+
 
         //Fields
         private string newMessageContent;
+        private Bitmap? micImageBinding= ImageHelper.LoadFromResource(new Uri("avares://Desktop.Assistant/Assets/mic.png"));
         private WindowNotificationManager windowNotificationManager;
         private IObservable<bool> canSendMessage;
     }
