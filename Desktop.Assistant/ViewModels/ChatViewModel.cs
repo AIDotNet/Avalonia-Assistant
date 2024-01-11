@@ -142,14 +142,18 @@ namespace Desktop.Assistant.ViewModels
             try
             {
                 StringBuilder hisList=new StringBuilder();
-                foreach (var msg in Messages)
-                { 
-                   string role= msg.Role == ChatRoleType.Sender ? "user" : "assistant";
-                    hisList.AppendLine( $"{role}:{((TextMessage)msg).Content }");
-                }
-                KernelFunction SummarizeConversationFunction = kernel.Plugins.GetFunction("ConversationSummaryPlugin", "SummarizeConversation");
-                var hisMsg  = (await kernel.InvokeAsync(SummarizeConversationFunction, new KernelArguments() { ["input"] = $"内容是：{hisList.ToString()} \r\n 请注意用中文总结。" })).GetValue<string>();
-                string prompt = @$"历史会话概要:{hisMsg}\n
+                string hisMsg = "";
+                if (Messages.Count > 0)
+                {
+                    foreach (var msg in Messages)
+                    {
+                        string role = msg.Role == ChatRoleType.Sender ? "user" : "assistant";
+                        hisList.AppendLine($"{role}:{((TextMessage)msg).Content}");
+                    }
+                    KernelFunction SummarizeConversationFunction = kernel.Plugins.GetFunction("ConversationSummaryPlugin", "SummarizeConversation");
+                    hisMsg = (await kernel.InvokeAsync(SummarizeConversationFunction, new KernelArguments() { ["input"] = $"内容是：{hisList.ToString()} \r\n 请注意用中文总结。" })).GetValue<string>();
+                }               
+                string  prompt = @$"历史会话概要:{hisMsg}\n
                                    用户：{inputMsg}";
                 var result= await chatCompletionService.GetChatMessageContentAsync(prompt);
                 if (result != null)
