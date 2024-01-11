@@ -27,8 +27,10 @@ namespace Desktop.Assistant.ViewModels
     {
         public ObservableCollection<MessageBase> Messages { get; private set; }
         private Kernel kernel;
-        private AudioRecorder audioRecorder;
+        //录音相关
         private bool _isRecording = false;
+        private AudioRecorder audioRecorder;
+        private WhisperProcessor processor;
 
         public string NewMessageContent
         {
@@ -38,8 +40,6 @@ namespace Desktop.Assistant.ViewModels
         
         public  ICommand DictateMessageCommand { get; private set; }
 
-        public ICommand AttachImageCommand { get; private set; }
-
         public ICommand SendMessageCommand { get; private set; }
 
         public ICommand EnterKeyPressedCommand { get; private set; }
@@ -47,15 +47,15 @@ namespace Desktop.Assistant.ViewModels
         public ChatViewModel( RoutingState router) : base(router)
         {
             this.Messages = new ObservableCollection<MessageBase>();
-            this.audioRecorder = new AudioRecorder();
+ 
 
             canSendMessage = this.WhenAnyValue(x => x.NewMessageContent).Select(x => !string.IsNullOrEmpty(x));
 
             SendMessageCommand = ReactiveCommand.CreateFromTask(SendMessage, canSendMessage);
-            AttachImageCommand = ReactiveCommand.CreateFromTask(AttachImage);
             DictateMessageCommand = ReactiveCommand.CreateFromTask(DictateMessage);
             EnterKeyPressedCommand = ReactiveCommand.CreateFromTask(EnterKeyPressed);
 
+            //实例化SK
             var handler = new OpenAIHttpClientHandler();
             kernel = Kernel.CreateBuilder()
                 .AddOpenAIChatCompletion(
@@ -64,7 +64,12 @@ namespace Desktop.Assistant.ViewModels
                   httpClient: new HttpClient(handler)
                      )
                 .Build();
+            //注入SK插件
             OSExtensions.ImportPluginFromObjectByOs(kernel);
+
+            //录音
+            processor = Locator.Current.GetService<WhisperProcessor>();
+            audioRecorder = new AudioRecorder();
         }
 
         /// <summary>
@@ -102,14 +107,8 @@ namespace Desktop.Assistant.ViewModels
             {
                 outMsg = "执行异常";
             }
-    
+  
             this.Messages.Add(new TextMessage(outMsg) { Role = ChatRoleType.Receiver });
-
-        }
-
-        async Task AttachImage()
-        {
-
         }
 
         async Task DictateMessage()
@@ -129,7 +128,7 @@ namespace Desktop.Assistant.ViewModels
                     audioRecorder.StopRecording();
                     await Task.Delay(500);
                     //结束后解析文字
-                    WhisperProcessor processor = Locator.Current.GetService<WhisperProcessor>();
+                    
                     var audioStr = string.Empty;
                     using (var fileStream = File.OpenRead(outputFilePath))
                     {
