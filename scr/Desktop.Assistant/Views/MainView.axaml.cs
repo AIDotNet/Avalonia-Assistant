@@ -5,7 +5,6 @@ using Avalonia.Markup.Xaml;
 using Avalonia.ReactiveUI;
 using Desktop.Assistant.ViewModels;
 using ReactiveUI;
-using Tmds.DBus.Protocol;
 
 namespace Desktop.Assistant.Views
 {

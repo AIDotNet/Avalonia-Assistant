@@ -1,0 +1,51 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <NoWarn>SKEXP0060,SKEXP0050</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Remove="Assets\ggml-base-q5_1.bin" />
+    <None Remove="Assets\gzh.png" />
+    <None Remove="Assets\mic-red.png" />
+    <None Remove="Assets\mic.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\avalonia-logo.ico" />
+    <AvaloniaResource Include="Assets\mic-red.png" />
+    <AvaloniaResource Include="Assets\mic.png" />
+    <AvaloniaResource Include="Assets\gzh.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="$(AvaloniaVersion)" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="$(AvaloniaVersion)" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="$(AvaloniaVersion)" />
+    <PackageReference Include="Avalonia.ReactiveUI" Version="$(AvaloniaVersion)" />
+    <!--Condition below is needed to remove Avalonia.Diagnostics package from build output in Release configuration.-->
+    <PackageReference Condition="'$(Configuration)' == 'Debug'" Include="Avalonia.Diagnostics" Version="$(AvaloniaVersion)" />
+    <PackageReference Include="Avalonia.Xaml.Behaviors" Version="$(AvaloniaVersion)" />
+    <PackageReference Include="Avalonia.Xaml.Interactivity" Version="$(AvaloniaVersion)" />
+    <PackageReference Include="System.Reactive" Version="6.0.0" />
+    <PackageReference Include="System.Reactive.Linq" Version="6.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Desktop.Assistant.Domain\Desktop.Assistant.Domain.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="plugins\BasePlugin\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Page Include="Assets\gzh.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="ggml-base-q5_1.bin">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+</Project>

@@ -1,9 +1,0 @@
-{
-  "profiles": {
-    "Desktop.Assistant": {
-      "commandName": "Project",
-      "remoteDebugEnabled": false,
-      "authenticationMode": "None"
-    }
-  }
-}
