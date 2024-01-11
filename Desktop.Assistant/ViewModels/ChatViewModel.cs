@@ -27,12 +27,32 @@ namespace Desktop.Assistant.ViewModels
 {
     public class ChatViewModel : ViewModelBase
     {
-        public ObservableCollection<MessageBase> Messages { get; private set; }
         private Kernel kernel;
         //录音相关
         private bool _isRecording = false;
         private AudioRecorder audioRecorder;
         private WhisperProcessor processor;
+        //Fields
+        private string newMessageContent;
+        private Bitmap? micImageBinding = ImageHelper.LoadFromResource(new Uri("avares://Desktop.Assistant/Assets/mic.png"));
+        private IObservable<bool> canSendMessage;
+        private bool? isCheckGPT = true;
+        private bool? isCheckAgent = false;
+
+        //公开属性
+        public bool? IsCheckGPT 
+        {
+            get => isCheckGPT;
+            set => this.RaiseAndSetIfChanged(ref isCheckGPT, value);
+        }
+
+        public bool? IsCheckAgent
+        {
+            get => isCheckAgent;
+            set => this.RaiseAndSetIfChanged(ref isCheckAgent, value);
+        }
+
+        public ObservableCollection<MessageBase> Messages { get; private set; }
         public Bitmap? MicImageBinding
         {
             get => micImageBinding;
@@ -45,6 +65,8 @@ namespace Desktop.Assistant.ViewModels
             set => this.RaiseAndSetIfChanged(ref newMessageContent, value);
         }
         
+
+        //Commands
         public  ICommand DictateMessageCommand { get; private set; }
 
         public ICommand SendMessageCommand { get; private set; }
@@ -172,12 +194,5 @@ namespace Desktop.Assistant.ViewModels
                 MicImageBinding = ImageHelper.LoadFromResource(new Uri("avares://Desktop.Assistant/Assets/mic.png"));
             }
         }
-
-
-        //Fields
-        private string newMessageContent;
-        private Bitmap? micImageBinding= ImageHelper.LoadFromResource(new Uri("avares://Desktop.Assistant/Assets/mic.png"));
-        private WindowNotificationManager windowNotificationManager;
-        private IObservable<bool> canSendMessage;
     }
 }

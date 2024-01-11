@@ -29,16 +29,22 @@
         <Button Content="{Binding Content}" Background="Transparent"/>
       </c:ChatBubble>
     </DataTemplate>
-
   </UserControl.DataTemplates>
 
-  <Grid RowDefinitions="*, Auto">
-    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+  <Grid RowDefinitions="30,*, Auto" >
+    <DockPanel Grid.Row="0"  >
+      <RadioButton GroupName="AIType" Margin="70,0" IsChecked="{Binding IsCheckGPT}"
+              Content="ChatGPT"/>
+      <RadioButton GroupName="AIType"  IsChecked="{Binding IsCheckAgent}" 
+                Content="AI Agent"/>
+    </DockPanel>
+    
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled" Grid.Row="1">
       <ItemsControl ItemsSource="{Binding Messages}" >
       </ItemsControl>
     </ScrollViewer>
 
-    <Grid ColumnDefinitions="*, Auto, Auto" Margin="20" Grid.Row="1">
+    <Grid ColumnDefinitions="*, Auto, Auto" Margin="20" Grid.Row="2">
       <Border Grid.Column="0"
             MinWidth="270"
             Background="{DynamicResource EntryBackground}"

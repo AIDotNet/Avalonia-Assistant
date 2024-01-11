@@ -12,6 +12,6 @@
         Icon="/Assets/avalonia-logo.ico"
         Title="许泽宇的技术分享"
         >
-  <rxui:RoutedViewHost Router="{Binding Router}" Margin="0,30,0,0">
+  <rxui:RoutedViewHost Router="{Binding Router}" Margin="0,0,0,0">
   </rxui:RoutedViewHost>
 </Window>
