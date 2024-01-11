@@ -143,7 +143,7 @@ namespace Desktop.Assistant.ViewModels
             {
                 StringBuilder hisList=new StringBuilder();
                 string hisMsg = "";
-                if (Messages.Count > 0)
+                if (Messages.Count > 1)
                 {
                     foreach (var msg in Messages)
                     {
