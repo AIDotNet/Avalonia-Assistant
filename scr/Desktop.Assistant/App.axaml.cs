@@ -21,19 +21,34 @@ namespace Desktop.Assistant
 
         public override void OnFrameworkInitializationCompleted()
         {
+            switch (ApplicationLifetime)
+            {
+                case IClassicDesktopStyleApplicationLifetime desktop:
+                    //desktop.MainWindow = new MainWindow();
+                    var suspension = new AutoSuspendHelper(ApplicationLifetime);
+                    RxApp.SuspensionHost.CreateNewAppState = () => new MainWindowViewModel();
+                    RxApp.SuspensionHost.SetupDefaultSuspendResume(new NewtonsoftJsonSuspensionDriver("appstate.json"));
+                    suspension.OnFrameworkInitializationCompleted();
+                    // Load the saved view model state.
+                    Register();
+                    new MainWindow { DataContext = Locator.Current.GetService<IScreen>() }.Show();
+                    break;
+                case ISingleViewApplicationLifetime singleView:
+                    Register();
+                    singleView.MainView = new MainView();
+                    break;
+            }        
+            // Create the AutoSuspendHelper.         
+            base.OnFrameworkInitializationCompleted();
+        }
 
-            // Create the AutoSuspendHelper.
-            var suspension = new AutoSuspendHelper(ApplicationLifetime);
-            RxApp.SuspensionHost.CreateNewAppState = () => new MainWindowViewModel();
-            RxApp.SuspensionHost.SetupDefaultSuspendResume(new NewtonsoftJsonSuspensionDriver("appstate.json"));
-            suspension.OnFrameworkInitializationCompleted();
-
-
+        private static void Register()
+        {
             Locator.CurrentMutable.RegisterConstant<IScreen>(RxApp.SuspensionHost.GetAppState<MainWindowViewModel>());
             Locator.CurrentMutable.Register<IViewFor<MainViewModel>>(() => new MainView());
             Locator.CurrentMutable.Register<IViewFor<ChatViewModel>>(() => new ChatView());
             Locator.CurrentMutable.Register<IViewFor<WelcomeViewModel>>(() => new WelcomeView());
-            Locator.CurrentMutable.Register <WhisperFactory>(() => WhisperFactory.FromPath("ggml-base-q5_1.bin"));
+            Locator.CurrentMutable.Register<WhisperFactory>(() => WhisperFactory.FromPath("ggml-base-q5_1.bin"));
             Locator.CurrentMutable.Register(() =>
             {
                 // 从构建的服务中获取WhisperFactory
@@ -42,10 +57,6 @@ namespace Desktop.Assistant
                     .WithLanguage("auto") // 自动识别语言
                     .Build();
             });
-
-            // Load the saved view model state.
-            new MainWindow { DataContext = Locator.Current.GetService<IScreen>() }.Show();
-            base.OnFrameworkInitializationCompleted();
-        } 
+        }
     }
 }

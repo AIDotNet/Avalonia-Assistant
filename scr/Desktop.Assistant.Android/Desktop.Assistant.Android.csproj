@@ -2,13 +2,13 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net8.0-android</TargetFramework>
-    <SupportedOSPlatformVersion>33</SupportedOSPlatformVersion>
-    <Nullable>enable</Nullable>
+    <SupportedOSPlatformVersion>21</SupportedOSPlatformVersion>
     <ApplicationId>com.CompanyName.Desktop.Assistant</ApplicationId>
     <ApplicationVersion>1</ApplicationVersion>
     <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
     <AndroidPackageFormat>apk</AndroidPackageFormat>
     <AndroidEnableProfiledAot>False</AndroidEnableProfiledAot>
+    <RootNamespace>Semi.Avalonia.Demo.Android</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>
