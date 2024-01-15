@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.ReactiveUI;
+using CommunityToolkit.Mvvm.DependencyInjection;
 using Desktop.Assistant.Services;
 using Desktop.Assistant.ViewModels;
 using Desktop.Assistant.Views;
@@ -30,11 +31,11 @@ namespace Desktop.Assistant
                     RxApp.SuspensionHost.SetupDefaultSuspendResume(new NewtonsoftJsonSuspensionDriver("appstate.json"));
                     suspension.OnFrameworkInitializationCompleted();
                     // Load the saved view model state.
-                    Register();
+                    ConfigureServices();
                     new MainWindow { DataContext = Locator.Current.GetService<IScreen>() }.Show();
                     break;
                 case ISingleViewApplicationLifetime singleView:
-                    Register();
+                    ConfigureServices();
                     singleView.MainView = new MainView();
                     break;
             }        
@@ -42,7 +43,7 @@ namespace Desktop.Assistant
             base.OnFrameworkInitializationCompleted();
         }
 
-        private static void Register()
+        private static void ConfigureServices()
         {
             Locator.CurrentMutable.RegisterConstant<IScreen>(RxApp.SuspensionHost.GetAppState<MainWindowViewModel>());
             Locator.CurrentMutable.Register<IViewFor<MainViewModel>>(() => new MainView());

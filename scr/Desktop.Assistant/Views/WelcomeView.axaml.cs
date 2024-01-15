@@ -12,6 +12,7 @@ namespace Desktop.Assistant.Views
     {
         public WelcomeView()
         {
+            ViewModel = new WelcomeViewModel(new RoutingState());
             InitializeComponent();
 
         }
