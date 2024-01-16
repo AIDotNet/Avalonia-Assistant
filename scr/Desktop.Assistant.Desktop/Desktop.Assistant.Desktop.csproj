@@ -22,4 +22,13 @@
   <ItemGroup>
     <ProjectReference Include="..\Desktop.Assistant\Desktop.Assistant.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <None Update="es\cli.c">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="es\es.exe">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
 </Project>
