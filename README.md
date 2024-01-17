@@ -36,7 +36,16 @@ https://github.com/songquanpeng/one-api
 ```
 
 
+
 ## 示例
+### ChatGPT模式
+
+你可以直接使用ChatGPT模式与GPT进行会话
+
+### AI Agent模式
+
+也可以使用Agent模式让AI来帮助你实现某些动作
+
 ![界面](https://github.com/xuzeyu91/Avalonia-Assistant/blob/main/img/cpu.png?raw=true)
 
 例如这个图，通过本地插件就能获取我的电脑相关信息。
