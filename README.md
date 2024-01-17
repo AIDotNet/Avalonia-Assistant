@@ -59,6 +59,11 @@ https://github.com/songquanpeng/one-api
 ……
 ```
 
+搜索本地文件
+
+![界面](https://github.com/xuzeyu91/Avalonia-Assistant/blob/main/img/searchfile.png?raw=true)
+
+
 我还会继续探索，客户端助手有哪些有趣的场景！
 
 ## 如何贡献
