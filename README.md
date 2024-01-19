@@ -1,6 +1,6 @@
 # Avalonia-Assistant
 
-Avalonia-Assistant 是一个开源的桌面智能助理，旨在提供一个基于 Avalonia UI 框架和 Semantic Kernel 与 OpenAI 集成的友好交互体验。通过使用 Avalonia-Assistant，您可以通过文本或语音命令来执行各种桌面操作，从而增强您的工作效率和日常办公体验。
+Avalonia-Assistant 是一个开源的桌面智能助理，旨在提供一个基于 Avalonia UI 框架和 Semantic Kernel 与 OpenAI 或其他llm大模型集成的友好交互体验。通过使用 Avalonia-Assistant，您可以通过文本或语音命令来执行各种桌面操作，从而增强您的工作效率和日常办公体验。
 
 ## 特性
 
