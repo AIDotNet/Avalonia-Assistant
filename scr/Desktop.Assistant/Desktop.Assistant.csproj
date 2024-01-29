@@ -1,4 +1,5 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="LLamaSharp.Runtime.targets" />
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
@@ -41,12 +42,19 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Include="runtimes\build\temp.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Page Include="Assets\gzh.png" />
   </ItemGroup>
 
   <ItemGroup>
     <None Update="ggml-base-q5_1.bin">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="tinyllama-1.1b-chat.gguf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
 </Project>

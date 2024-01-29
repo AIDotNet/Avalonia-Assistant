@@ -5,6 +5,8 @@
     <LangVersion>latest</LangVersion>  </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="LLamaSharp" Version="0.9.1" />
+    <PackageReference Include="LLamaSharp.Backend.Cpu" Version="0.9.1" />
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="8.0.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="8.0.0" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.0" />
@@ -24,6 +26,10 @@
     <PackageReference Include="NAudio.Core" Version="2.2.1" />
     <PackageReference Include="Whisper.net" Version="1.5.0" />
     <PackageReference Include="Whisper.net.Runtime" Version="1.5.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Utils\RepoUtils\" />
   </ItemGroup>
 
 </Project>

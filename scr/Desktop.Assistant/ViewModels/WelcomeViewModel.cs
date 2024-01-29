@@ -35,6 +35,25 @@ namespace Desktop.Assistant.ViewModels
             get => model;
             set => this.RaiseAndSetIfChanged(ref model, value);
         }
+        public string GgufPath
+        {
+            get => ggufpath;
+            set => this.RaiseAndSetIfChanged(ref ggufpath, value);
+        }
+
+
+        //公开属性
+        public bool IsCheckOpenAI
+        {
+            get => isCheckOpenAI;
+            set => this.RaiseAndSetIfChanged(ref isCheckOpenAI, value);
+        }
+
+        public bool IsCheckgguf
+        {
+            get => isCheckgguf;
+            set => this.RaiseAndSetIfChanged(ref isCheckgguf, value);
+        }
 
         public ICommand CompleteCommand { get; private set; }
 
@@ -50,6 +69,7 @@ namespace Desktop.Assistant.ViewModels
             }
          
             CompleteCommand = ReactiveCommand.Create(Complete);
+            GgufPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "tinyllama-1.1b-chat.gguf");
         }
 
         public void Complete()
@@ -67,7 +87,7 @@ namespace Desktop.Assistant.ViewModels
                 OpenAIOption.Key = Key;
                 OpenAIOption.Model = Model;
 
-                Router.Navigate.Execute(new ChatViewModel( Router));
+                Router.Navigate.Execute(new ChatViewModel( Router, IsCheckOpenAI,this.GgufPath));
             }
             catch (Exception e)
             {
@@ -81,5 +101,9 @@ namespace Desktop.Assistant.ViewModels
         private string key;
         private string model;
         private string endpoint;
+        private bool isCheckOpenAI = true;
+        private bool isCheckgguf = false;
+
+        private string ggufpath= "tinyllama-1.1b-chat.gguf";
     }
 }

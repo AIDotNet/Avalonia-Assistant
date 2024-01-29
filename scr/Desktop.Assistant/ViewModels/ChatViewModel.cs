@@ -26,6 +26,7 @@ using Microsoft.SemanticKernel.Connectors.OpenAI;
 using Microsoft.SemanticKernel.ChatCompletion;
 using Microsoft.SemanticKernel.Plugins.Core;
 using System.Text;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Desktop.Assistant.ViewModels
 {
@@ -37,21 +38,26 @@ namespace Desktop.Assistant.ViewModels
         private AudioRecorder audioRecorder;
         private WhisperProcessor processor;
         private OpenAIChatCompletionService chatCompletionService;
+
+        private StatefulChatService _statefulChatService;
         //Fields
         private string newMessageContent;
         private Bitmap? micImageBinding = ImageHelper.LoadFromResource(new Uri("avares://Desktop.Assistant/Assets/mic.png"));
         private IObservable<bool> canSendMessage;
-        private bool? isCheckGPT = true;
-        private bool? isCheckAgent = false;
+        private bool isCheckGPT = true;
+        private bool isCheckAgent = false;
+        private bool isCheckOpenAI = true;
+        private string ggufpath;
+
 
         //公开属性
-        public bool? IsCheckGPT 
+        public bool IsCheckGPT 
         {
             get => isCheckGPT;
             set => this.RaiseAndSetIfChanged(ref isCheckGPT, value);
         }
 
-        public bool? IsCheckAgent
+        public bool IsCheckAgent
         {
             get => isCheckAgent;
             set => this.RaiseAndSetIfChanged(ref isCheckAgent, value);
@@ -78,11 +84,11 @@ namespace Desktop.Assistant.ViewModels
 
         public ICommand EnterKeyPressedCommand { get; private set; }
 
-        public ChatViewModel( RoutingState router) : base(router)
+        public ChatViewModel( RoutingState router,bool isOpenAI,string GgufPath) : base(router)
         {
             this.Messages = new ObservableCollection<MessageBase>();
- 
-
+            this.isCheckOpenAI = isOpenAI;
+            this.ggufpath = GgufPath;
             canSendMessage = this.WhenAnyValue(x => x.NewMessageContent).Select(x => !string.IsNullOrEmpty(x));
 
             SendMessageCommand = ReactiveCommand.CreateFromTask(SendMessage, canSendMessage);
@@ -105,6 +111,8 @@ namespace Desktop.Assistant.ViewModels
             //录音
             processor = Locator.Current.GetService<WhisperProcessor>();
             audioRecorder = new AudioRecorder();
+
+            _statefulChatService =new StatefulChatService(ggufpath);
         }
 
         /// <summary>
@@ -129,12 +137,33 @@ namespace Desktop.Assistant.ViewModels
             //判断是GPT还是Agent
             if (IsCheckGPT==true)
             {
-                outMsg= await ChatGPT(inputMsg);
+                if (isCheckOpenAI)
+                {
+                    outMsg = await ChatGPT(inputMsg);
+                }
+                else 
+                {
+                    outMsg = await LLama(inputMsg);
+                }
             }
             else {
                 outMsg= await AIAgent(inputMsg);
             }
             this.Messages.Add(new TextMessage(outMsg) { Role = ChatRoleType.Receiver });
+        }
+
+        private async Task<string> LLama(string inputMsg)
+        {
+            string outMsg = "";
+            try
+            {
+                outMsg=await _statefulChatService.Send(new SendMessageInput() { Text=inputMsg});
+            }
+            catch (Exception ex)
+            {
+                outMsg = ex.Message;
+            }
+            return outMsg;
         }
         private async Task<string> ChatGPT(string inputMsg)
         {

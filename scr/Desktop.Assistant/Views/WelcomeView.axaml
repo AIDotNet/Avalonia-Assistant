@@ -5,26 +5,39 @@
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
              x:Class="Desktop.Assistant.Views.WelcomeView">
   
-  <Grid RowDefinitions="Auto, Auto, Auto, Auto, Auto"  HorizontalAlignment="Center" VerticalAlignment="Center">
+  <Grid RowDefinitions="Auto, Auto, Auto, Auto, Auto,Auto"  HorizontalAlignment="Center" VerticalAlignment="Center">
       
-      <TextBlock Text="配置OpenAI"  FontSize="30" FontWeight="Medium" Margin ="50"/>
-      
-      <StackPanel Orientation="Horizontal" Grid.Row="1" Spacing="10" Margin="0" >
+    <TextBlock Text="配置模型"  FontSize="30" FontWeight="Medium" Margin ="50,0"/>
+    <StackPanel Orientation="Horizontal" Grid.Row="1" Spacing="0" Margin="0" >
+      <DockPanel Grid.Row="0"  >
+        <RadioButton GroupName="AIType" Margin="70,0" IsChecked="{Binding IsCheckOpenAI}"
+                Content="OpenAI"/>
+        <RadioButton GroupName="AIType"  IsChecked="{Binding IsCheckgguf}"
+                  Content="gguf"/>
+      </DockPanel>
+    </StackPanel>
+    
+      <StackPanel Orientation="Horizontal" Grid.Row="2" Spacing="10" Margin="0,5"  IsVisible="{Binding IsCheckOpenAI}">
           <TextBlock Text="Endpoint:" MinWidth="120" TextAlignment="Right" VerticalAlignment="Center"/>
           <TextBox Text="{Binding Endpoint}" Width="170"  Watermark="https://api.openai.com/" VerticalAlignment="Center"/>
       </StackPanel>
       
-      <StackPanel Orientation="Horizontal" Grid.Row="2" Spacing="10" Margin="0,5"  >
+      <StackPanel Orientation="Horizontal" Grid.Row="3" Spacing="10" Margin="0,5"   IsVisible="{Binding IsCheckOpenAI}">
           <TextBlock Text="Key:" MinWidth="120" TextAlignment="Right" VerticalAlignment="Center"/>
           <TextBox Text="{Binding Key}" Width="170" PasswordChar="*" VerticalAlignment="Center"/>
       </StackPanel>
       
-      <StackPanel Orientation="Horizontal" Grid.Row="3" Spacing="10" Margin="0,5"  > 
+      <StackPanel Orientation="Horizontal" Grid.Row="4" Spacing="10" Margin="0,5"   IsVisible="{Binding IsCheckOpenAI}"> 
           <TextBlock Text="Model:" MinWidth="120" TextAlignment="Right" VerticalAlignment="Center"/>
           <TextBox Text="{Binding Model}" Width="170"  VerticalAlignment="Center"/>
       </StackPanel>
+
+      <StackPanel Orientation="Horizontal" Grid.Row="2" Spacing="10" Margin="0,5"   IsVisible="{Binding IsCheckgguf}">
+        <TextBlock Text="Path:" MinWidth="120" TextAlignment="Right" VerticalAlignment="Center"/>
+        <TextBox Text="{Binding GgufPath}" Width="170"  VerticalAlignment="Center"/>
+      </StackPanel>
       
-      <StackPanel Orientation="Horizontal" Grid.Row="4" Spacing="10" Margin="0,8" HorizontalAlignment="Right"  >
+      <StackPanel Orientation="Horizontal" Grid.Row="5" Spacing="10" Margin="0,8" HorizontalAlignment="Right"  >
          <Button Content="完成"  Command="{Binding CompleteCommand}"/>
       </StackPanel>
       

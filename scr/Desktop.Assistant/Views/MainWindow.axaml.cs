@@ -13,7 +13,7 @@ namespace Desktop.Assistant.Views
         public MainWindow()
         {
             InitializeComponent();
-
+            this.AttachDevTools();
             // 订阅窗体打开事件
             this.Opened += OnOpened;
         }

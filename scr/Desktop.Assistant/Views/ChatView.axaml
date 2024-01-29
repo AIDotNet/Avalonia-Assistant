@@ -34,9 +34,9 @@
   <Grid RowDefinitions="30,*, Auto" >
     <DockPanel Grid.Row="0"  >
       <RadioButton GroupName="AIType" Margin="70,0" IsChecked="{Binding IsCheckGPT}"
-              Content="ChatGPT"/>
+              Content="聊天对话"/>
       <RadioButton GroupName="AIType"  IsChecked="{Binding IsCheckAgent}" 
-                Content="AI Agent"/>
+                Content="智能助手"/>
     </DockPanel>
     
     <ScrollViewer HorizontalScrollBarVisibility="Disabled" Grid.Row="1">

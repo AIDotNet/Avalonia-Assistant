@@ -6,9 +6,12 @@ using CommunityToolkit.Mvvm.DependencyInjection;
 using Desktop.Assistant.Services;
 using Desktop.Assistant.ViewModels;
 using Desktop.Assistant.Views;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using ReactiveUI;
 using Splat;
+using System.IO;
 using Whisper.net;
 
 namespace Desktop.Assistant

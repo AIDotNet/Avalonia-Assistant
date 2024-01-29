@@ -12,7 +12,6 @@ namespace Desktop.Assistant.Views
     {
         public ChatView()
         {
-            ViewModel = new ChatViewModel(new RoutingState());
             InitializeComponent();
         }
 
