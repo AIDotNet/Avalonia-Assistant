@@ -74,6 +74,12 @@ https://github.com/songquanpeng/one-api
 ![界面](https://github.com/xuzeyu91/Avalonia-Assistant/blob/main/img/searchfile.png?raw=true)
 
 
+集成了LLamaSharp可以在
+```
+https://hf-mirror.com/
+```
+搜索gguf格式模型，项目中也内置了一个1.1B的本地模型，可以直接使用。
+
 我还会继续探索，客户端助手有哪些有趣的场景！
 
 ## 如何贡献
