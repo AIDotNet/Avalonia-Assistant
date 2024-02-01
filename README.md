@@ -102,4 +102,4 @@ Fork 这个仓库。
 
 ## 联系我
 如有任何问题或建议，请通过以下方式关注我的公众号，可以发送进群等消息，然后我会拉你进交流群
-![公众号](https://raw.githubusercontent.com/xuzeyu91/semantic-kernel-aiagent/main/gzh.jpg)
+![公众号](https://raw.githubusercontent.com/xuzeyu91/Xzy.KnowledgeBase/main/gzh.jpg)
