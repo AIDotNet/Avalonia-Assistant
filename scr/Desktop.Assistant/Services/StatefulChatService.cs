@@ -20,7 +20,7 @@ namespace Desktop.Assistant.Services
 
         public StatefulChatService(string GgufPath)
         {
-            var @params = new LLama.Common.ModelParams("D:\\isoftstone\\Code\\AI\\tinyllama-1.1b-chat-v1.0.Q3_K_M.gguf")
+            var @params = new LLama.Common.ModelParams(GgufPath)
             {
                 ContextSize = 512,
             };
