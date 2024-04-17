@@ -95,24 +95,27 @@ namespace Desktop.Assistant.ViewModels
             DictateMessageCommand = ReactiveCommand.CreateFromTask(DictateMessage);
             EnterKeyPressedCommand = ReactiveCommand.CreateFromTask(EnterKeyPressed);
 
-            //实例化SK
-            var handler = new OpenAIHttpClientHandler();
-            kernel = Kernel.CreateBuilder()
-                .AddOpenAIChatCompletion(
-                  modelId: OpenAIOption.Model,
-                  apiKey: OpenAIOption.Key,
-                  httpClient: new HttpClient(handler)
-                     )
-                .Build();
-            //注入SK插件
-            kernel.ImportPluginFromObject(new ConversationSummaryPlugin(), "ConversationSummaryPlugin");
-            OSExtensions.ImportPluginFromObjectByOs(kernel);
-            chatCompletionService = new(OpenAIOption.Model, OpenAIOption.Key, httpClient: new HttpClient(handler));
-            //录音
-            processor = Locator.Current.GetService<WhisperProcessor>();
-            audioRecorder = new AudioRecorder();
+            _statefulChatService = new StatefulChatService(ggufpath);
 
-            _statefulChatService =new StatefulChatService(ggufpath);
+            if (string.IsNullOrEmpty(OpenAIOption.Model) || string.IsNullOrEmpty(OpenAIOption.Key))
+            {
+                //实例化SK
+                var handler = new OpenAIHttpClientHandler();
+                kernel = Kernel.CreateBuilder()
+                    .AddOpenAIChatCompletion(
+                      modelId: OpenAIOption.Model,
+                      apiKey: OpenAIOption.Key,
+                      httpClient: new HttpClient(handler)
+                         )
+                    .Build();
+                //注入SK插件
+                kernel.ImportPluginFromObject(new ConversationSummaryPlugin(), "ConversationSummaryPlugin");
+                OSExtensions.ImportPluginFromObjectByOs(kernel);
+                chatCompletionService = new(OpenAIOption.Model, OpenAIOption.Key, httpClient: new HttpClient(handler));
+                //录音
+                processor = Locator.Current.GetService<WhisperProcessor>();
+                audioRecorder = new AudioRecorder();
+            }
         }
 
         /// <summary>

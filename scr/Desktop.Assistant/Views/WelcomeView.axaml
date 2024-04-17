@@ -34,6 +34,7 @@
 
       <StackPanel Orientation="Horizontal" Grid.Row="2" Spacing="10" Margin="0,5"   IsVisible="{Binding IsCheckgguf}">
         <TextBlock Text="Path:" MinWidth="120" TextAlignment="Right" VerticalAlignment="Center"/>
+        
         <TextBox Text="{Binding GgufPath}" Width="170"  VerticalAlignment="Center"/>
       </StackPanel>
       
