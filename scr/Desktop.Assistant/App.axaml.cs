@@ -58,7 +58,7 @@ namespace Desktop.Assistant
                 // 从构建的服务中获取WhisperFactory
                 var whisperFactory = Locator.Current.GetService<WhisperFactory>();
                 return whisperFactory.CreateBuilder()
-                    .WithLanguage("auto") // 自动识别语言
+                    .WithLanguage("zh") // 自动识别语言
                     .Build();
             });
         }
