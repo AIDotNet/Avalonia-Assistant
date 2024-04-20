@@ -97,7 +97,7 @@ namespace Desktop.Assistant.ViewModels
 
             _statefulChatService = new StatefulChatService(ggufpath);
 
-            if (string.IsNullOrEmpty(OpenAIOption.Model) || string.IsNullOrEmpty(OpenAIOption.Key))
+            if (this.isCheckOpenAI&&(string.IsNullOrEmpty(OpenAIOption.Model) || string.IsNullOrEmpty(OpenAIOption.Key)))
             {
                 //实例化SK
                 var handler = new OpenAIHttpClientHandler();
