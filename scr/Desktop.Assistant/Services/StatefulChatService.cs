@@ -22,7 +22,7 @@ namespace Desktop.Assistant.Services
         {
             var @params = new LLama.Common.ModelParams(GgufPath)
             {
-                ContextSize = 512,
+                ContextSize = 2048,
             };
 
             // todo: share weights from a central service
