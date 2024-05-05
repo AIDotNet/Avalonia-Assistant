@@ -16,8 +16,14 @@ Avalonia-Assistant 是一个开源的桌面智能助理，旨在提供一个基�
 
 ## 开始使用
 
-在您的本机上开始使用 Avalonia-Assistant 很简单。您需要遵循以下步骤：
+网盘免安装exe下载地址：
+```
+链接：https://pan.quark.cn/s/f8997ec2ad0d
+提取码：d7ry
+```
 
+
+如果想自行编译使用方式：
 克隆这个仓库:
    ```sh
    git clone https://github.com/xuzeyu91/Avalonia-Assistant.git
