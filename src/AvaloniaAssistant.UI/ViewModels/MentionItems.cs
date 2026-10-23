@@ -9,6 +9,28 @@ using TKCode.Arc;
 
 namespace AvaloniaAssistant.UI.ViewModels;
 
+/// <summary>输入框里待发送的一张图片：缩略图 + 尺寸，点右上角可以撤掉。</summary>
+public sealed partial class PendingImageViewModel : ObservableObject
+{
+    private readonly Action<PendingImageViewModel>? _remove;
+
+    public PendingImageViewModel(ChatImage image, Bitmap thumbnail, Action<PendingImageViewModel>? remove = null)
+    {
+        Image = image;
+        Thumbnail = thumbnail;
+        _remove = remove;
+    }
+
+    public ChatImage Image { get; }
+
+    public Bitmap Thumbnail { get; }
+
+    public string Caption => Image.Caption;
+
+    [RelayCommand]
+    private void Remove() => _remove?.Invoke(this);
+}
+
 /// <summary>
 /// 文件类型的标签与配色。@ 浮层和引用标签共用一套，
 /// 同一个扩展名在哪里都是同一个颜色，用户不用重新认一遍。

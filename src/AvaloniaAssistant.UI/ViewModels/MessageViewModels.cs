@@ -3,6 +3,7 @@ using System.Collections.Specialized;
 using System.Text;
 using System.Text.Json;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using AvaloniaAssistant.Abstractions;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -20,13 +21,55 @@ public abstract class MessageViewModel : ObservableObject
 
 public sealed partial class UserMessageViewModel : MessageViewModel
 {
-    public UserMessageViewModel(string text, IReadOnlyList<ChatAttachment>? attachments = null)
+    public UserMessageViewModel(
+        string text,
+        IReadOnlyList<ChatAttachment>? attachments = null,
+        IReadOnlyList<ChatImage>? images = null)
     {
         Text = text;
         Attachments = attachments ?? [];
+        SourceImages = images ?? [];
+        Thumbnails = LoadThumbnails(SourceImages);
     }
 
     public string Text { get; }
+
+    /// <summary>这一轮附带的图片，重试时原样再发一次。</summary>
+    public IReadOnlyList<ChatImage> SourceImages { get; }
+
+    /// <summary>气泡里显示的小图。解码时就缩到 120px 宽，几张 4K 截图也不会把内存吃穿。</summary>
+    public IReadOnlyList<Bitmap> Thumbnails { get; }
+
+    public bool HasImages => Thumbnails.Count > 0;
+
+    private static IReadOnlyList<Bitmap> LoadThumbnails(IReadOnlyList<ChatImage> images)
+    {
+        if (images.Count == 0)
+        {
+            return [];
+        }
+
+        var thumbnails = new List<Bitmap>(images.Count);
+        foreach (var image in images)
+        {
+            try
+            {
+                if (!File.Exists(image.Path))
+                {
+                    continue;
+                }
+
+                using var stream = File.OpenRead(image.Path);
+                thumbnails.Add(Bitmap.DecodeToWidth(stream, 120));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+            {
+                // 图片被删了或格式坏了，少显示一张，不影响这条消息
+            }
+        }
+
+        return thumbnails;
+    }
 
     /// <summary>这一轮 @ 进来的资料。气泡里只显示名字，正文不进界面。</summary>
     public IReadOnlyList<ChatAttachment> Attachments { get; }

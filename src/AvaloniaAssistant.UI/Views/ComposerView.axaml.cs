@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
+using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Markup.Xaml;
@@ -68,6 +69,13 @@ public partial class ComposerView : UserControl
             return;
         }
 
+        // Ctrl+V 顺手看看剪贴板里有没有图：有就收进待发送列表。
+        // 文本仍然交给 Textarea 自己粘，不抢它的活。
+        if (e.Key == Key.V && e.KeyModifiers.HasFlag(KeyModifiers.Control))
+        {
+            _ = TryPasteImageAsync(viewModel);
+        }
+
         // @ 浮层开着的时候，上下键和 Enter 归浮层：先选资料，再把光标交回输入框，
         // 别让用户按 Enter 想选一条却把半截问题发出去了。
         if (viewModel.ShowMention)
@@ -114,6 +122,32 @@ public partial class ComposerView : UserControl
         if (viewModel.SendCommand.CanExecute(null))
         {
             viewModel.SendCommand.Execute(null);
+        }
+    }
+
+    /// <summary>
+    /// 读剪贴板里的位图。剪贴板里是文本或文件时什么都不做——
+    /// 用户按 Ctrl+V 粘一段文字，不该被这里拦住。
+    /// </summary>
+    private async Task TryPasteImageAsync(ComposerViewModel viewModel)
+    {
+        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+        if (clipboard is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var bitmap = await clipboard.TryGetValueAsync(DataFormat.Bitmap);
+            if (bitmap is not null)
+            {
+                viewModel.AddImage(bitmap);
+            }
+        }
+        catch
+        {
+            // 剪贴板格式不认识，当普通粘贴处理
         }
     }
 

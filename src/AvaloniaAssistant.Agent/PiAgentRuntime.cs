@@ -240,6 +240,7 @@ public sealed class PiAgentRuntime : IAssistantRuntime
                 Model = settings.Model,
                 ApiKey = settings.ApiKey,
                 BaseUrl = settings.BaseUrl,
+                Protocol = settings.EffectiveProtocol,
                 DisabledTools = [.. settings.DisabledTools],
             };
 
@@ -485,17 +486,21 @@ public sealed class PiAgentRuntime : IAssistantRuntime
 
         public required string BaseUrl { get; init; }
 
+        public required AgentProtocol Protocol { get; init; }
+
         public required IReadOnlyList<string> DisabledTools { get; init; }
 
         /// <summary>
-        /// 会话复用条件：历史一致，且权限 / 模型 / 端点 / 工具开关都没变。
-        /// 权限变了必须重建——BeforeToolCall 闭包和内置工具集都是建会话时定下的。
+        /// 会话复用条件：历史一致，且权限 / 模型 / 端点 / 协议 / 工具开关都没变。
+        /// 权限变了必须重建——BeforeToolCall 闭包和内置工具集都是建会话时定下的；
+        /// 协议变了也必须重建——流式函数是建会话时按协议选定的。
         /// </summary>
         public bool Matches(IReadOnlyList<HistoryTurn> history, AssistantSettings settings)
             => Permission == settings.Permission
                && Model == settings.Model
                && ApiKey == settings.ApiKey
                && BaseUrl == settings.BaseUrl
+               && Protocol == settings.EffectiveProtocol
                && DisabledTools.SequenceEqual(settings.DisabledTools)
                && SameHistory(LastHistory, history);
     }

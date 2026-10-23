@@ -41,7 +41,29 @@
                                  LineHeight="21" />
           </Border>
 
-          <!-- 引用了哪些资料，气泡下面留一行小字，事后回看能对上 -->
+          <!-- 这一轮贴的图，缩略图跟着气泡右对齐 -->
+          <ItemsControl ItemsSource="{Binding Thumbnails}"
+                        IsVisible="{Binding HasImages}"
+                        HorizontalAlignment="Right"
+                        Margin="0,2,0,0">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <WrapPanel ItemSpacing="6" LineSpacing="6" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Border CornerRadius="10"
+                        ClipToBounds="True"
+                        BorderBrush="{StaticResource BorderBrush}"
+                        BorderThickness="1">
+                  <Image Source="{Binding}" Width="120" Stretch="Uniform" />
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+
+          <!-- 引用了哪些文件，气泡下面留一行小字，事后回看能对上 -->
           <StackPanel Orientation="Horizontal"
                       Spacing="5"
                       HorizontalAlignment="Right"

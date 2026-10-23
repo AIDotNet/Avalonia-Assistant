@@ -156,7 +156,7 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
         }
 
         var userMessage = (UserMessageViewModel)Messages[userIndex];
-        var prompt = new PromptRequest(userMessage.Text, userMessage.Attachments);
+        var prompt = new PromptRequest(userMessage.Text, userMessage.Attachments, userMessage.SourceImages);
 
         // 用户消息和 Session.Entries 里的 User 条目严格一一对应（提示条只进消息流不进存档），
         // 所以按「第几轮提问」定位要截断的存档位置，比按消息下标找更稳。
@@ -213,9 +213,10 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
                     Kind = ChatEntryKind.User,
                     Text = input.Text,
                     Attachments = [.. input.Attachments],
+                    Images = [.. input.Images ?? []],
                 });
 
-                Messages.Add(new UserMessageViewModel(input.Text, input.Attachments));
+                Messages.Add(new UserMessageViewModel(input.Text, input.Attachments, input.Images));
 
                 if (Session.Entries.Count(entry => entry.Kind == ChatEntryKind.User) == 1)
                 {
@@ -250,7 +251,8 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
                 Session.Mode,
                 _settings.Current.Permission,
                 Session.WorkspacePath,
-                new ChatApprovalGate(this));
+                new ChatApprovalGate(this),
+                input.Images);
 
             _cts?.Dispose();
             _cts = new CancellationTokenSource();
@@ -412,7 +414,7 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
             switch (entry.Kind)
             {
                 case ChatEntryKind.User:
-                    Messages.Add(new UserMessageViewModel(entry.Text, entry.Attachments) { CreatedAt = entry.CreatedAt });
+                    Messages.Add(new UserMessageViewModel(entry.Text, entry.Attachments, entry.Images) { CreatedAt = entry.CreatedAt });
                     break;
 
                 case ChatEntryKind.Assistant:

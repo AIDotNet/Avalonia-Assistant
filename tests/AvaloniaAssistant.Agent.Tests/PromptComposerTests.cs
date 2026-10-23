@@ -125,6 +125,57 @@ public sealed class PromptComposerTests
     }
 
     [Fact]
+    public void SessionJsonRoundTripKeepsPastedImages()
+    {
+        var session = new ChatSession
+        {
+            Entries =
+            [
+                new ChatEntry
+                {
+                    Kind = ChatEntryKind.User,
+                    Text = "看下这张图",
+                    Images =
+                    [
+                        new ChatImage
+                        {
+                            Id = "img1",
+                            Path = @"C://Users//demo//AppData//Roaming//AvaloniaAssistant//images//img1.png",
+                            MimeType = "image/png",
+                            Width = 1280,
+                            Height = 720,
+                            Size = 204800,
+                        },
+                    ],
+                },
+            ],
+        };
+
+        var json = JsonSerializer.Serialize(session, AssistantJson.Options);
+        var restored = JsonSerializer.Deserialize<ChatSession>(json, AssistantJson.Options);
+
+        var image = Assert.Single(Assert.Single(restored!.Entries).Images);
+        Assert.Equal("img1", image.Id);
+        Assert.Equal(1280, image.Width);
+        Assert.Equal("200 KB", image.DisplaySize);
+        Assert.Contains("1280×720", image.Caption);
+
+        // 计算属性不该写进存档，否则每张图多两份冗余字段
+        Assert.DoesNotContain("caption", json, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void PromptRequestCarriesImagesAlongsideText()
+    {
+        var image = new ChatImage { Id = "i1", Path = "x.png" };
+        var request = new PromptRequest("看图", [], [image]);
+
+        Assert.True(request.HasImages);
+        Assert.Single(request.Images!);
+        Assert.False(PromptRequest.Plain("只有文字").HasImages);
+    }
+
+    [Fact]
     public void SessionJsonRoundTripKeepsAttachmentSnapshot()
     {
         var session = new ChatSession

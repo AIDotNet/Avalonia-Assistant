@@ -146,6 +146,7 @@ public sealed class AssistantSettings
     /// 界面上显式选择的协议；null 表示跟随服务商预设。
     /// 旧版 settings.json 没有这个字段，读出来仍是 null，不会把 Anthropic 预设误降级成 Chat。
     /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public AgentProtocol? Protocol { get; set; }
 
     [JsonIgnore]

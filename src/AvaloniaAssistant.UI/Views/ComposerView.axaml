@@ -143,73 +143,68 @@
             Padding="14,10,12,9"
             BoxShadow="{StaticResource ComposerShadow}">
       <Grid RowDefinitions="Auto,Auto,Auto,Auto">
-        <!-- 待发送的图片 -->
-        <ItemsControl Grid.Row="0"
-                      ItemsSource="{Binding Images}"
-                      IsVisible="{Binding HasImages}"
-                      Margin="0,0,0,7">
-          <ItemsControl.ItemsPanel>
-            <ItemsPanelTemplate>
-              <WrapPanel ItemSpacing="6" LineSpacing="6" />
-            </ItemsPanelTemplate>
-          </ItemsControl.ItemsPanel>
-          <ItemsControl.ItemTemplate>
-            <DataTemplate>
-              <Border Width="68"
-                      Height="68"
-                      CornerRadius="10"
-                      ClipToBounds="True"
-                      Background="{StaticResource SurfaceMutedBrush}"
-                      ToolTip.Tip="{Binding Caption}">
-                <Panel>
-                  <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" />
-                  <Button Classes="image-remove"
-                          Command="{Binding RemoveCommand}"
-                          HorizontalAlignment="Right"
-                          VerticalAlignment="Top"
-                          Margin="3"
-                          ToolTip.Tip="移除这张图">
-                    <arc:ArcGlyph Data="{x:Static arc:ArcIcons.CircleX}" Size="11" />
-                  </Button>
-                </Panel>
-              </Border>
-            </DataTemplate>
-          </ItemsControl.ItemTemplate>
-        </ItemsControl>
+        <!-- 待发送的内容：图片在上，引用的文件在下，都没有时整行塌掉 -->
+        <StackPanel Grid.Row="0" Spacing="6" Margin="0,0,0,7">
+          <ItemsControl ItemsSource="{Binding Images}" IsVisible="{Binding HasImages}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <WrapPanel ItemSpacing="6" LineSpacing="6" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Border Width="68"
+                        Height="68"
+                        CornerRadius="10"
+                        ClipToBounds="True"
+                        Background="{StaticResource SurfaceMutedBrush}"
+                        ToolTip.Tip="{Binding Caption}">
+                  <Panel>
+                    <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" />
+                    <Button Classes="image-remove"
+                            Command="{Binding RemoveCommand}"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Top"
+                            Margin="3"
+                            ToolTip.Tip="移除这张图">
+                      <arc:ArcGlyph Data="{x:Static arc:ArcIcons.CircleX}" Size="11" />
+                    </Button>
+                  </Panel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
 
-        <!-- 已引用的文件 -->
-        <ItemsControl Grid.Row="0"
-                      ItemsSource="{Binding References}"
-                      IsVisible="{Binding HasReferences}"
-                      Margin="0,0,0,7">
-          <ItemsControl.ItemsPanel>
-            <ItemsPanelTemplate>
-              <WrapPanel ItemSpacing="6" LineSpacing="6" />
-            </ItemsPanelTemplate>
-          </ItemsControl.ItemsPanel>
-          <ItemsControl.ItemTemplate>
-            <DataTemplate>
-              <Border Classes="ref-chip" ToolTip.Tip="{Binding Detail}">
-                <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
-                  <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Paperclip}"
-                                Size="11"
-                                Foreground="{StaticResource TextMutedBrush}" />
-                  <TextBlock Text="{Binding Name}"
-                             FontSize="11.5"
-                             MaxWidth="180"
-                             TextTrimming="CharacterEllipsis"
-                             VerticalAlignment="Center" />
-                  <Button Classes="ref-remove"
-                          Command="{Binding $parent[ItemsControl].DataContext.RemoveReferenceCommand}"
-                          CommandParameter="{Binding}"
-                          ToolTip.Tip="取消引用">
-                    <arc:ArcGlyph Data="{x:Static arc:ArcIcons.CircleX}" Size="11" />
-                  </Button>
-                </StackPanel>
-              </Border>
-            </DataTemplate>
-          </ItemsControl.ItemTemplate>
-        </ItemsControl>
+          <ItemsControl ItemsSource="{Binding References}" IsVisible="{Binding HasReferences}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <WrapPanel ItemSpacing="6" LineSpacing="6" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Border Classes="ref-chip" ToolTip.Tip="{Binding Detail}">
+                  <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                    <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Paperclip}"
+                                  Size="11"
+                                  Foreground="{StaticResource TextMutedBrush}" />
+                    <TextBlock Text="{Binding Name}"
+                               FontSize="11.5"
+                               MaxWidth="180"
+                               TextTrimming="CharacterEllipsis"
+                               VerticalAlignment="Center" />
+                    <Button Classes="ref-remove"
+                            Command="{Binding $parent[ItemsControl].DataContext.RemoveReferenceCommand}"
+                            CommandParameter="{Binding}"
+                            ToolTip.Tip="取消引用">
+                      <arc:ArcGlyph Data="{x:Static arc:ArcIcons.CircleX}" Size="11" />
+                    </Button>
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
 
         <!-- @ 资料浮层：贴在输入框上沿，打字时不用挪手 -->
         <Border Grid.Row="1"
@@ -303,7 +298,7 @@
           </StackPanel>
 
           <TextBlock Grid.Column="1"
-                     Text="Enter 发送 · @ 引用文件"
+                     Text="Enter 发送 · @ 引用文件 · Ctrl+V 贴图"
                      Classes="caption"
                      FontSize="10"
                      Margin="7,0,0,0"
