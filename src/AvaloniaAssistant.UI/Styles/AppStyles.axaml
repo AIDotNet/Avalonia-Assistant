@@ -542,28 +542,16 @@
     <Setter Property="BorderBrush" Value="#F0CFCB" />
   </Style>
 
-  <!-- 滚动条：主题默认是一条 8px 宽的实心灰棒，压在浅色底上像根柱子。
-       这里把「看得见的」压到 4px：条本身留 8px 当拖拽热区，滑块用边框把背景挤到中间，
-       所以看着细、抓着还是原来那么宽。 -->
+  <!-- 滚动条：主题给的是一条 8px 宽的实心灰棒，压在浅色底上像根柱子。
+       收成 4px（横竖一致），轨道透明，只留滑块本身。 -->
   <Style Selector="ScrollBar:vertical">
-    <Setter Property="Width" Value="8" />
-    <Setter Property="MinWidth" Value="8" />
+    <Setter Property="Width" Value="4" />
+    <Setter Property="MinWidth" Value="4" />
     <Setter Property="Background" Value="Transparent" />
   </Style>
   <Style Selector="ScrollBar:horizontal">
-    <Setter Property="Height" Value="8" />
-    <Setter Property="MinHeight" Value="8" />
+    <Setter Property="Height" Value="4" />
+    <Setter Property="MinHeight" Value="4" />
     <Setter Property="Background" Value="Transparent" />
-  </Style>
-  <Style Selector="ScrollBar:vertical /template/ Thumb">
-    <Setter Property="BorderThickness" Value="2,0" />
-    <Setter Property="BackgroundSizing" Value="InnerBorder" />
-  </Style>
-  <Style Selector="ScrollBar:horizontal /template/ Thumb">
-    <Setter Property="BorderThickness" Value="0,2" />
-    <Setter Property="BackgroundSizing" Value="InnerBorder" />
-  </Style>
-  <Style Selector="ScrollBar:pointerover /template/ Thumb">
-    <Setter Property="Background" Value="{StaticResource BorderStrongBrush}" />
   </Style>
 </Styles>

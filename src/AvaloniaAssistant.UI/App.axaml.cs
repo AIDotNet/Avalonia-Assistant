@@ -1,11 +1,8 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
-using Avalonia.Controls.Primitives;
 using Avalonia.Input;
-using Avalonia.Layout;
 using Avalonia.Markup.Xaml;
-using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.VisualTree;
 using AvaloniaAssistant.Abstractions;
@@ -150,8 +147,6 @@ public partial class AssistantApp : Application
             Directory.CreateDirectory(directory);
         }
 
-        DumpScrollBars(window);
-
         // 渲染窗口的视觉根（带背景的那一层），而不是 Window 本身：
         // Window 会让 RenderTargetBitmap 漏掉合成层（按钮、图标），
         // 只渲染 Content 又会在右下留下透明边。视觉根两者都能兼顾。
@@ -166,52 +161,5 @@ public partial class AssistantApp : Application
         var bitmap = new RenderTargetBitmap(size, new Vector(96, 96));
         bitmap.Render(root);
         bitmap.Save(path, PngBitmapEncoderOptions.Default);
-    }
-
-    private static void DumpScrollBars(Window window)
-    {
-        foreach (var bar in window.GetVisualDescendants().OfType<ScrollBar>())
-        {
-            if (bar.Bounds.Width <= 0 && bar.Bounds.Height <= 0)
-            {
-                continue;
-            }
-
-            Console.WriteLine($"[SB] type={bar.GetType().FullName} bounds={bar.Bounds}");
-            foreach (var child in bar.GetVisualDescendants())
-            {
-                if (child.GetType().Name.Contains("Thumb"))
-                {
-                    Console.WriteLine($"   [THUMB] {child.GetType().FullName} bounds={child.Bounds}");
-                    foreach (var property in child.GetType().GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance))
-                    {
-                        if (property.GetIndexParameters().Length > 0)
-                        {
-                            continue;
-                        }
-
-                        object? value;
-                        try
-                        {
-                            value = property.GetValue(child);
-                        }
-                        catch
-                        {
-                            continue;
-                        }
-
-                        if (value is Avalonia.Media.IBrush brush)
-                        {
-                            value = (brush as Avalonia.Media.ISolidColorBrush)?.Color;
-                        }
-
-                        if (value is not null && !value.ToString()!.Contains("Avalonia", StringComparison.Ordinal))
-                        {
-                            Console.WriteLine($"      {property.Name} = {value}");
-                        }
-                    }
-                }
-            }
-        }
     }
 }

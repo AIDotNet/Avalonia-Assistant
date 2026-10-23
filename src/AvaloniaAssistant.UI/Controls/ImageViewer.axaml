@@ -34,16 +34,11 @@
             Background="Transparent"
             ClipToBounds="True"
             Cursor="Hand">
+      <!-- 缩放 / 平移两个变换在 code-behind 里建：ScaleTransform 不是控件，
+           x:Name 不会生成字段，写在这里也拿不到。顺序是「先缩放再平移」。 -->
       <Image x:Name="Preview"
              Stretch="None"
-             RenderTransformOrigin="0%,0%">
-        <Image.RenderTransform>
-          <TransformGroup>
-            <ScaleTransform x:Name="Scale" />
-            <TranslateTransform x:Name="Offset" />
-          </TransformGroup>
-        </Image.RenderTransform>
-      </Image>
+             RenderTransformOrigin="0%,0%" />
     </Border>
 
     <!-- 顶部工具条：尺寸信息在左，缩放和关闭在右 -->
