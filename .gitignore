@@ -368,3 +368,5 @@ FodyWeavers.xsd
 /.artifacts
 /.library
 /.tmp-arc
+/.tmp-hang
+/.tmp-verify
