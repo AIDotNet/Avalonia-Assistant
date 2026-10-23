@@ -222,6 +222,11 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
                 {
                     Session.Title = SessionText.BuildTitle(input.Text);
                     OnPropertyChanged(nameof(Title));
+
+                    // 第一句话落下来就把任务写进侧栏，不等这一轮跑完：
+                    // 模型还在流的时候侧栏里本来什么都没有，用户会以为任务没建成；
+                    // 而且整轮跑完才写文件的话，中途关掉应用这条任务就没了。
+                    await _host.RegisterSessionAsync(Session);
                 }
             }
 

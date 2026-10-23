@@ -14,6 +14,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private readonly ISessionStore _sessions;
     private readonly Dictionary<string, ChatSession> _sessionCache = new(StringComparer.Ordinal);
 
+    /// <summary>「任务」区是展开还是收起。null 表示用户还没动过，按有没有空间来定。</summary>
+    private bool? _taskSectionExpanded;
+
     public MainWindowViewModel(
         IAssistantRuntime runtime,
         ISettingsProvider settings,
@@ -68,15 +71,19 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     public string VersionText => "v1.0.0";
 
-    public string SessionCountText => $"任务 ({SessionGroups.Sum(group => group.Items.Count)})";
+    /// <summary>「任务」是全部任务的总入口：归了空间也还是任务，不从这里消失。</summary>
+    public string SessionCountText => $"任务 ({_sessionCache.Count})";
 
     /// <summary>「空间」标题右侧跟着条数，和「任务」保持一致；一个都没有时不挂个 0。</summary>
     public string WorkspaceCountText => HasWorkspaces ? $"空间 ({Workspaces.Count})" : "空间";
 
-    public bool HasNoSessions => SessionGroups.Count == 0;
+    public bool HasNoSessions => _sessionCache.Count == 0;
 
-    /// <summary>「任务」这一块只放没归到空间里的对话；空间下的对话挂在空间自己身上。</summary>
-    public bool ShowTaskSection => SessionGroups.Count > 0 || !HasWorkspaces;
+    /// <summary>
+    /// 还没有空间时「任务」默认展开——第一眼就该看见刚建的任务；
+    /// 任务都挂在空间下之后默认收起，不让同一批任务在侧栏里占两遍位置。
+    /// </summary>
+    public bool IsTaskSectionExpanded => _taskSectionExpanded ?? Workspaces.Count == 0;
 
     /// <summary>「空间」里有没有东西可点；没有就说明当前是普通任务。</summary>
     public bool HasWorkspaces => Workspaces.Count > 0;
@@ -133,6 +140,14 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private void ToggleSidebar() => IsSidebarVisible = !IsSidebarVisible;
 
+    /// <summary>点「任务」标题：展开/收起全部任务。</summary>
+    [RelayCommand]
+    private void ToggleTaskSection()
+    {
+        _taskSectionExpanded = !IsTaskSectionExpanded;
+        OnPropertyChanged(nameof(IsTaskSectionExpanded));
+    }
+
     public Task StartNewChatAsync(string? prompt)
         => OpenNewChatAsync(string.IsNullOrWhiteSpace(prompt) ? null : PromptRequest.Plain(prompt));
 
@@ -174,15 +189,41 @@ public sealed partial class MainWindowViewModel : ObservableObject
         _sessionCache[session.Id] = session;
 
         // 正在聊的这一轮要看得见：空间被收起时自动展开，别让新对话存进去却找不到。
-        if (!string.IsNullOrWhiteSpace(session.WorkspacePath) && IsCollapsed(Settings, session.WorkspacePath))
-        {
-            SetCollapsed(Settings, session.WorkspacePath, false);
-            await SettingsProvider.SaveAsync(Settings);
-        }
+        await ExpandWorkspaceAsync(session);
 
         await _sessions.SaveAsync(session);
         await ReloadSessionsAsync();
         await SetActiveSessionAsync(session.Id);
+    }
+
+    /// <summary>
+    /// 新任务第一句话一发出就先落盘。侧栏是按存档重建的，等整轮跑完再写文件的话，
+    /// 回复还在流的时候侧栏里根本没有这张任务；中途关掉应用，连用户打的字一起丢。
+    /// 这里只写文件 + 刷侧栏，不像 <see cref="SaveSessionAsync"/> 那样重新读盘——
+    /// 读盘会把正在跑的会话对象换成反序列化出来的副本。
+    /// </summary>
+    public async Task RegisterSessionAsync(ChatSession session)
+    {
+        _sessionCache[session.Id] = session;
+
+        // 空间收着就展开：任务建在看不见的地方等于没建。
+        await ExpandWorkspaceAsync(session);
+
+        await _sessions.SaveAsync(session);
+        await ReloadWorkspacesAsync();
+        await SetActiveSessionAsync(session.Id);
+    }
+
+    /// <summary>会话落在哪个空间，就把那个空间展开。</summary>
+    private async Task ExpandWorkspaceAsync(ChatSession session)
+    {
+        if (string.IsNullOrWhiteSpace(session.WorkspacePath) || !IsCollapsed(Settings, session.WorkspacePath))
+        {
+            return;
+        }
+
+        SetCollapsed(Settings, session.WorkspacePath, false);
+        await SettingsProvider.SaveAsync(Settings);
     }
 
     public async Task DeleteSessionAsync(string sessionId)
@@ -430,7 +471,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public Task ReloadWorkspacesAsync() => Ui.OnUiAsync(RebuildSidebar);
 
     /// <summary>
-    /// 侧边栏的统一重建入口：先按空间把对话分下去，剩下的按日期归到「任务」。
+    /// 侧边栏的统一重建入口：任务按日期分组列全部，「空间」再按目录分一遍。
+    /// 两张表看的是同一批会话——空间是归类，不是把任务藏起来的地方。
     /// 空间顺序只看添加顺序，点和展开都不改变它。
     /// </summary>
     private void RebuildSidebar()
@@ -477,7 +519,6 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
         SessionGroups.Clear();
         foreach (var group in sessions
-                     .Where(session => !claimed.Contains(session.Id))
                      .GroupBy(session => GroupName(session.UpdatedAt))
                      .OrderBy(group => GroupOrder(group.Key)))
         {
@@ -488,7 +529,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
         OnPropertyChanged(nameof(SessionCountText));
         OnPropertyChanged(nameof(HasNoSessions));
-        OnPropertyChanged(nameof(ShowTaskSection));
+        OnPropertyChanged(nameof(IsTaskSectionExpanded));
         OnPropertyChanged(nameof(HasWorkspaces));
         OnPropertyChanged(nameof(WorkspaceCountText));
     }

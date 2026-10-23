@@ -1,0 +1,91 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:arc="https://github.com/AIDotNet/TKCode.Arc"
+             x:Class="AvaloniaAssistant.UI.Controls.ImageViewer"
+             IsVisible="False"
+             Focusable="True">
+  <UserControl.Styles>
+    <!-- 遮罩上的圆形按钮：深色底 + 白图标，压在任意亮度的图上都看得清 -->
+    <Style Selector="Button.viewer-action">
+      <Setter Property="Height" Value="30" />
+      <Setter Property="MinWidth" Value="30" />
+      <Setter Property="Padding" Value="8,0" />
+      <Setter Property="CornerRadius" Value="15" />
+      <Setter Property="Background" Value="#33FFFFFF" />
+      <Setter Property="Foreground" Value="#FFFFFF" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="FontSize" Value="11.5" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.viewer-action:pointerover">
+      <Setter Property="Background" Value="#5CFFFFFF" />
+    </Style>
+    <Style Selector="Button.viewer-action:disabled">
+      <Setter Property="Background" Value="#1AFFFFFF" />
+      <Setter Property="Foreground" Value="#80FFFFFF" />
+    </Style>
+  </UserControl.Styles>
+
+  <!-- 整块铺满父容器，半透明黑就是模态遮罩 -->
+  <Grid x:Name="Scrim" Background="#D9000000">
+    <!-- 图片层：可拖动、可缩放。ClipToBounds 让放大后的图不会画到遮罩外面 -->
+    <Border x:Name="Viewport"
+            Background="Transparent"
+            ClipToBounds="True"
+            Cursor="Hand">
+      <Image x:Name="Preview"
+             Stretch="None"
+             RenderTransformOrigin="0%,0%">
+        <Image.RenderTransform>
+          <TransformGroup>
+            <ScaleTransform x:Name="Scale" />
+            <TranslateTransform x:Name="Offset" />
+          </TransformGroup>
+        </Image.RenderTransform>
+      </Image>
+    </Border>
+
+    <!-- 顶部工具条：尺寸信息在左，缩放和关闭在右 -->
+    <Grid VerticalAlignment="Top"
+          Margin="16"
+          ColumnDefinitions="Auto,*,Auto">
+      <Border Background="#40000000"
+              CornerRadius="11"
+              Padding="10,5"
+              VerticalAlignment="Center"
+              HorizontalAlignment="Left">
+        <TextBlock x:Name="CaptionText"
+                   FontSize="11.5"
+                   Foreground="#E6FFFFFF" />
+      </Border>
+
+      <StackPanel Grid.Column="2"
+                  Orientation="Horizontal"
+                  Spacing="7"
+                  HorizontalAlignment="Right">
+        <Button Classes="viewer-action" Click="OnZoomOutClick" ToolTip.Tip="缩小">
+          <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Minus}" Size="13" />
+        </Button>
+        <Button Classes="viewer-action" Click="OnResetClick" ToolTip.Tip="还原到 100%">
+          <TextBlock x:Name="ZoomText" Text="100%" />
+        </Button>
+        <Button Classes="viewer-action" Click="OnZoomInClick" ToolTip.Tip="放大">
+          <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Plus}" Size="13" />
+        </Button>
+        <Button Classes="viewer-action" Click="OnCloseClick" ToolTip.Tip="关闭（Esc）">
+          <arc:ArcGlyph Data="{x:Static arc:ArcIcons.CircleX}" Size="14" />
+        </Button>
+      </StackPanel>
+    </Grid>
+
+    <!-- 底部提示：只在没放大时露一下，放大后自动消失 -->
+    <TextBlock x:Name="HintText"
+               Text="滚轮缩放 · 拖动平移 · Esc 关闭"
+               HorizontalAlignment="Center"
+               VerticalAlignment="Bottom"
+               Margin="0,0,0,18"
+               FontSize="11"
+               Foreground="#99FFFFFF" />
+  </Grid>
+</UserControl>

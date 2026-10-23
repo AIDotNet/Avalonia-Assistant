@@ -9,6 +9,11 @@
   </Style>
 
   <Style Selector="Button.nav">
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.12" />
+      </Transitions>
+    </Setter>
     <Setter Property="Height" Value="36" />
     <Setter Property="Padding" Value="9,0" />
     <Setter Property="HorizontalAlignment" Value="Stretch" />
@@ -31,6 +36,11 @@
   </Style>
 
   <Style Selector="Button.task">
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.12" />
+      </Transitions>
+    </Setter>
     <Setter Property="Padding" Value="9,6" />
     <Setter Property="HorizontalAlignment" Value="Stretch" />
     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
@@ -98,6 +108,11 @@
   </Style>
 
   <Style Selector="Button.icon">
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.12" />
+      </Transitions>
+    </Setter>
     <Setter Property="Width" Value="30" />
     <Setter Property="Height" Value="30" />
     <Setter Property="Padding" Value="0" />
@@ -113,7 +128,25 @@
     <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
   </Style>
 
+  <!-- 行内小图标（对话行的「⋯」、空间的「+」「⋯」）已经躺在一条高亮行里，
+       自己再叠一层底色就成了两个圆角块套在一起，看着很脏。
+       这一类只提亮图标，不加底。 -->
+  <Style Selector="Button.icon.row-more:pointerover">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Button.icon.ws-add:pointerover">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Button.icon.ws-more:pointerover">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
   <Style Selector="Button.chip">
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.12" />
+      </Transitions>
+    </Setter>
     <Setter Property="Height" Value="34" />
     <Setter Property="Padding" Value="14,0" />
     <Setter Property="CornerRadius" Value="17" />
@@ -132,13 +165,18 @@
     <Setter Property="HorizontalContentAlignment" Value="Center" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
   </Style>
+  <!-- 只动底色和文字色。原来连边框一起加深，底色和边框同时变，像框在闪。 -->
   <Style Selector="Button.chip:pointerover">
     <Setter Property="Background" Value="{StaticResource SurfaceMutedBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource BorderStrongBrush}" />
     <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
   </Style>
 
   <Style Selector="Button.pill">
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.12" />
+      </Transitions>
+    </Setter>
     <Setter Property="Height" Value="30" />
     <Setter Property="Padding" Value="10,0" />
     <Setter Property="CornerRadius" Value="15" />
@@ -162,6 +200,11 @@
 
   <!-- 权限浮层里的档位行 -->
   <Style Selector="Button.permission-option">
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.12" />
+      </Transitions>
+    </Setter>
     <Setter Property="Padding" Value="8,7" />
     <Setter Property="CornerRadius" Value="9" />
     <Setter Property="Background" Value="Transparent" />
@@ -247,6 +290,11 @@
   </Style>
 
   <Style Selector="Button.ghost-action">
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.12" />
+      </Transitions>
+    </Setter>
     <Setter Property="Height" Value="26" />
     <Setter Property="Padding" Value="7,0" />
     <Setter Property="CornerRadius" Value="7" />
@@ -308,6 +356,11 @@
   </Style>
 
   <Style Selector="Border.tool-tile">
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.12" />
+      </Transitions>
+    </Setter>
     <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
     <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
     <Setter Property="BorderThickness" Value="1" />
@@ -374,6 +427,7 @@
     <Setter Property="Transitions">
       <Transitions>
         <DoubleTransition Property="Opacity" Duration="0:0:0.12" />
+        <BrushTransition Property="Background" Duration="0:0:0.12" />
       </Transitions>
     </Setter>
   </Style>
@@ -382,6 +436,7 @@
     <Setter Property="Transitions">
       <Transitions>
         <DoubleTransition Property="Opacity" Duration="0:0:0.12" />
+        <BrushTransition Property="Background" Duration="0:0:0.12" />
       </Transitions>
     </Setter>
   </Style>
@@ -394,6 +449,11 @@
 
   <!-- 空间这一行整块亮：名字和「⋯」落在同一个圆角块里，不在按钮和图标之间断开 -->
   <Style Selector="Border.ws-chip">
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.12" />
+      </Transitions>
+    </Setter>
     <Setter Property="Background" Value="Transparent" />
   </Style>
   <Style Selector="Border.ws-chip:pointerover">
@@ -413,6 +473,11 @@
   </Style>
 
   <Style Selector="Button.tool-head">
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.12" />
+      </Transitions>
+    </Setter>
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="Padding" Value="10,8" />
@@ -475,5 +540,30 @@
   <Style Selector="Border.save-toast.error">
     <Setter Property="Background" Value="{StaticResource DangerSubtleBrush}" />
     <Setter Property="BorderBrush" Value="#F0CFCB" />
+  </Style>
+
+  <!-- 滚动条：主题默认是一条 8px 宽的实心灰棒，压在浅色底上像根柱子。
+       这里把「看得见的」压到 4px：条本身留 8px 当拖拽热区，滑块用边框把背景挤到中间，
+       所以看着细、抓着还是原来那么宽。 -->
+  <Style Selector="ScrollBar:vertical">
+    <Setter Property="Width" Value="8" />
+    <Setter Property="MinWidth" Value="8" />
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="ScrollBar:horizontal">
+    <Setter Property="Height" Value="8" />
+    <Setter Property="MinHeight" Value="8" />
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="ScrollBar:vertical /template/ Thumb">
+    <Setter Property="BorderThickness" Value="2,0" />
+    <Setter Property="BackgroundSizing" Value="InnerBorder" />
+  </Style>
+  <Style Selector="ScrollBar:horizontal /template/ Thumb">
+    <Setter Property="BorderThickness" Value="0,2" />
+    <Setter Property="BackgroundSizing" Value="InnerBorder" />
+  </Style>
+  <Style Selector="ScrollBar:pointerover /template/ Thumb">
+    <Setter Property="Background" Value="{StaticResource BorderStrongBrush}" />
   </Style>
 </Styles>

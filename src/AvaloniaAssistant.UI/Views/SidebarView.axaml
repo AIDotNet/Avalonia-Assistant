@@ -184,33 +184,61 @@
 
           <Border Height="1" Background="{StaticResource BorderBrush}" Margin="8,12,8,10" />
 
-          <!-- 「任务」只放没归到空间里的对话，空间里的对话挂在各自空间下面 -->
-          <StackPanel IsVisible="{Binding ShowTaskSection}">
-            <Grid ColumnDefinitions="*,Auto" Margin="8,0,4,4">
-              <TextBlock Text="{Binding SessionCountText}" Classes="section-title" />
+          <!-- 「任务」是全部任务的总入口，「空间」只是另一层归类：
+               归了空间的任务在这里仍然看得见，不会因为分了组就消失。 -->
+          <Button Classes="nav ws-head"
+                  Command="{Binding ToggleTaskSectionCommand}"
+                  ToolTip.Tip="展开 / 收起全部任务">
+            <Grid ColumnDefinitions="Auto,Auto,*">
+              <Panel Width="12" VerticalAlignment="Center">
+                <arc:ArcGlyph Data="{x:Static arc:ArcIcons.ChevronDown}"
+                              Size="11"
+                              IsVisible="{Binding IsTaskSectionExpanded}" />
+                <arc:ArcGlyph Data="{x:Static arc:ArcIcons.ChevronRight}"
+                              Size="11"
+                              IsVisible="{Binding !IsTaskSectionExpanded}" />
+              </Panel>
+              <!-- 空出空间那一行的文件夹图标位，两区标题才对得齐 -->
+              <Panel Grid.Column="1" Width="19" />
+              <TextBlock Grid.Column="2"
+                         Text="{Binding SessionCountText}"
+                         Classes="section-title"
+                         Margin="9,0,0,0"
+                         VerticalAlignment="Center" />
             </Grid>
+          </Button>
 
-            <TextBlock Text="还没有任务，点上面「新建任务」开始。"
-                       Classes="caption"
-                       FontSize="10.5"
-                       Margin="8,2,0,4"
-                       TextWrapping="Wrap"
-                       IsVisible="{Binding HasNoSessions}" />
+          <Border IsVisible="{Binding IsTaskSectionExpanded}"
+                  Margin="13,2,0,0"
+                  Padding="6,0,0,0"
+                  BorderBrush="{StaticResource BorderBrush}"
+                  BorderThickness="1,0,0,0">
+            <StackPanel>
+              <TextBlock Text="还没有任务，点上面「新建任务」开始。"
+                         Classes="caption"
+                         FontSize="10.5"
+                         Margin="0,2,0,4"
+                         TextWrapping="Wrap"
+                         IsVisible="{Binding HasNoSessions}" />
 
-            <ItemsControl ItemsSource="{Binding SessionGroups}">
-              <ItemsControl.ItemTemplate>
-                <DataTemplate>
-                  <StackPanel Margin="0,4,0,0">
-                    <TextBlock Text="{Binding Header}" Classes="caption" Margin="8,2,0,4" FontSize="10.5" />
-                    <ItemsControl ItemsSource="{Binding Items}"
-                                  ItemTemplate="{StaticResource SessionRowTemplate}" />
-                  </StackPanel>
-                </DataTemplate>
-              </ItemsControl.ItemTemplate>
-            </ItemsControl>
+              <ItemsControl ItemsSource="{Binding SessionGroups}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <StackPanel Margin="0,4,0,0">
+                      <TextBlock Text="{Binding Header}"
+                                 Classes="caption"
+                                 Margin="0,2,0,4"
+                                 FontSize="10.5" />
+                      <ItemsControl ItemsSource="{Binding Items}"
+                                    ItemTemplate="{StaticResource SessionRowTemplate}" />
+                    </StackPanel>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </Border>
 
-            <Border Height="1" Background="{StaticResource BorderBrush}" Margin="8,12,8,10" />
-          </StackPanel>
+          <Border Height="1" Background="{StaticResource BorderBrush}" Margin="8,12,8,10" />
 
           <Grid ColumnDefinitions="*,Auto" Margin="8,0,4,4">
             <TextBlock Text="{Binding WorkspaceCountText}" Classes="section-title" />
