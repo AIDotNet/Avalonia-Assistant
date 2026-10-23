@@ -54,6 +54,30 @@ public partial class SidebarView : UserControl
     }
 
     /// <summary>
+    /// 鼠标进到一条对话上：把信息卡打开。行内「时间淡出、⋯出现」交给 :pointerover 样式，
+    /// 这里只管卡片，不去碰 IsVisible，免得样式和代码抢同一份状态。
+    /// </summary>
+    private void OnSessionRowPointerEntered(object? sender, PointerEventArgs e)
+    {
+        if (sender is Control { DataContext: SessionItemViewModel item })
+        {
+            item.IsCardOpen = true;
+        }
+    }
+
+    /// <summary>
+    /// 鼠标离开这条对话：收掉信息卡。PointerEntered/Exited 是 Direct 路由，
+    /// 只是在行内部换到子控件上不会触发，所以卡片不会自己闪。
+    /// </summary>
+    private void OnSessionRowPointerExited(object? sender, PointerEventArgs e)
+    {
+        if (sender is Control { DataContext: SessionItemViewModel item })
+        {
+            item.IsCardOpen = false;
+        }
+    }
+
+    /// <summary>
     /// 对话行右边那个「⋯」。默认不显示，鼠标移到这一行才出现；点它才展开菜单。
     /// 弹层同样用 Flyout 自己排，原因和上面工作区的「⋯」一样。
     /// </summary>
@@ -64,11 +88,9 @@ public partial class SidebarView : UserControl
             return;
         }
 
-        // 悬停信息卡可能还开着，点「⋯」时一起收掉，免得卡片和菜单叠在一起
-        if (target.Parent is Grid row)
-        {
-            ToolTip.SetIsOpen(row, false);
-        }
+        // 悬停信息卡可能还开着，点「⋯」时一起收掉，免得卡片和菜单叠在一起。
+        // 这时指针还在行内，不会再触发 Entered，所以不会马上又弹回来。
+        item.IsCardOpen = false;
 
         CloseFlyouts();
 

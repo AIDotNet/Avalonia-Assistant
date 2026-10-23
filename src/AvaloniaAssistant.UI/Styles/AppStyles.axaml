@@ -48,13 +48,18 @@
 
   <!-- 对话行：默认显示时间；鼠标移到这一行，时间淡出、「⋯」出现，点击才展开菜单 -->
   <Style Selector="Grid.task-row TextBlock.row-time">
-    <Setter Property="Opacity" Value="0" />
+    <Setter Property="Opacity" Value="1" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <DoubleTransition Property="Opacity" Duration="0:0:0.12" />
+      </Transitions>
+    </Setter>
   </Style>
   <Style Selector="Grid.task-row:pointerover TextBlock.row-time">
     <Setter Property="Opacity" Value="0" />
   </Style>
   <Style Selector="Button.row-more">
-    <Setter Property="IsVisible" Value="True" />
+    <Setter Property="IsVisible" Value="False" />
   </Style>
   <Style Selector="Grid.task-row:pointerover Button.row-more">
     <Setter Property="IsVisible" Value="True" />
