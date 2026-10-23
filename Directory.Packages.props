@@ -10,6 +10,7 @@
     <PackageVersion Include="TKCode.Arc" Version="$(ArcVersion)" />
     <PackageVersion Include="TKCode.Arc.Fonts" Version="$(ArcVersion)" />
     <PackageVersion Include="Pi.Agent" Version="$(PiVersion)" />
+    <PackageVersion Include="Pi.CodingAgent" Version="$(PiVersion)" />
     <PackageVersion Include="NAudio" Version="2.2.1" />
     <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.0" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.12" />
