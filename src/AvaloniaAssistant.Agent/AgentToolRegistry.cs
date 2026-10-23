@@ -4,6 +4,7 @@ using AvaloniaAssistant.Agent.Tools;
 using Pi.Agent;
 using Pi.Agent.Types;
 using Pi.Ai.Types;
+using ToolDefinition = Pi.CodingAgent.Core.Extensions.ToolDefinition;
 
 namespace AvaloniaAssistant.Agent;
 
@@ -29,10 +30,7 @@ public sealed class AgentToolRegistry
         IReadOnlyCollection<string> disabled,
         out IReadOnlyDictionary<string, AgentToolInfo> catalog)
     {
-        var enabled = _tools
-            .Where(tool => !disabled.Contains(tool.Info.Name, StringComparer.Ordinal))
-            .ToList();
-
+        var enabled = EnabledTools(disabled);
         catalog = enabled.ToDictionary(tool => tool.Info.Name, tool => tool.Info, StringComparer.Ordinal);
 
         var agentTools = new List<AgentTool>(enabled.Count);
@@ -68,6 +66,57 @@ public sealed class AgentToolRegistry
 
         return agentTools;
     }
+
+    /// <summary>
+    /// 把内置工具包成 Pi.CodingAgent 的 <see cref="ToolDefinition"/>，作为 CustomTools 注入会话。
+    /// 参数是字典（不是 JsonElement），执行结果同样是文本块。
+    /// </summary>
+    internal IReadOnlyList<ToolDefinition> CreateCustomTools(
+        AgentRunRequest request,
+        IReadOnlyCollection<string> disabled,
+        out IReadOnlyDictionary<string, AgentToolInfo> catalog)
+    {
+        var enabled = EnabledTools(disabled);
+        catalog = enabled.ToDictionary(tool => tool.Info.Name, tool => tool.Info, StringComparer.Ordinal);
+
+        var definitions = new List<ToolDefinition>(enabled.Count);
+        foreach (var tool in enabled)
+        {
+            var info = tool.Info;
+            var captured = tool;
+            definitions.Add(new ToolDefinition
+            {
+                Name = info.Name,
+                Label = info.Label,
+                Description = BuildDescription(info),
+                Parameters = BuildSchema(info),
+                Execute = async (_, args, cancellationToken, _, _) =>
+                {
+                    try
+                    {
+                        var text = await captured.ExecuteAsync(
+                            new ToolInvocation(args, request.WorkspacePath, request.Permission),
+                            cancellationToken).ConfigureAwait(false);
+
+                        return new AgentToolResult([new TextContent(text)]);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        throw;
+                    }
+                    catch (Exception ex)
+                    {
+                        return AgentToolResult.FromError(ex.Message);
+                    }
+                },
+            });
+        }
+
+        return definitions;
+    }
+
+    private List<IAgentTool> EnabledTools(IReadOnlyCollection<string> disabled)
+        => _tools.Where(tool => !disabled.Contains(tool.Info.Name, StringComparer.Ordinal)).ToList();
 
     private static string BuildDescription(AgentToolInfo info)
     {
