@@ -26,9 +26,15 @@ public sealed class PiStreamFactory : IPiStreamFactory
                 Signal = cancellationToken,
             };
 
-            return settings.Protocol == AgentProtocol.AnthropicMessages
-                ? AnthropicMessages.StreamSimple(model, context, options, cancellationToken)
-                : OpenAiCompletions.StreamSimple(model, context, options, cancellationToken);
+            return settings.EffectiveProtocol switch
+            {
+                AgentProtocol.AnthropicMessages => AnthropicMessages.StreamSimple(
+                    model, context, options, cancellationToken: cancellationToken),
+                AgentProtocol.OpenAiResponses => OpenAiResponses.StreamSimple(
+                    model, context, options, cancellationToken: cancellationToken),
+                _ => OpenAiCompletions.StreamSimple(
+                    model, context, options, cancellationToken: cancellationToken),
+            };
         };
     }
 }

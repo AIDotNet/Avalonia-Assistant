@@ -20,7 +20,6 @@ public sealed partial class MainWindowViewModel : ObservableObject
         ISessionStore sessions,
         IFilePicker picker,
         IVoiceInput voice,
-        LibraryStore library,
         WorkspaceFileSearch fileSearch)
     {
         _sessions = sessions;
@@ -28,7 +27,6 @@ public sealed partial class MainWindowViewModel : ObservableObject
         SettingsProvider = settings;
         Picker = picker;
         Voice = voice;
-        Library = library;
         FileSearch = fileSearch;
         Home = new HomeViewModel(this);
 
@@ -51,10 +49,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     public IVoiceInput Voice { get; }
 
-    /// <summary>工作区资料库。composer 的 @ 引用和资料库页共用这一份，不各读各的索引。</summary>
-    public LibraryStore Library { get; }
-
-    /// <summary>@ 时的工作区文件索引。带缓存，composer 和资料库页共用一个实例。</summary>
+    /// <summary>@ 时的工作区文件索引。带缓存，首页和对话页的输入框共用一个实例。</summary>
     public WorkspaceFileSearch FileSearch { get; }
 
     public AssistantSettings Settings => SettingsProvider.Current;
@@ -94,8 +89,6 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     public bool IsMcpSelected => CurrentPage is McpViewModel;
 
-    public bool IsLibrarySelected => CurrentPage is LibraryViewModel;
-
     public bool IsSettingsSelected => CurrentPage is SettingsViewModel;
 
     [ObservableProperty]
@@ -129,10 +122,6 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     [RelayCommand]
     public void OpenMcp() => CurrentPage = new McpViewModel(this);
-
-    /// <summary>资料库页只在用户点进来时才读索引，不必常驻一个 VM。</summary>
-    [RelayCommand]
-    public void OpenLibrary() => CurrentPage = new LibraryViewModel(this, Library);
 
     [RelayCommand]
     public async Task OpenSettingsAsync()
@@ -209,7 +198,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         await ReloadSessionsAsync();
     }
 
-    /// <summary>侧边栏「添加工作区」和资料库入口共用：选一个目录，设为当前工作区并记住它。</summary>
+    /// <summary>侧边栏「添加工作区」和输入框里的工作区切换共用：选一个目录，设为当前工作区并记住它。</summary>
     [RelayCommand]
     public async Task AddWorkspaceAsync()
     {
@@ -660,7 +649,6 @@ public sealed partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(IsHomeSelected));
         OnPropertyChanged(nameof(IsToolsSelected));
         OnPropertyChanged(nameof(IsMcpSelected));
-        OnPropertyChanged(nameof(IsLibrarySelected));
         OnPropertyChanged(nameof(IsSettingsSelected));
     }
 

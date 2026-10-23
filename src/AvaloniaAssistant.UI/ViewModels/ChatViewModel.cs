@@ -27,7 +27,7 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
             Mode = host.Settings.Mode,
         };
 
-        Composer = new ComposerViewModel(_runtime, _settings, host.Picker, host.Voice, host.OpenSettingsAsync, host.Library, host.FileSearch);
+        Composer = new ComposerViewModel(_runtime, _settings, host.Picker, host.Voice, host.OpenSettingsAsync, host.FileSearch);
         Composer.SendRequested += async (_, request) => await SendPromptAsync(request);
         Composer.StopRequested += (_, _) => Stop();
         Composer.PermissionChanged += OnPermissionChanged;

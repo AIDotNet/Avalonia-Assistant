@@ -137,7 +137,10 @@ public sealed class PiAgentRuntime : IAssistantRuntime
             try
             {
                 await writer.WriteAsync(new AgentStreamEvent.RunStarted(request.SessionId, modelOption.Id)).ConfigureAwait(false);
-                await session.PromptAsync(request.Prompt, new PromptOptions { Source = "interactive" }).ConfigureAwait(false);
+                await session.PromptAsync(
+                        request.Prompt,
+                        new PromptOptions { Source = "interactive", Images = LoadImages(request.Images) })
+                    .ConfigureAwait(false);
 
                 var last = session.Messages.OfType<AssistantMessage>().LastOrDefault();
                 var stats = session.GetSessionStats();
@@ -401,6 +404,40 @@ public sealed class PiAgentRuntime : IAssistantRuntime
         StopReason.Length => AgentStopReason.Length,
         _ => AgentStopReason.Completed,
     };
+
+    /// <summary>
+    /// 把磁盘上的图片读成模型要的 base64 内容块。单张读不到就跳过——
+    /// 一张坏图不该把整轮对话打死。
+    /// </summary>
+    private static IReadOnlyList<ImageContent>? LoadImages(IReadOnlyList<ChatImage>? images)
+    {
+        if (images is not { Count: > 0 })
+        {
+            return null;
+        }
+
+        var contents = new List<ImageContent>(images.Count);
+        foreach (var image in images)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(image.Path) || !File.Exists(image.Path))
+                {
+                    continue;
+                }
+
+                contents.Add(new ImageContent(
+                    Convert.ToBase64String(File.ReadAllBytes(image.Path)),
+                    string.IsNullOrWhiteSpace(image.MimeType) ? "image/png" : image.MimeType));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // 读失败只丢这一张
+            }
+        }
+
+        return contents.Count > 0 ? contents : null;
+    }
 
     private static string FormatArguments(object? args)
     {

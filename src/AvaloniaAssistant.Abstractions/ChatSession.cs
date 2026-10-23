@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace AvaloniaAssistant.Abstractions;
 
 public enum ChatEntryKind
@@ -38,8 +40,11 @@ public sealed class ChatEntry
 
     public List<ToolCallRecord> ToolCalls { get; set; } = [];
 
-    /// <summary>这一轮用户从资料库引用进来的文档。内容留快照，重试或第二天接着聊都是同一份上下文。</summary>
+    /// <summary>这一轮用户 @ 引用进来的文件。内容留快照，重试或第二天接着聊都是同一份上下文。</summary>
     public List<ChatAttachment> Attachments { get; set; } = [];
+
+    /// <summary>这一轮用户粘贴进来的图片。</summary>
+    public List<ChatImage> Images { get; set; } = [];
 
     public string? Error { get; set; }
 
@@ -60,10 +65,10 @@ public sealed class ChatAttachment
 
     public string Name { get; set; } = string.Empty;
 
-    /// <summary>展示与引用用的路径：工作区文件是相对路径，资料库条目是库里的名字。</summary>
+    /// <summary>展示与引用用的相对路径。</summary>
     public string? Path { get; set; }
 
-    /// <summary>来源：<c>workspace</c> 或 <c>library</c>。界面上据此标「工作区 / 资料库」。</summary>
+    /// <summary>文件从哪来，目前只有 <c>workspace</c>。</summary>
     public string Source { get; set; } = "workspace";
 
     public string Kind { get; set; } = "FILE";
@@ -83,9 +88,35 @@ public sealed class ChatAttachment
 
     public bool HasText => !string.IsNullOrEmpty(Text);
 
-    public bool IsLibrary => string.Equals(Source, "library", StringComparison.OrdinalIgnoreCase);
-
     public string DisplayPath => string.IsNullOrWhiteSpace(Path) ? Name : Path!;
+}
+
+/// <summary>
+/// 粘贴进对话的一张图片。二进制落在数据目录的 <c>images/</c> 下，会话只记路径和尺寸——
+/// 把 base64 塞进 session.json 会让存档几十倍地涨。
+/// </summary>
+public sealed class ChatImage
+{
+    public string Id { get; set; } = string.Empty;
+
+    /// <summary>PNG 文件的绝对路径。</summary>
+    public string Path { get; set; } = string.Empty;
+
+    public string MimeType { get; set; } = "image/png";
+
+    public int Width { get; set; }
+
+    public int Height { get; set; }
+
+    public long Size { get; set; }
+
+    [JsonIgnore]
+    public string DisplaySize => Size >= 1024 * 1024
+        ? $"{Size / 1024.0 / 1024.0:0.#} MB"
+        : $"{Size / 1024.0:0.#} KB";
+
+    [JsonIgnore]
+    public string Caption => $"{Width}×{Height} · {DisplaySize}";
 }
 
 public sealed class ToolCallRecord

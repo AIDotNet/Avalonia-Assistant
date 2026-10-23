@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Text.RegularExpressions;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using AvaloniaAssistant.Abstractions;
 using AvaloniaAssistant.Storage;
 using AvaloniaAssistant.UI.Services;
@@ -21,10 +22,8 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
     private readonly IVoiceInput _voice;
     private readonly EventHandler _settingsChanged;
 
-    private readonly LibraryStore _library;
     private readonly WorkspaceFileSearch _fileSearch;
-    private IReadOnlyList<LibraryDocument> _documents = [];
-    private string? _documentsWorkspace;
+    private string? _indexedWorkspace;
 
     /// <summary>自己在改 Text（补全 @、清空）时不要再弹一次浮层。</summary>
     private bool _suppressMention;
@@ -32,7 +31,7 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
     /// <summary>@ 候选的加载序号：并发输入时只认最后一次。</summary>
     private int _mentionVersion;
 
-    private bool _documentsLoaded;
+    private bool _indexed;
 
     public ComposerViewModel(
         IAssistantRuntime runtime,
@@ -40,7 +39,6 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
         IFilePicker picker,
         IVoiceInput voice,
         Func<Task> openSettings,
-        LibraryStore library,
         WorkspaceFileSearch fileSearch)
     {
         _runtime = runtime;
@@ -48,7 +46,6 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
         _picker = picker;
         _voice = voice;
         _openSettings = openSettings;
-        _library = library;
         _fileSearch = fileSearch;
         _settingsChanged = (_, _) => Refresh();
         RefreshModels();
@@ -66,11 +63,16 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
 
     public ObservableCollection<ModelOption> Models { get; } = [];
 
-    /// <summary>这一轮 @ 进来的文件（工作区或资料库），发送时变成 <see cref="PromptRequest.Attachments"/>。</summary>
+    /// <summary>这一轮 @ 进来的文件，发送时变成 <see cref="PromptRequest.Attachments"/>。</summary>
     public ObservableCollection<MentionItemViewModel> References { get; } = [];
 
     /// <summary>@ 浮层里的候选，最多 8 条。</summary>
     public ObservableCollection<MentionItemViewModel> MentionItems { get; } = [];
+
+    /// <summary>待发送的图片（粘贴进来的）。</summary>
+    public ObservableCollection<PendingImageViewModel> Images { get; } = [];
+
+    public bool HasImages => Images.Count > 0;
 
     public bool HasReferences => References.Count > 0;
 
@@ -181,7 +183,7 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
         }
 
         var value = Text?.Trim() ?? string.Empty;
-        if (value.Length == 0)
+        if (value.Length == 0 && Images.Count == 0)
         {
             return;
         }
@@ -190,6 +192,11 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
         {
             _ = _openSettings();
             return;
+        }
+
+        if (value.Length == 0)
+        {
+            value = "看下这张图。";
         }
 
         // 引用的是工作区文件时，正文要现场读：文件可能刚被改过，索引里的旧内容不作数。
@@ -202,12 +209,16 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
                 attachments.Add(await BuildAttachmentAsync(reference));
             }
 
+            var images = Images.Select(item => item.Image).ToList();
+
             Text = string.Empty;
             References.Clear();
+            Images.Clear();
             OnPropertyChanged(nameof(HasReferences));
+            OnPropertyChanged(nameof(HasImages));
             CloseMention();
 
-            SendRequested?.Invoke(this, new PromptRequest(value, attachments));
+            SendRequested?.Invoke(this, new PromptRequest(value, attachments, images));
         }
         finally
         {
@@ -215,7 +226,7 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>把一个引用变成模型能读的附件：工作区读盘、资料库直接用索引里的正文。</summary>
+    /// <summary>把一个引用变成模型能读的附件：发送时才读盘，文件刚改过也能读到新内容。</summary>
     private static async Task<ChatAttachment> BuildAttachmentAsync(MentionItemViewModel item)
     {
         var attachment = new ChatAttachment
@@ -223,18 +234,10 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
             Id = item.Id,
             Name = item.Name,
             Path = item.Path,
-            Source = item.IsLibrary ? "library" : "workspace",
+            Source = "workspace",
             Kind = item.Kind,
             Size = item.Size,
         };
-
-        if (item.Document is { } document)
-        {
-            attachment.Text = document.Text;
-            attachment.LineCount = document.HasText ? document.Text!.Count(character => character == '\n') + 1 : 0;
-            attachment.Truncated = document.HasText && document.Text!.Length >= LibraryStore.MaxIndexedChars;
-            return attachment;
-        }
 
         if (string.IsNullOrWhiteSpace(item.FullPath) || !File.Exists(item.FullPath))
         {
@@ -249,7 +252,8 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
         return attachment;
     }
 
-    private bool CanSend() => !IsBusy && !IsSending && !IsRecording && !string.IsNullOrWhiteSpace(Text);
+    private bool CanSend() => !IsBusy && !IsSending && !IsRecording
+        && (!string.IsNullOrWhiteSpace(Text) || Images.Count > 0);
 
     partial void OnTextChanged(string? value)
     {
@@ -279,9 +283,9 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
     {
         var version = ++_mentionVersion;
 
-        await EnsureDocumentsAsync();
+        await EnsureWorkspaceIndexAsync();
 
-        // 等待读索引的这段时间用户又敲了字，这一次结果已经过期
+        // 等待扫盘的这段时间用户又敲了字，这一次结果已经过期
         if (version != _mentionVersion)
         {
             return;
@@ -290,7 +294,7 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
         var query = MentionQuery;
         var workspace = _settings.Current.WorkspacePath ?? string.Empty;
 
-        // 工作区要扫盘，丢线程池；资料库索引本来就在内存里
+        // 扫盘丢线程池，别让输入卡住
         var files = await Task.Run(() => _fileSearch.Search(workspace, query, 12));
         if (version != _mentionVersion)
         {
@@ -307,18 +311,6 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
                 ? rank++
                 : WorkspaceFileSearch.Score(file.RelativePath, query);
             candidates.Add((MentionItemViewModel.FromWorkspace(file), score));
-        }
-
-        // 同名的资料库条目排在后面一点点：用户多半指的是眼前工作区里那份
-        foreach (var document in _documents
-                     .Where(document => LibraryStore.Matches(document, query))
-                     .OrderByDescending(document => document.AddedAt)
-                     .Take(6))
-        {
-            var score = query.Length == 0
-                ? 100 + rank++
-                : WorkspaceFileSearch.Score(document.Name, query) + 5;
-            candidates.Add((MentionItemViewModel.FromLibrary(document), score));
         }
 
         var items = candidates
@@ -349,58 +341,47 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
         }
 
         return query.Length > 0
-            ? $"工作区和资料库里都没有带「{query}」的文件。"
+            ? $"工作区里没有带「{query}」的文件。"
             : "工作区里还没有可引用的文件。";
     }
 
-    private async Task EnsureDocumentsAsync()
+    private async Task EnsureWorkspaceIndexAsync()
     {
         var workspace = _settings.Current.WorkspacePath ?? string.Empty;
-        if (_documentsLoaded && string.Equals(_documentsWorkspace, workspace, StringComparison.OrdinalIgnoreCase))
+        if (_indexed && string.Equals(_indexedWorkspace, workspace, StringComparison.OrdinalIgnoreCase))
         {
             return;
         }
 
-        _documents = await _library.LoadAsync(workspace);
-
-        // 顺手在工作区预热一遍文件索引，别让用户第一次按 @ 时等扫盘
+        // 预热一遍文件索引，别让用户第一次按 @ 时等扫盘
         if (!string.IsNullOrWhiteSpace(workspace) && Directory.Exists(workspace))
         {
             await Task.Run(() => _fileSearch.List(workspace));
         }
 
-        _documentsWorkspace = workspace;
-        _documentsLoaded = true;
+        _indexedWorkspace = workspace;
+        _indexed = true;
     }
 
     /// <summary>
-    /// 按名字引用一个文件，不改输入框文字。给自动化验收用，
-    /// 将来资料库页做「引用到对话」也走这里。先找工作区，再找资料库。
+    /// 按名字引用一个工作区文件，不改输入框文字。给自动化验收用，
+    /// 将来「从文件树拖进对话」也走这里。
     /// </summary>
     public async Task<bool> ReferenceByNameAsync(string name)
     {
-        await EnsureDocumentsAsync();
+        await EnsureWorkspaceIndexAsync();
 
         var workspace = _settings.Current.WorkspacePath ?? string.Empty;
         var file = _fileSearch
             .Search(workspace, name, 8)
             .FirstOrDefault(entry => entry.RelativePath.Contains(name, StringComparison.OrdinalIgnoreCase));
 
-        if (file is not null)
-        {
-            AddReference(MentionItemViewModel.FromWorkspace(file));
-            return true;
-        }
-
-        var document = _documents.FirstOrDefault(item =>
-            item.Name.Contains(name, StringComparison.OrdinalIgnoreCase));
-
-        if (document is null)
+        if (file is null)
         {
             return false;
         }
 
-        AddReference(MentionItemViewModel.FromLibrary(document));
+        AddReference(MentionItemViewModel.FromWorkspace(file));
         return true;
     }
 
@@ -473,6 +454,50 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
 
         UpdateMention(Text);
         RequestFocus();
+    }
+
+    /// <summary>
+    /// Ctrl+V 粘到一张图：落盘成 PNG，挂到待发送列表。
+    /// 写盘失败（权限、磁盘满）就当没粘上，不弹框打断输入。
+    /// </summary>
+    public bool AddImage(Bitmap bitmap)
+    {
+        try
+        {
+            Directory.CreateDirectory(AppPaths.Images);
+
+            var id = Guid.NewGuid().ToString("n")[..12];
+            var path = Path.Combine(AppPaths.Images, id + ".png");
+            bitmap.Save(path);
+
+            var image = new ChatImage
+            {
+                Id = id,
+                Path = path,
+                MimeType = "image/png",
+                Width = bitmap.PixelSize.Width,
+                Height = bitmap.PixelSize.Height,
+                Size = new FileInfo(path).Length,
+            };
+
+            Images.Add(new PendingImageViewModel(image, bitmap, RemoveImage));
+            OnPropertyChanged(nameof(HasImages));
+            SendCommand.NotifyCanExecuteChanged();
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    private void RemoveImage(PendingImageViewModel item)
+    {
+        if (Images.Remove(item))
+        {
+            OnPropertyChanged(nameof(HasImages));
+            SendCommand.NotifyCanExecuteChanged();
+        }
     }
 
     [RelayCommand]
@@ -656,8 +681,8 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
 
     public void Refresh()
     {
-        // 工作区或设置变了，下次 @ 要重新读索引，别拿上一个工作区的资料
-        _documentsLoaded = false;
+        // 工作区或设置变了，下次 @ 要重新扫盘，别拿上一个工作区的文件
+        _indexed = false;
         RefreshModels();
         OnPropertyChanged(nameof(ModelLabel));
         OnPropertyChanged(nameof(PermissionLabel));

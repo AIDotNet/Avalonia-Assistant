@@ -5,7 +5,7 @@
 | 项目 | 本地路径 | 本次使用方式 | 版本 |
 | --- | --- | --- | --- |
 | pi.net | `D:\AI\参考项目\pi.net` | NuGet 包 `Pi.CodingAgent`（传递引入 `Pi.Agent`、`Pi.Ai`、`Pi.Mcp`） | 1.4.2 |
-| TKCode.Arc | `D:\AI\参考项目\TKCode.Arc` | NuGet 包 `TKCode.Arc`、`TKCode.Arc.Fonts` | 0.3.0-preview.1 |
+| TKCode.Arc | `D:\AI\参考项目\TKCode.Arc` | NuGet 包 `TKCode.Arc`、`TKCode.Arc.Fonts` | 0.3.0-preview.3 |
 
 > 包和本地源码在少数地方不完全一致，下面单独标注。实现以**包实际暴露的 API**为准，本地源码用来理解行为和边界。
 
@@ -142,10 +142,11 @@ AppBuilder.Configure<AssistantApp>()
 
 ### 2.3 包与本地源码的三个差异（踩过的坑）
 
-1. **XAML 命名空间不同。**
-   本地源码是 `https://github.com/AIDotNet/TKCode.Arc`；
-   NuGet 包 0.3.0-preview.1 里是 `https://github.com/AtomUICommunity/TKCode.Arc`。
-   本项目统一使用包里的地址，所有 `xmlns:arc` 都是 `AtomUICommunity`。
+1. **XAML 命名空间变过一次。**
+   preview.1 的包里是 `https://github.com/AtomUICommunity/TKCode.Arc`，
+   从 preview.2 起改回 `https://github.com/AIDotNet/TKCode.Arc`，与本地源码一致。
+   升级到 preview.3 时把全部 `xmlns:arc` 从 `AtomUICommunity` 改成 `AIDotNet`，
+   XAML 里 `arc:ArcGlyph` / `arc:ArcIcons` / `arc:Textarea` 才解析得到。
 
 2. **图标数量不同。**
    本地源码有 213 个 `ArcIcons`，包里有 187 个。

@@ -32,8 +32,5 @@
     <DataTemplate DataType="{x:Type vm:McpViewModel}">
       <views:McpView />
     </DataTemplate>
-    <DataTemplate DataType="{x:Type vm:LibraryViewModel}">
-      <views:LibraryView />
-    </DataTemplate>
   </Application.DataTemplates>
 </Application>

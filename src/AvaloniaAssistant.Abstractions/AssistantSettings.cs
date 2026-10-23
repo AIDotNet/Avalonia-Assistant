@@ -5,7 +5,13 @@ namespace AvaloniaAssistant.Abstractions;
 /// <summary>模型服务协议。运行时据此选择 pi.net 的 provider 适配器。</summary>
 public enum AgentProtocol
 {
+    /// <summary>OpenAI Chat Completions（/chat/completions），兼容面最广。</summary>
     OpenAiCompatible,
+
+    /// <summary>OpenAI Responses（/responses），官方新接口。</summary>
+    OpenAiResponses,
+
+    /// <summary>Anthropic Messages（/messages），Claude 原生形状。</summary>
     AnthropicMessages,
 }
 
@@ -29,7 +35,7 @@ public sealed record ProviderPreset(
     public static readonly ProviderPreset OpenAI = new(
         AgentProviderKind.OpenAI,
         "OpenAI",
-        "官方 OpenAI 接口",
+        "官方接口，可选 Chat / Responses",
         "https://api.openai.com/v1",
         "gpt-6.1-sol",
         AgentProtocol.OpenAiCompatible);
@@ -136,8 +142,17 @@ public sealed class AssistantSettings
 
     public string Mode { get; set; } = "office";
 
+    /// <summary>
+    /// 界面上显式选择的协议；null 表示跟随服务商预设。
+    /// 旧版 settings.json 没有这个字段，读出来仍是 null，不会把 Anthropic 预设误降级成 Chat。
+    /// </summary>
+    public AgentProtocol? Protocol { get; set; }
+
     [JsonIgnore]
-    public AgentProtocol Protocol => ProviderPreset.For(Provider).Protocol;
+    public AgentProtocol EffectiveProtocol => Protocol ?? ProviderPreset.For(Provider).Protocol;
+
+    [JsonIgnore]
+    public ProtocolOption ProtocolInfo => ProtocolCatalog.For(EffectiveProtocol);
 
     public AssistantSettings Clone() => new()
     {
@@ -156,5 +171,6 @@ public sealed class AssistantSettings
         CollapsedWorkspaces = [.. CollapsedWorkspaces],
         DisabledTools = [.. DisabledTools],
         Mode = Mode,
+        Protocol = Protocol,
     };
 }

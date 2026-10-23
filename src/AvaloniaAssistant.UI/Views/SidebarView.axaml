@@ -173,15 +173,6 @@
             </StackPanel>
           </Button>
 
-          <Button Classes="nav" Classes.active="{Binding IsLibrarySelected}" Command="{Binding OpenLibraryCommand}">
-            <StackPanel Orientation="Horizontal" Spacing="9">
-              <arc:ArcGlyph Data="{x:Static arc:ArcIcons.FolderOpen}"
-                            Size="16"
-                            Foreground="{Binding $parent[Button].Foreground}" />
-              <TextBlock Text="资料库" VerticalAlignment="Center" />
-            </StackPanel>
-          </Button>
-
           <Button Classes="nav" Classes.active="{Binding IsSettingsSelected}" Command="{Binding OpenSettingsCommand}">
             <StackPanel Orientation="Horizontal" Spacing="9">
               <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Settings}"

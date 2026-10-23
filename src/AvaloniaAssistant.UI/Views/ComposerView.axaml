@@ -113,6 +113,22 @@
       <Setter Property="HorizontalContentAlignment" Value="Center" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
+    <!-- 图片右上角的删除：图可能很亮，按钮带半透明黑底才看得清 -->
+    <Style Selector="Button.image-remove">
+      <Setter Property="Width" Value="17" />
+      <Setter Property="Height" Value="17" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="CornerRadius" Value="9" />
+      <Setter Property="Background" Value="#B3000000" />
+      <Setter Property="Foreground" Value="#FFFFFF" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.image-remove:pointerover">
+      <Setter Property="Background" Value="#E6000000" />
+    </Style>
+
     <Style Selector="Button.ref-remove:pointerover">
       <Setter Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
       <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
@@ -127,7 +143,41 @@
             Padding="14,10,12,9"
             BoxShadow="{StaticResource ComposerShadow}">
       <Grid RowDefinitions="Auto,Auto,Auto,Auto">
-        <!-- 已引用的资料 -->
+        <!-- 待发送的图片 -->
+        <ItemsControl Grid.Row="0"
+                      ItemsSource="{Binding Images}"
+                      IsVisible="{Binding HasImages}"
+                      Margin="0,0,0,7">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <WrapPanel ItemSpacing="6" LineSpacing="6" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <Border Width="68"
+                      Height="68"
+                      CornerRadius="10"
+                      ClipToBounds="True"
+                      Background="{StaticResource SurfaceMutedBrush}"
+                      ToolTip.Tip="{Binding Caption}">
+                <Panel>
+                  <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" />
+                  <Button Classes="image-remove"
+                          Command="{Binding RemoveCommand}"
+                          HorizontalAlignment="Right"
+                          VerticalAlignment="Top"
+                          Margin="3"
+                          ToolTip.Tip="移除这张图">
+                    <arc:ArcGlyph Data="{x:Static arc:ArcIcons.CircleX}" Size="11" />
+                  </Button>
+                </Panel>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <!-- 已引用的文件 -->
         <ItemsControl Grid.Row="0"
                       ItemsSource="{Binding References}"
                       IsVisible="{Binding HasReferences}"
@@ -148,10 +198,6 @@
                              FontSize="11.5"
                              MaxWidth="180"
                              TextTrimming="CharacterEllipsis"
-                             VerticalAlignment="Center" />
-                  <TextBlock Text="{Binding SourceText}"
-                             FontSize="9"
-                             Foreground="{StaticResource TextMutedBrush}"
                              VerticalAlignment="Center" />
                   <Button Classes="ref-remove"
                           Command="{Binding $parent[ItemsControl].DataContext.RemoveReferenceCommand}"
@@ -211,7 +257,7 @@
                                    TextTrimming="CharacterEllipsis" />
                       </StackPanel>
                       <TextBlock Grid.Column="2"
-                                 Text="{Binding SourceText}"
+                                 Text="{Binding SizeText}"
                                  Classes="caption"
                                  FontSize="9.5"
                                  VerticalAlignment="Center" />
@@ -251,7 +297,7 @@
             </Button>
             <Button Classes="icon"
                     Command="{Binding OpenMentionCommand}"
-                    ToolTip.Tip="引用工作区或资料库里的文件（输入 @）">
+                    ToolTip.Tip="引用工作区里的文件（输入 @）">
               <TextBlock Text="@" FontSize="15" FontWeight="Medium" VerticalAlignment="Center" />
             </Button>
           </StackPanel>

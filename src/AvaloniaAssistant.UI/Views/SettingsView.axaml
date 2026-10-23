@@ -70,6 +70,31 @@
                      Placeholder="deepseek-flash"
                      Text="{Binding Model, Mode=TwoWay}" />
 
+          <StackPanel Spacing="7">
+            <TextBlock Text="协议" Classes="caption" FontSize="11.5" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Button Classes="chip"
+                      Classes.active="{Binding IsChatProtocolSelected}"
+                      Command="{Binding SetProtocolCommand}"
+                      CommandParameter="chat"
+                      Content="Chat Completions" />
+              <Button Classes="chip"
+                      Classes.active="{Binding IsResponsesProtocolSelected}"
+                      Command="{Binding SetProtocolCommand}"
+                      CommandParameter="responses"
+                      Content="Responses" />
+              <Button Classes="chip"
+                      Classes.active="{Binding IsMessagesProtocolSelected}"
+                      Command="{Binding SetProtocolCommand}"
+                      CommandParameter="messages"
+                      Content="Anthropic Messages" />
+            </StackPanel>
+            <TextBlock Text="{Binding ProtocolHint}"
+                       Classes="caption"
+                       TextWrapping="Wrap"
+                       LineHeight="18" />
+          </StackPanel>
+
           <Grid ColumnDefinitions="*,*">
             <arc:Input Label="Temperature"
                        Text="{Binding Temperature, Mode=TwoWay}"

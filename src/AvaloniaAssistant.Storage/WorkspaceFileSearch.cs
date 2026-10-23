@@ -70,7 +70,7 @@ public sealed class WorkspaceFileSearch
         return files;
     }
 
-    /// <summary>按查询词找文件。空查询按最近修改排，和资料库列表的口径一致。</summary>
+    /// <summary>按查询词找文件。空查询按最近修改排，先把刚动过的摆出来。</summary>
     public IReadOnlyList<WorkspaceFileEntry> Search(string root, string? query, int limit = 20)
     {
         var files = List(root);

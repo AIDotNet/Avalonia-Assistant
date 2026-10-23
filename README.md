@@ -14,8 +14,6 @@ Windows 桌面 AI 助理。Agent 循环用 [pi.net](https://github.com/AIDotNet/
   `.pi/mcp.json` 的 MCP 服务端启动时连接。
 - **@ 直接引用文件**：输入框打 `@` 按名字搜当前工作区的文件——文件名精确 > 前缀 > 包含 > 路径 > 字符子序列，
   自动跳过 `node_modules` / `.git` 这类目录；选中即引用，**发送时才读内容**，不用先把文件导入到哪里。
-- **资料库收长期资料**：要留着反复用的文件拖进资料库页，副本落在 `.library/` 并抽出正文建索引，
-  同样出现在 `@` 候选里（标「资料库」）。
 - **长会话能自己压缩**：CodingAgent 的上下文压缩与自动重试，不必手动清空。
 - **三档权限**：只读 / 工作区 / 完全访问；执行命令会在对话里弹授权卡。
 - **工具过程可见**：每次调用压成一行（「执行命令：dotnet build」+ 耗时），点开才看参数和结果；
@@ -31,9 +29,7 @@ Windows 桌面 AI 助理。Agent 循环用 [pi.net](https://github.com/AIDotNet/
 | --- | --- |
 | ![会话](docs/images/chat.png) | ![设置](docs/images/settings.png) |
 
-| 技能 | 资料库 |
-| --- | --- |
-| ![技能](docs/images/tools.png) | ![资料库](docs/images/library.png) |
+![技能](docs/images/tools.png)
 
 ## 两个核心框架
 
@@ -41,7 +37,7 @@ Windows 桌面 AI 助理。Agent 循环用 [pi.net](https://github.com/AIDotNet/
 
 | 层 | 框架 | 引用包 | 版本 |
 | --- | --- | --- | --- |
-| UI 框架 | [TKCode.Arc](https://github.com/AIDotNet/TKCode.Arc)（AtomUI 生态） | `TKCode.Arc`、`TKCode.Arc.Fonts` | 0.3.0-preview.1 |
+| UI 框架 | [TKCode.Arc](https://github.com/AIDotNet/TKCode.Arc)（AtomUI 生态） | `TKCode.Arc`、`TKCode.Arc.Fonts` | 0.3.0-preview.3 |
 | Agent 框架 | [pi.net](https://github.com/AIDotNet/pi.net)（Pi 的 .NET 移植） | `Pi.CodingAgent`（传递引入 `Pi.Agent` / `Pi.Ai` / `Pi.Mcp` 等） | 1.4.2 |
 
 - **TKCode.Arc 负责界面**：控件、主题、图标字体全部来自 Arc，入口在 `Program.BuildAvaloniaApp`
@@ -290,16 +286,9 @@ dotnet run --project src/AvaloniaAssistant.Desktop -- --run "用三句话介绍�
 ├── settings.json
 ├── sessions\<session-id>.json
 └── Workspace\                  # 默认工作区
-
-<工作区>\.library\
-├── index.json                  # 资料索引：名称、大小、摘要、正文
-└── files\<id>_<原名>            # 导入时复制的副本
 ```
 
 删除 `sessions\` 下的文件即可清空对应会话。设置页有「打开数据目录」。
-
-资料库跟着工作区走：换一个工作区就是另一批资料。`.library` 只存副本，原文件不受影响；
-如果工作区是 git 仓库，建议把 `.library/` 加进 `.gitignore`。
 
 ## 已知边界
 
@@ -309,8 +298,7 @@ dotnet run --project src/AvaloniaAssistant.Desktop -- --run "用三句话介绍�
 - **会话存档仍是本项目自己的 JSON**：CodingAgent 的会话跑在内存里，压缩结果不跨进程保存；
   重启后由 `sessions/*.json` 的历史重建上下文，压缩收益会重新累计。
 - **上下文窗口按 128k 估算**：模型真实窗口不在本地目录里，压缩触发点据此计算，特殊模型需要手动调。
-- **资料库只索引 UTF-8 文本**：GBK 编码的中文 txt 会被当成二进制，只能按文件名引用，搜不到正文。
-- **资料库不做向量检索**：搜索是名字 / 摘要 / 正文的子串匹配，资料上千份时该换 SQLite FTS。
+- **@ 只按文件名和路径匹配**：不是全文检索，搜文件里的内容要等后面的索引；二进制文件可以引用但没有正文。
 - **没有定时任务 / 专家市场**：导航里暂未提供入口，避免假按钮；扩展点见架构文档。
 - **Windows 优先**：代码里对 macOS/Linux 的路径和 shell 做了分支，但只在 Windows 上验证过。
 

@@ -55,7 +55,7 @@ internal sealed class CodingSessionFactory
         StreamFn? streamOverride,
         CancellationToken cancellationToken)
     {
-        var api = ApiName(settings);
+        var api = ProtocolCatalog.ApiId(settings.EffectiveProtocol);
         var http = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
 
         var runtime = await ModelRuntime.CreateAsync(new CreateModelRuntimeOptions
@@ -107,9 +107,15 @@ internal sealed class CodingSessionFactory
                 }
 
                 var streamingModel = spec with { Api = api, BaseUrl = settings.BaseUrl };
-                return settings.Protocol == AgentProtocol.AnthropicMessages
-                    ? AnthropicMessages.StreamSimple(streamingModel, context, options, http, CancellationToken.None)
-                    : OpenAiCompletions.StreamSimple(streamingModel, context, options, http, CancellationToken.None);
+                return settings.EffectiveProtocol switch
+                {
+                    AgentProtocol.AnthropicMessages => AnthropicMessages.StreamSimple(
+                        streamingModel, context, options, http, CancellationToken.None),
+                    AgentProtocol.OpenAiResponses => OpenAiResponses.StreamSimple(
+                        streamingModel, context, options, http, CancellationToken.None),
+                    _ => OpenAiCompletions.StreamSimple(
+                        streamingModel, context, options, http, CancellationToken.None),
+                };
             },
         });
 
@@ -163,7 +169,4 @@ internal sealed class CodingSessionFactory
 
         return result.Session;
     }
-
-    private static string ApiName(AssistantSettings settings)
-        => settings.Protocol == AgentProtocol.AnthropicMessages ? "anthropic-messages" : "openai-completions";
 }

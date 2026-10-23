@@ -105,6 +105,17 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     public string WorkspacePath => Settings.WorkspacePath;
 
+    public bool IsChatProtocolSelected => Settings.EffectiveProtocol == AgentProtocol.OpenAiCompatible;
+
+    public bool IsResponsesProtocolSelected => Settings.EffectiveProtocol == AgentProtocol.OpenAiResponses;
+
+    public bool IsMessagesProtocolSelected => Settings.EffectiveProtocol == AgentProtocol.AnthropicMessages;
+
+    /// <summary>协议说明。没手动选过时补一句“跟随服务商推荐”，避免以为是写死的。</summary>
+    public string ProtocolHint => Settings.Protocol is null
+        ? Settings.ProtocolInfo.Description + "（当前跟随服务商推荐）"
+        : Settings.ProtocolInfo.Description;
+
     public bool IsReadOnlySelected => Settings.Permission == PermissionMode.ReadOnly;
 
     public bool IsWorkspaceSelected => Settings.Permission == PermissionMode.Workspace;
@@ -149,6 +160,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         Settings.Provider = option.Preset.Kind;
         Settings.BaseUrl = option.Preset.BaseUrl;
         Settings.Model = option.Preset.Model;
+        // 换服务商时协议回到推荐值，用户想用代理绕协议可以再手动改。
+        Settings.Protocol = option.Preset.Protocol;
 
         foreach (var provider in Providers)
         {
@@ -157,6 +170,28 @@ public sealed partial class SettingsViewModel : ObservableObject
 
         OnPropertyChanged(nameof(BaseUrl));
         OnPropertyChanged(nameof(Model));
+        NotifyProtocolChanged();
+    }
+
+    [RelayCommand]
+    private void SetProtocol(string protocol)
+    {
+        Settings.Protocol = protocol switch
+        {
+            "responses" => AgentProtocol.OpenAiResponses,
+            "messages" => AgentProtocol.AnthropicMessages,
+            _ => AgentProtocol.OpenAiCompatible,
+        };
+
+        NotifyProtocolChanged();
+    }
+
+    private void NotifyProtocolChanged()
+    {
+        OnPropertyChanged(nameof(IsChatProtocolSelected));
+        OnPropertyChanged(nameof(IsResponsesProtocolSelected));
+        OnPropertyChanged(nameof(IsMessagesProtocolSelected));
+        OnPropertyChanged(nameof(ProtocolHint));
     }
 
     [RelayCommand]

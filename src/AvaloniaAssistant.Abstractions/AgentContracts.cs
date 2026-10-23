@@ -74,12 +74,17 @@ public sealed record HistoryTurn(string Role, string Text)
 }
 
 /// <summary>
-/// 用户按下发送时交给对话线的东西：输入框里的原文，加上这一轮从资料库 @ 过来的文档。
+/// 用户按下发送时交给对话线的东西：输入框里的原文，加上这一轮 @ 引用进来的文件。
 /// 原文照原样显示在气泡里，附件内容只喂给模型。
 /// </summary>
-public sealed record PromptRequest(string Text, IReadOnlyList<ChatAttachment> Attachments)
+public sealed record PromptRequest(
+    string Text,
+    IReadOnlyList<ChatAttachment> Attachments,
+    IReadOnlyList<ChatImage>? Images = null)
 {
     public static PromptRequest Plain(string text) => new(text, []);
+
+    public bool HasImages => Images is { Count: > 0 };
 }
 
 /// <summary>一次 agent 运行的输入。运行时无状态：历史由调用方携带。</summary>
@@ -89,7 +94,8 @@ public sealed record AgentRunRequest(    string SessionId,
     string Mode,
     PermissionMode Permission,
     string? WorkspacePath,
-    IToolApprovalGate? ApprovalGate);
+    IToolApprovalGate? ApprovalGate,
+    IReadOnlyList<ChatImage>? Images = null);
 
 public sealed record ToolApprovalRequest(
     string SessionId,
