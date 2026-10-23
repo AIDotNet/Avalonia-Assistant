@@ -66,12 +66,16 @@ public sealed partial class SessionItemViewModel : ObservableObject
 public sealed partial class WorkspaceItemViewModel : ObservableObject
 {
     private readonly Action<string> _select;
+    private readonly Action<string> _open;
+    private readonly Func<string, string, Task<string?>> _rename;
     private readonly Func<string, Task> _repick;
     private readonly Func<string, Task> _remove;
 
     public WorkspaceItemViewModel(
         string path,
         Action<string> select,
+        Action<string> open,
+        Func<string, string, Task<string?>> rename,
         Func<string, Task> repick,
         Func<string, Task> remove)
     {
@@ -82,6 +86,8 @@ public sealed partial class WorkspaceItemViewModel : ObservableObject
                 ? name
                 : path;
         _select = select;
+        _open = open;
+        _rename = rename;
         _repick = repick;
         _remove = remove;
     }
@@ -95,6 +101,12 @@ public sealed partial class WorkspaceItemViewModel : ObservableObject
 
     [RelayCommand]
     private void Select() => _select(Path);
+
+    /// <summary>在资源管理器里打开这个目录。</summary>
+    public void OpenFolder() => _open(Path);
+
+    /// <summary>改目录名。成功返回 null，失败返回一句能直接给用户看的原因。</summary>
+    public Task<string?> RenameAsync(string newName) => _rename(Path, newName);
 
     /// <summary>换一个目录顶替这条记录，原来选中的话跟着切过去。</summary>
     [RelayCommand]

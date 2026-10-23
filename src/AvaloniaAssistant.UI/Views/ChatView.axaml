@@ -67,6 +67,12 @@
           </Border>
 
           <ItemsControl ItemsSource="{Binding Tools}">
+            <!-- 相邻的工具卡片之间留出间距，否则连续多次调用会贴成一整块 -->
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <StackPanel Spacing="6" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
               <DataTemplate>
                 <Border Classes="tool-card">
@@ -151,9 +157,16 @@
                        Foreground="{StaticResource DangerBrush}" />
           </Border>
 
+          <!-- 回复的操作菜单：复制要有内容才出现，重试只在这条回复真的结束（含失败/中断）后才出现 -->
           <StackPanel IsVisible="{Binding ShowActions}" Orientation="Horizontal" Spacing="2" Margin="0,1,0,0">
-            <Button Classes="ghost-action" Command="{Binding CopyCommand}" Content="复制" />
-            <Button Classes="ghost-action" Command="{Binding RetryCommand}" Content="重试" />
+            <Button Classes="ghost-action"
+                    Command="{Binding CopyCommand}"
+                    IsVisible="{Binding HasText}"
+                    Content="复制" />
+            <Button Classes="ghost-action"
+                    Command="{Binding RetryCommand}"
+                    ToolTip.Tip="重新生成这条回复（会丢弃它之后的内容）"
+                    Content="重试" />
             <TextBlock Text="{Binding TokenText}"
                        IsVisible="{Binding HasTokens}"
                        Classes="caption"
@@ -246,17 +259,15 @@
           <TextBlock Text="{Binding Title}" FontSize="13.5" FontWeight="Medium" TextTrimming="CharacterEllipsis" />
           <TextBlock Text="{Binding HeaderSubtitle}" Classes="caption" FontSize="10.5" />
         </StackPanel>
-        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-          <Border Background="{StaticResource SurfaceMutedBrush}" CornerRadius="11" Padding="10,4" VerticalAlignment="Center">
-            <TextBlock Text="{Binding StatusText}" Classes="caption" FontSize="10.5" />
-          </Border>
-          <Button Classes="icon" Command="{Binding RetryCommand}" ToolTip.Tip="重新生成">
-            <arc:ArcGlyph Data="{x:Static arc:ArcIcons.RefreshCw}" Size="15" />
-          </Button>
-          <Button Classes="icon" Command="{Binding StopCommand}" ToolTip.Tip="停止">
-            <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Square}" Size="13" />
-          </Button>
-        </StackPanel>
+        <!-- 停止已经在输入框里（运行中发送键会变成停止键），重试挂在每条回复下面，
+             顶栏只留状态，避免同一个动作出现两处入口。 -->
+        <Border Grid.Column="2"
+                Background="{StaticResource SurfaceMutedBrush}"
+                CornerRadius="11"
+                Padding="10,4"
+                VerticalAlignment="Center">
+          <TextBlock Text="{Binding StatusText}" Classes="caption" FontSize="10.5" />
+        </Border>
       </Grid>
     </Border>
 

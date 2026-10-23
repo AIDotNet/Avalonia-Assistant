@@ -1,0 +1,157 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:arc="https://github.com/AtomUICommunity/TKCode.Arc"
+        x:Class="AvaloniaAssistant.UI.Views.PermissionConfirmDialog"
+        Title="确认允许完全访问"
+        CanResize="False"
+        ShowInTaskbar="False"
+        WindowDecorations="None"
+        WindowStartupLocation="CenterOwner"
+        TransparencyLevelHint="Transparent"
+        Background="Transparent"
+        FontFamily="{StaticResource AppFontFamily}"
+        RequestedThemeVariant="Light">
+  <!-- 窗口铺满父窗口，这层半透明黑就是模态遮罩；卡片居中显示 -->
+  <Grid Background="#66000000">
+    <Border Width="520"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center"
+            Background="{StaticResource SurfaceBrush}"
+            BorderBrush="{StaticResource BorderStrongBrush}"
+            BorderThickness="1"
+            CornerRadius="18"
+            Padding="24,20,24,18"
+            BoxShadow="0 24 64 0 #33000000">
+    <StackPanel Spacing="14">
+      <Grid ColumnDefinitions="Auto,*,Auto">
+        <Border Width="26"
+                Height="26"
+                CornerRadius="13"
+                Background="{StaticResource DangerSubtleBrush}"
+                VerticalAlignment="Top">
+          <arc:ArcGlyph Data="{x:Static arc:ArcIcons.TriangleAlert}"
+                        Size="15"
+                        Foreground="{StaticResource DangerBrush}"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center" />
+        </Border>
+
+        <TextBlock Grid.Column="1"
+                   Text="确认允许完全访问？"
+                   FontSize="17"
+                   FontWeight="SemiBold"
+                   Margin="10,0,8,0"
+                   VerticalAlignment="Center" />
+
+        <Button Grid.Column="2"
+                Classes="icon"
+                Click="OnCancelClick"
+                ToolTip.Tip="取消">
+          <arc:ArcGlyph Data="{x:Static arc:ArcIcons.CircleX}" Size="15" />
+        </Button>
+      </Grid>
+
+      <TextBlock Text="开启完全访问后，所有任务都会跳过确认步骤、直接操作这台电脑。请只在信任的任务里开启，包括以下内容："
+                 FontSize="12.5"
+                 LineHeight="20"
+                 TextWrapping="Wrap"
+                 Foreground="{StaticResource TextSecondaryBrush}" />
+
+      <Border Background="{StaticResource SurfaceMutedBrush}"
+              CornerRadius="12"
+              Padding="16,13">
+        <StackPanel Spacing="13">
+          <Grid ColumnDefinitions="Auto,*">
+            <arc:ArcGlyph Data="{x:Static arc:ArcIcons.FileText}"
+                          Size="15"
+                          Foreground="{StaticResource TextSecondaryBrush}"
+                          VerticalAlignment="Top"
+                          Margin="0,2,0,0" />
+            <StackPanel Grid.Column="1" Spacing="3" Margin="10,0,0,0">
+              <TextBlock Text="文件操作" FontSize="12.5" FontWeight="Medium" />
+              <TextBlock Text="读取、创建、修改、上传或删除这台电脑上任意位置的文件"
+                         FontSize="11.5"
+                         LineHeight="17"
+                         TextWrapping="Wrap"
+                         Foreground="{StaticResource TextMutedBrush}" />
+            </StackPanel>
+          </Grid>
+
+          <Grid ColumnDefinitions="Auto,*">
+            <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Command}"
+                          Size="15"
+                          Foreground="{StaticResource TextSecondaryBrush}"
+                          VerticalAlignment="Top"
+                          Margin="0,2,0,0" />
+            <StackPanel Grid.Column="1" Spacing="3" Margin="10,0,0,0">
+              <TextBlock Text="终端命令" FontSize="12.5" FontWeight="Medium" />
+              <TextBlock Text="执行命令、安装软件和更改系统设置"
+                         FontSize="11.5"
+                         LineHeight="17"
+                         TextWrapping="Wrap"
+                         Foreground="{StaticResource TextMutedBrush}" />
+            </StackPanel>
+          </Grid>
+
+          <Grid ColumnDefinitions="Auto,*">
+            <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Globe}"
+                          Size="15"
+                          Foreground="{StaticResource TextSecondaryBrush}"
+                          VerticalAlignment="Top"
+                          Margin="0,2,0,0" />
+            <StackPanel Grid.Column="1" Spacing="3" Margin="10,0,0,0">
+              <TextBlock Text="访问互联网" FontSize="12.5" FontWeight="Medium" />
+              <TextBlock Text="访问网站、发送数据并使用已启用的 MCP 连接器"
+                         FontSize="11.5"
+                         LineHeight="17"
+                         TextWrapping="Wrap"
+                         Foreground="{StaticResource TextMutedBrush}" />
+            </StackPanel>
+          </Grid>
+        </StackPanel>
+      </Border>
+
+      <!-- 自绘勾选框：这个应用的主题里没有 CheckBox 模板，用 Button + Border 更稳 -->
+      <Button Classes="agree" Click="OnAgreeClick">
+        <StackPanel Orientation="Horizontal" Spacing="9" VerticalAlignment="Center">
+          <Border x:Name="AgreeBox"
+                  Width="17"
+                  Height="17"
+                  CornerRadius="4"
+                  Background="{StaticResource SurfaceBrush}"
+                  BorderBrush="{StaticResource BorderStrongBrush}"
+                  BorderThickness="1"
+                  VerticalAlignment="Center">
+            <arc:ArcGlyph x:Name="AgreeCheck"
+                          Data="{x:Static arc:ArcIcons.Check}"
+                          Size="11"
+                          Foreground="#FFFFFF"
+                          IsVisible="False"
+                          HorizontalAlignment="Center"
+                          VerticalAlignment="Center" />
+          </Border>
+          <TextBlock Text="我已了解风险，并对自己的数据安全负责"
+                     FontSize="12.5"
+                     VerticalAlignment="Center" />
+        </StackPanel>
+      </Button>
+
+      <StackPanel Orientation="Horizontal"
+                  Spacing="10"
+                  HorizontalAlignment="Right"
+                  Margin="0,2,0,0">
+        <Button Classes="chip"
+                Content="取消"
+                MinWidth="88"
+                HorizontalContentAlignment="Center"
+                Click="OnCancelClick" />
+        <Button x:Name="ConfirmButton"
+                Classes="danger"
+                Content="允许完全访问"
+                IsEnabled="False"
+                Click="OnConfirmClick" />
+      </StackPanel>
+    </StackPanel>
+    </Border>
+  </Grid>
+</Window>

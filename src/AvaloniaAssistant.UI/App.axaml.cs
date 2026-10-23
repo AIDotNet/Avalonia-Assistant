@@ -5,6 +5,7 @@ using Avalonia.Input;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media.Imaging;
 using Avalonia.VisualTree;
+using AvaloniaAssistant.Abstractions;
 using AvaloniaAssistant.UI.Services;
 using AvaloniaAssistant.UI.ViewModels;
 using AvaloniaAssistant.UI.Views;
@@ -62,6 +63,12 @@ public partial class AssistantApp : Application
                     break;
                 case "mcp":
                     viewModel.OpenMcp();
+                    if (AppLaunchOptions.OpenMcpImport && viewModel.CurrentPage is McpViewModel mcp)
+                    {
+                        mcp.ShowImport();
+                        mcp.FillExample();
+                    }
+
                     break;
                 case "library":
                     viewModel.OpenLibrary();
@@ -93,6 +100,18 @@ public partial class AssistantApp : Application
                         Source = focused,
                     });
                 }
+            }
+
+            // 验收用：直接弹「完全访问」确认层，确认后真的切到完全访问，配合 --screenshot 看结果。
+            if (AppLaunchOptions.ConfirmFullAccessDialog)
+            {
+                var anchor = window.Content as Visual ?? window;
+                if (await PermissionConfirmDialog.ShowAsync(anchor))
+                {
+                    await viewModel.Home.Composer.SetPermissionAsync(PermissionMode.FullAccess);
+                }
+
+                await Task.Delay(400);
             }
 
             if (string.IsNullOrWhiteSpace(AppLaunchOptions.ScreenshotPath))

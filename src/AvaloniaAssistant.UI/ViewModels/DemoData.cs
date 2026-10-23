@@ -27,7 +27,7 @@ internal static class DemoData
                 {
                     Kind = ChatEntryKind.Assistant,
                     CreatedAt = now.AddMinutes(-12),
-                    Model = "deepseek-v4-flash",
+                    Model = "deepseek-flash",
                     InputTokens = 1284,
                     OutputTokens = 213,
                     Reasoning = "先跑一条命令查系统信息，确认 CPU、内存和磁盘；再把结果写成文件，最后用一段话说明写到了哪里。",
@@ -64,7 +64,7 @@ internal static class DemoData
                 {
                     Kind = ChatEntryKind.Assistant,
                     CreatedAt = now.AddMinutes(-2),
-                    Model = "deepseek-v4-flash",
+                    Model = "deepseek-flash",
                     InputTokens = 1650,
                     OutputTokens = 168,
                     ToolCalls =
@@ -72,10 +72,10 @@ internal static class DemoData
                         new ToolCallRecord
                         {
                             Id = "demo-call-3",
-                            Name = "list_directory",
-                            Label = "浏览文件夹",
+                            Name = "ls",
+                            Label = "列出目录",
                             Arguments = "{\n  \"path\": \"C:/Users/demo/Downloads\"\n}",
-                            Result = "找到 3 个超过 100MB 的文件。",
+                            Result = "Windows11.iso  5.2 GB\n模型权重.gguf  1.8 GB\n录屏-1015.mp4  640 MB",
                             DurationMs = 41,
                         },
                     ],

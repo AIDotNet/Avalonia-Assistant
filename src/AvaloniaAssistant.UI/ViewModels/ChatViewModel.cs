@@ -29,6 +29,7 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
         Composer = new ComposerViewModel(_runtime, _settings, host.Picker, host.Voice, host.OpenSettingsAsync);
         Composer.SendRequested += async (_, text) => await SendPromptAsync(text);
         Composer.StopRequested += (_, _) => Stop();
+        Composer.PermissionChanged += OnPermissionChanged;
 
         Messages.CollectionChanged += OnMessagesChanged;
         _settings.Changed += OnSettingsChanged;
@@ -41,11 +42,34 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
     public void Dispose()
     {
         _settings.Changed -= OnSettingsChanged;
+        Composer.PermissionChanged -= OnPermissionChanged;
         Composer.Dispose();
     }
 
     private void OnSettingsChanged(object? sender, EventArgs e)
         => OnPropertyChanged(nameof(HeaderSubtitle));
+
+    /// <summary>
+    /// 权限档位变了就在对话里留一条提示：用户得清楚接下来的命令还会不会问自己。
+    /// 只进消息流，不写进会话存档，重新打开不会重复出现。
+    /// </summary>
+    private void OnPermissionChanged(object? sender, PermissionMode permission)
+    {
+        if (IsBusy)
+        {
+            return;
+        }
+
+        var text = permission switch
+        {
+            PermissionMode.FullAccess => "已切换为完全访问：执行命令、修改文件都不再逐次确认。",
+            PermissionMode.ReadOnly => "已切换为只读：不会修改文件，也不会执行命令。",
+            _ => "已切换为默认权限：执行命令、调用 MCP 工具前会先问你。",
+        };
+
+        Messages.Add(new NoticeMessageViewModel(text));
+        RequestScroll(true);
+    }
 
     public ObservableCollection<MessageViewModel> Messages { get; } = [];
 
@@ -95,34 +119,71 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
         await RunPromptAsync(text.Trim(), addUserMessage: true);
     }
 
-    [RelayCommand]
-    private async Task RetryAsync()
+    /// <summary>
+    /// 从某条回复重来：截掉它和它后面的一切，用同一轮的用户提问重跑。
+    /// 重试挂在回复下面，点哪条就从哪轮开始，而不是永远重跑最后一轮。
+    /// </summary>
+    private async Task RetryFromAsync(AssistantMessageViewModel message)
     {
         if (IsBusy)
         {
             return;
         }
 
-        var index = Session.Entries.FindLastIndex(entry => entry.Kind == ChatEntryKind.User);
-        if (index < 0)
+        var messageIndex = Messages.IndexOf(message);
+        if (messageIndex < 0)
         {
             return;
         }
 
-        var prompt = Session.Entries[index].Text;
-        if (Session.Entries.Count > index + 1)
+        var userIndex = -1;
+        for (var i = messageIndex; i >= 0; i--)
         {
-            Session.Entries.RemoveRange(index + 1, Session.Entries.Count - index - 1);
+            if (Messages[i] is UserMessageViewModel)
+            {
+                userIndex = i;
+                break;
+            }
         }
 
-        var lastUserMessage = Messages.LastOrDefault(message => message is UserMessageViewModel);
-        if (lastUserMessage is not null)
+        if (userIndex < 0)
         {
-            var messageIndex = Messages.IndexOf(lastUserMessage);
-            while (Messages.Count > messageIndex + 1)
+            return;
+        }
+
+        var prompt = ((UserMessageViewModel)Messages[userIndex]).Text;
+
+        // 用户消息和 Session.Entries 里的 User 条目严格一一对应（提示条只进消息流不进存档），
+        // 所以按「第几轮提问」定位要截断的存档位置，比按消息下标找更稳。
+        var turn = Messages.Take(userIndex + 1).Count(item => item is UserMessageViewModel) - 1;
+        var entryIndex = -1;
+        for (var i = 0; i < Session.Entries.Count; i++)
+        {
+            if (Session.Entries[i].Kind != ChatEntryKind.User)
             {
-                Messages.RemoveAt(Messages.Count - 1);
+                continue;
             }
+
+            if (turn-- == 0)
+            {
+                entryIndex = i;
+                break;
+            }
+        }
+
+        if (entryIndex < 0)
+        {
+            return;
+        }
+
+        if (Session.Entries.Count > entryIndex + 1)
+        {
+            Session.Entries.RemoveRange(entryIndex + 1, Session.Entries.Count - entryIndex - 1);
+        }
+
+        while (Messages.Count > userIndex + 1)
+        {
+            Messages.RemoveAt(Messages.Count - 1);
         }
 
         await RunPromptAsync(prompt, addUserMessage: false);
@@ -170,9 +231,10 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
 
             assistant = new AssistantMessageViewModel
             {
-                RetryRequested = () => _ = RetryAsync(),
                 ScrollRequested = () => RequestScroll(false),
             };
+            // 重试要能定位到自己这一轮，所以先把实例建好再把回调挂上去
+            assistant.RetryRequested = () => RetryFromAsync(assistant);
             Messages.Add(assistant);
 
             var request = new AgentRunRequest(
@@ -356,9 +418,9 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
                         InputTokens = entry.InputTokens,
                         OutputTokens = entry.OutputTokens,
                         Error = entry.Error,
-                        RetryRequested = () => _ = RetryAsync(),
                         ScrollRequested = () => RequestScroll(false),
                     };
+                    assistant.RetryRequested = () => RetryFromAsync(assistant);
                     assistant.SetPersisted(entry.Text, entry.Reasoning);
 
                     foreach (var record in entry.ToolCalls)
@@ -415,6 +477,13 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
     {
         public async Task<bool> RequestAsync(ToolApprovalRequest request, CancellationToken cancellationToken)
         {
+            // 完全访问在运行时那一层已经放行；这里再兜一次，避免会话复用了旧权限的闭包
+            // 又把确认卡片弹出来。
+            if (PermissionModeText.SkipsApproval(owner._settings.Current.Permission))
+            {
+                return true;
+            }
+
             var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             ApprovalMessageViewModel? card = null;
 

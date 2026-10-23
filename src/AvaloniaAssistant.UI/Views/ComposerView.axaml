@@ -117,10 +117,21 @@
               </StackPanel>
             </Button>
 
-            <Button Classes="pill" Click="OnPermissionClick" ToolTip.Tip="工具权限">
+            <Button Classes="pill permission-pill"
+                    Classes.full="{Binding IsFullAccess}"
+                    Click="OnPermissionClick"
+                    ToolTip.Tip="{Binding PermissionTooltip}">
               <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
-                <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Shield}" Size="13" />
-                <TextBlock Text="{Binding PermissionLabel}" FontSize="12" VerticalAlignment="Center" />
+                <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Shield}"
+                              Size="13"
+                              Foreground="{Binding PermissionForeground}" />
+                <TextBlock Text="{Binding PermissionLabel}"
+                           FontSize="12"
+                           Foreground="{Binding PermissionForeground}"
+                           VerticalAlignment="Center" />
+                <arc:ArcGlyph Data="{x:Static arc:ArcIcons.ChevronDown}"
+                              Size="12"
+                              Foreground="{Binding PermissionForeground}" />
               </StackPanel>
             </Button>
 
@@ -155,7 +166,7 @@
                TextWrapping="Wrap"
                Margin="4,7,4,0" />
 
-    <Grid ColumnDefinitions="*" Margin="4,7,4,0">
+    <Grid ColumnDefinitions="*,Auto" Margin="4,7,4,0">
       <StackPanel Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
         <Button Classes="pill" Click="OnWorkspaceClick" ToolTip.Tip="{Binding WorkspacePath}">
           <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
@@ -165,6 +176,20 @@
           </StackPanel>
         </Button>
         <TextBlock Text="本地运行" Classes="caption" VerticalAlignment="Center" Margin="6,0,0,0" />
+      </StackPanel>
+
+      <!-- 完全访问是危险态：常驻一条提醒，避免用户忘了自己关掉了确认 -->
+      <StackPanel Grid.Column="1"
+                  Orientation="Horizontal"
+                  Spacing="5"
+                  VerticalAlignment="Center"
+                  IsVisible="{Binding ShowFullAccessNotice}">
+        <arc:ArcGlyph Data="{x:Static arc:ArcIcons.CircleAlert}"
+                      Size="12"
+                      Foreground="{StaticResource WarningBrush}" />
+        <TextBlock Text="完全访问已开启，工具将直接执行"
+                   FontSize="11"
+                   Foreground="{StaticResource WarningBrush}" />
       </StackPanel>
     </Grid>
   </StackPanel>

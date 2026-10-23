@@ -136,4 +136,10 @@ public static class AppLaunchOptions
 
     /// <summary>开发用：预填后模拟一次 Enter，验证发送链路。</summary>
     public static bool PressEnter { get; set; }
+
+    /// <summary>开发用：MCP 页直接展开 JSON 导入面板并填入示例，配合 --screenshot 检查版式。</summary>
+    public static bool OpenMcpImport { get; set; }
+
+    /// <summary>开发用：启动后直接弹「完全访问」风险确认层，确认即切档，配合 --screenshot 看版式。</summary>
+    public static bool ConfirmFullAccessDialog { get; set; }
 }

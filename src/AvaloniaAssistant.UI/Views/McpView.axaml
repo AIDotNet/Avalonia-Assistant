@@ -23,10 +23,18 @@
           </Button>
           <Button Classes="pill"
                   Command="{Binding ShowFormCommand}"
-                  ToolTip.Tip="填名称和启动命令，写入 mcp.json">
+                  ToolTip.Tip="只加一个服务端，填名称和启动命令">
             <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
-              <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Sparkles}" Size="12" />
-              <TextBlock Text="添加服务端" FontSize="11" VerticalAlignment="Center" />
+              <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Plus}" Size="12" />
+              <TextBlock Text="表单添加" FontSize="11" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+          <Button Classes="pill"
+                  Command="{Binding ShowImportCommand}"
+                  ToolTip.Tip="整段粘贴标准 mcp.json，多个服务端一次写进去">
+            <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+              <arc:ArcGlyph Data="{x:Static arc:ArcIcons.FileText}" Size="12" />
+              <TextBlock Text="导入 JSON" FontSize="11" VerticalAlignment="Center" />
             </StackPanel>
           </Button>
         </StackPanel>
@@ -41,15 +49,83 @@
                    LineHeight="19" />
 
         <Border IsVisible="{Binding HasNotice}"
-                Background="{StaticResource SurfaceMutedBrush}"
+                Background="{Binding NoticeBackground}"
                 CornerRadius="8"
                 Padding="12,8">
           <TextBlock Text="{Binding Notice}"
+                     Foreground="{Binding NoticeForeground}"
                      FontSize="11.5"
                      TextWrapping="Wrap"
                      LineHeight="17" />
         </Border>
 
+        <!-- 导入 JSON：主路径，粘一段标准配置就行 -->
+        <Border Classes="tool-tile" IsVisible="{Binding IsImportOpen}" Padding="14,12">
+          <StackPanel Spacing="10">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Text="粘贴 mcp.json"
+                         FontSize="12.5"
+                         FontWeight="Medium"
+                         VerticalAlignment="Center" />
+              <Button Grid.Column="1"
+                      Classes="ghost-action"
+                      Command="{Binding FillExampleCommand}"
+                      ToolTip.Tip="填入一份能直接跑的示例，改个路径就能用"
+                      Content="填入示例" />
+            </Grid>
+
+            <!-- 用 arc:Textarea 而不是 TextBox：本应用的控件主题里没有 TextBox 的模板，
+                 裸 TextBox 只会画出一个空框（正文和占位文字都不渲染）。 -->
+            <Border Background="{StaticResource SurfaceMutedBrush}"
+                    BorderBrush="{StaticResource BorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="10"
+                    Padding="10,8">
+              <arc:Textarea Classes="composer"
+                            AcceptsReturn="True"
+                            MinHeight="176"
+                            MaxHeight="272"
+                            IsResizable="False"
+                            FontFamily="{StaticResource MonoFontFamily}"
+                            FontSize="11.5"
+                            Foreground="{StaticResource TextPrimaryBrush}"
+                            CaretBrush="{StaticResource TextPrimaryBrush}"
+                            Placeholder="在这里粘贴 mcpServers 整段配置…"
+                            Text="{Binding ImportJson, Mode=TwoWay}" />
+            </Border>
+
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Text="mcpServers 写法、VS Code 的 servers 写法，或者直接给一层「名称 → 配置」都能认。stdio 填 command / args，远程填 url / headers；exposure 自动补 direct，npx 这类命令自动补 Windows 启动层。"
+                         Classes="caption"
+                         FontSize="10.5"
+                         TextWrapping="Wrap"
+                         LineHeight="16"
+                         Margin="0,0,10,0" />
+              <StackPanel Grid.Column="1"
+                          Orientation="Horizontal"
+                          Spacing="8"
+                          VerticalAlignment="Bottom">
+                <Button Classes="ghost-action"
+                        Command="{Binding ImportFileCommand}"
+                        ToolTip.Tip="选一个现成的 mcp.json 读进来，确认后再导入"
+                        Content="从文件…" />
+                <Button Classes="chip"
+                        Classes.active="{Binding OverwriteExisting}"
+                        Command="{Binding ToggleOverwriteCommand}"
+                        ToolTip.Tip="同名服务端是覆盖，还是留着原来的"
+                        Content="覆盖同名" />
+                <Button Classes="pill"
+                        Content="取消"
+                        Command="{Binding CancelImportCommand}" />
+                <Button Classes="pill"
+                        Content="导入"
+                        Command="{Binding ImportCommand}" />
+              </StackPanel>
+            </Grid>
+          </StackPanel>
+        </Border>
+
+        <!-- 表单：只想加一个 stdio 服务端时更直接 -->
         <Border Classes="tool-tile" IsVisible="{Binding IsFormOpen}" Padding="14,12">
           <StackPanel Spacing="10">
             <TextBlock Text="添加 MCP 服务端（stdio）"
@@ -91,10 +167,12 @@
                          Text="{Binding Args, Mode=TwoWay}" />
             </Grid>
             <Grid ColumnDefinitions="*,Auto">
-              <TextBlock Text="参数按空格拆成数组；exposure 自动写 direct，npx / npm 会自动补 Windows 启动层。"
+              <TextBlock Text="参数按空格拆成数组；exposure 自动写 direct，npx / npm 会自动补 Windows 启动层。要写 env、headers 或一次加多个，用「导入 JSON」。"
                          Classes="caption"
                          FontSize="10.5"
-                         VerticalAlignment="Center" />
+                         VerticalAlignment="Center"
+                         TextWrapping="Wrap"
+                         LineHeight="16" />
               <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
                 <Button Classes="pill"
                         Content="取消"

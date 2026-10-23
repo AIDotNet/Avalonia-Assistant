@@ -230,6 +230,92 @@ public sealed partial class MainWindowViewModel : ObservableObject
         await SettingsProvider.SaveAsync(settings);
     }
 
+    /// <summary>在资源管理器里打开工作区目录。</summary>
+    public void OpenWorkspaceFolder(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return;
+        }
+
+        if (!Directory.Exists(path))
+        {
+            return;
+        }
+
+        Ui.OpenExternal(path);
+    }
+
+    /// <summary>
+    /// 改磁盘上的目录名。成功返回 null；失败返回一句能直接展示的原因。
+    /// </summary>
+    public async Task<string?> RenameWorkspaceAsync(string path, string newName)
+    {
+        var name = (newName ?? string.Empty).Trim();
+        if (name.Length == 0)
+        {
+            return "名字不能为空";
+        }
+
+        if (name.IndexOfAny(System.IO.Path.GetInvalidFileNameChars()) >= 0)
+        {
+            return "名字里不能有 \\ / : * ? \" < > |";
+        }
+
+        var parent = System.IO.Path.GetDirectoryName(path);
+        if (string.IsNullOrEmpty(parent))
+        {
+            return "这个路径不支持重命名";
+        }
+
+        var target = System.IO.Path.Combine(parent, name);
+        if (string.Equals(target, path, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        if (!Directory.Exists(path))
+        {
+            return "目录不存在，可能已经被移动或删除";
+        }
+
+        if (Directory.Exists(target) || File.Exists(target))
+        {
+            return "同目录下已经有同名文件或文件夹";
+        }
+
+        try
+        {
+            Directory.Move(path, target);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            return "重命名失败：" + ex.Message;
+        }
+
+        var settings = Settings;
+        if (string.Equals(settings.WorkspacePath, path, StringComparison.OrdinalIgnoreCase))
+        {
+            settings.WorkspacePath = target;
+        }
+
+        var index = settings.RecentWorkspaces.FindIndex(item =>
+            string.Equals(item, path, StringComparison.OrdinalIgnoreCase));
+        if (index >= 0)
+        {
+            settings.RecentWorkspaces[index] = target;
+        }
+        else
+        {
+            settings.RecentWorkspaces.Insert(0, target);
+        }
+
+        Home.Refresh();
+        await ReloadWorkspacesAsync();
+        await SettingsProvider.SaveAsync(settings);
+        return null;
+    }
+
     /// <summary>
     /// 从「空间」里去掉一条记录。去掉的如果是当前工作区，就把工作区清空——
     /// 之后新建的任务不再带工作区，按普通对话处理。
@@ -310,7 +396,13 @@ public sealed partial class MainWindowViewModel : ObservableObject
             Workspaces.Clear();
             foreach (var path in paths.Take(6))
             {
-                Workspaces.Add(new WorkspaceItemViewModel(path, SelectWorkspace, RepickWorkspaceAsync, RemoveWorkspaceAsync)
+                Workspaces.Add(new WorkspaceItemViewModel(
+                    path,
+                    SelectWorkspace,
+                    OpenWorkspaceFolder,
+                    RenameWorkspaceAsync,
+                    RepickWorkspaceAsync,
+                    RemoveWorkspaceAsync)
                 {
                     IsActive = string.Equals(path, settings.WorkspacePath, StringComparison.OrdinalIgnoreCase),
                 });

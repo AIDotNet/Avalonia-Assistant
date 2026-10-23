@@ -24,10 +24,10 @@ public sealed class PiAgentRuntime : IAssistantRuntime
 {
     private static readonly Dictionary<AgentProviderKind, string[]> KnownModels = new()
     {
-        [AgentProviderKind.DeepSeek] = ["deepseek-v4-flash", "deepseek-v4-pro"],
-        [AgentProviderKind.OpenAI] = ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini"],
+        [AgentProviderKind.DeepSeek] = ["deepseek-flash", "deepseek-v4-pro"],
+        [AgentProviderKind.OpenAI] = ["gpt-6.1-sol", "gpt-6-astra", "gpt-6-luna"],
         [AgentProviderKind.Anthropic] = ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-fable-5-1"],
-        [AgentProviderKind.Custom] = [],
+        [AgentProviderKind.Custom] = ["qwen3.8:27b", "qwen3.8-flash"],
     };
 
     private readonly ISettingsProvider _settings;
@@ -111,7 +111,9 @@ public sealed class PiAgentRuntime : IAssistantRuntime
                     writer.TryWrite(new AgentStreamEvent.ToolStarted(
                         start.ToolCallId,
                         start.ToolName,
-                        catalog.TryGetValue(start.ToolName, out var tool) ? tool.Label : start.ToolName,
+                        catalog.TryGetValue(start.ToolName, out var tool)
+                            ? tool.Label
+                            : CodingSessionFactory.BuiltinLabel(start.ToolName),
                         FormatArguments(start.Args)));
                     break;
 
@@ -274,16 +276,18 @@ public sealed class PiAgentRuntime : IAssistantRuntime
 
             var name = context.ToolCall.Name;
             var info = catalog.TryGetValue(name, out var known) ? known : null;
+            var label = info?.Label ?? CodingSessionFactory.BuiltinLabel(name);
             var mutating = ToolAccess.IsMutating(name, info);
 
             if (mutating && request.Permission == PermissionMode.ReadOnly)
             {
                 return new BeforeToolCallResult(
                     Block: true,
-                    Reason: $"当前是只读模式，已阻止「{info?.Label ?? name}」。需要修改时请把权限切换为「工作区」或「完全访问」。");
+                    Reason: $"当前是只读模式，已阻止「{label}」。需要修改时请把权限切换为「默认权限」或「完全访问」。");
             }
 
-            if (!ToolAccess.RequiresApproval(name, info) || request.Permission == PermissionMode.FullAccess)
+            // 完全访问直接放行：不弹确认、不问原因。
+            if (PermissionModeText.SkipsApproval(request.Permission) || !ToolAccess.RequiresApproval(name, info))
             {
                 return null;
             }
@@ -297,9 +301,9 @@ public sealed class PiAgentRuntime : IAssistantRuntime
                 new ToolApprovalRequest(
                     request.SessionId,
                     name,
-                    info?.Label ?? name,
+                    label,
                     FormatArguments(context.Args),
-                    $"{info?.Label ?? name} 会修改本机状态，需要你确认。",
+                    $"{label} 会修改本机状态，需要你确认。",
                     request.Permission),
                 token).ConfigureAwait(false);
 

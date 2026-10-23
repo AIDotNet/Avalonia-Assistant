@@ -64,6 +64,24 @@ public sealed class PiAgentRuntimeTests
     }
 
     [Fact]
+    public async Task FullAccessRunsMutatingToolWithoutAskingGate()
+    {
+        var stream = new ScriptedStreamFactory(
+        [
+            Faux.Response.ToolUse(new ToolCallContent("call-1", "run_command", new { command = "echo hi" })),
+            Faux.Response.Text("执行完成。"),
+        ]);
+
+        // 完全访问下不应该再弹授权：gate 就算拒绝也未被动用。
+        var gate = new RecordingGate(approve: false);
+        var runtime = new PiAgentRuntime(new FakeSettings(), stream);
+        var events = await CollectAsync(runtime, "执行 echo", PermissionMode.FullAccess, gate);
+
+        Assert.False(gate.Called);
+        Assert.Contains(events, e => e is AgentStreamEvent.ToolFinished { IsError: false });
+    }
+
+    [Fact]
     public async Task MissingApiKeyFailsWithoutCallingModel()
     {
         var settings = new FakeSettings();

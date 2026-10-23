@@ -19,7 +19,8 @@ Windows 桌面 AI 助理。Agent 循环用 [pi.net](https://github.com/AIDotNet/
 - **Markdown**：标题、列表、表格、行内代码、代码块高亮。
 - **语音输入**：NAudio 录音 + `/audio/transcriptions` 转写（端点需支持）。
 - **技能页**：卡片式浏览，按分类筛选、关键词搜索，开关与导入都持久化。
-- **MCP 页**：列出 `mcp.json` 里的服务端，填名称 / 命令 / 参数就能加一个 stdio 服务端。
+- **MCP 页**：列出 `mcp.json` 里的服务端，整段粘贴标准 JSON（`mcpServers` / VS Code 的 `servers` 写法）
+  就能一次导入多个，也能从现成的 `mcp.json` 文件读进来；只加一个 stdio 服务端时用表单。
 
 | 会话 | 设置 |
 | --- | --- |
@@ -83,16 +84,18 @@ dotnet run --project src/AvaloniaAssistant.Desktop
 
 | 服务商 | Base URL | 默认模型 | 备选 |
 | --- | --- | --- | --- |
-| DeepSeek | `https://api.deepseek.com/v1` | `deepseek-v4-flash` | `deepseek-v4-pro` |
-| OpenAI | `https://api.openai.com/v1` | `gpt-5.5` | `gpt-5.4`、`gpt-5.4-mini` |
+| DeepSeek | `https://api.deepseek.com/v1` | `deepseek-flash` | `deepseek-v4-pro` |
+| OpenAI | `https://api.openai.com/v1` | `gpt-6.1-sol` | `gpt-6-astra`（需申请）、`gpt-6-luna` |
 | Anthropic | `https://api.anthropic.com` | `claude-sonnet-5-5` | `claude-opus-5-5`、`claude-haiku-5-5` |
-| 自定义 | `http://localhost:11434/v1` | `qwen3.5:9b` | 填你本地实际拉取的模型 |
+| 自定义 | `http://localhost:11434/v1` | `qwen3.8:27b` | `qwen3.8-flash`（云端 API 名） |
 
-> 默认走「够用且便宜」的那一档：DeepSeek 用 Flash、Anthropic 用 Sonnet。要更强就把模型换成
+> 默认走「够用且便宜」的那一档：DeepSeek 用 Flash、Anthropic 用 Sonnet、本地用 27B。要更强就换成
 > `deepseek-v4-pro` 或 `claude-opus-5-5`，Token 消耗也会跟着上去。
 >
-> 模型名填的是厂商 API 的 `model` 字段，不是 App 里的展示名。旧的 `deepseek-chat` /
-> `deepseek-reasoner` 已于 2026-07-24 下线，请不要再填。
+> 模型名填的是厂商 API 的 `model` 字段，不是 App 里的展示名，而且写法各家不一样：
+> DeepSeek `deepseek-flash` 用连字符，Ollama 的 tag 用冒号（`qwen3.8:27b`），填错直接 404。
+> 旧的 `deepseek-chat` / `deepseek-reasoner` 已于 2026-07-24 下线，`deepseek-v4-flash` 也已退役
+> （请求会被转到 `deepseek-flash`，但别再写了）。
 
 > 自定义端点必须是 OpenAI 兼容的 `/chat/completions`。本地 LLM 不再走 LLamaSharp，
 > 用 Ollama / LM Studio 暴露一个兼容端点即可。
@@ -125,7 +128,7 @@ Avalonia-Assistant/
 │   │   ├── ToolAccess.cs                 # 内置 / MCP 工具的安全属性判定
 │   │   ├── PiStreamFactory.cs            # 测试可替换的 OpenAI / Anthropic 流式入口
 │   │   ├── AgentToolRegistry.cs          # 自建工具清单 → ToolDefinition
-│   │   └── Tools/                        # 8 个自建工具
+│   │   └── Tools/                        # 5 个自建工具（读 / 列 / 搜走 CodingAgent 内置）
 │   ├── AvaloniaAssistant.Storage/        # settings.json / sessions/*.json / 技能导入
 │   ├── AvaloniaAssistant.Speech/         # NAudio 录音 + 转写
 │   ├── AvaloniaAssistant.UI/             # 窗口、页面、VM、样式
@@ -133,7 +136,7 @@ Avalonia-Assistant/
 │   │   ├── ViewModels/                   # 命令、会话状态、消息 VM
 │   │   └── Styles/                       # Tokens.axaml / AppStyles.axaml
 │   └── AvaloniaAssistant.Desktop/        # 入口、DI、Arc 初始化
-├── tests/AvaloniaAssistant.Agent.Tests/  # 24 个测试
+├── tests/AvaloniaAssistant.Agent.Tests/  # 31 个测试
 └── docs/
     ├── research.md               # 两个参考项目的结构与集成方式
     ├── migration.md              # 旧功能逐项盘点与取舍
@@ -187,8 +190,9 @@ UI ──► Abstractions ◄── Agent ──► Pi.CodingAgent ──► Pi.
 
 原因是 MCP 的 stdio 传输用 `UseShellExecute = false` 直接起进程，而 `CreateProcess` 不认
 `.cmd` / `.bat` 垫片：写 `"command": "npx"`（或 `npx.cmd`）时服务端进程根本起不来，
-表现是「配置在、工具永远不出现」，且没有明显报错。通过 MCP 页的「添加服务端」表单填 `npx`
-时，`CapabilityInstaller` 会自动补这层包装，不用自己写。macOS / Linux 直接写 `npx`。
+表现是「配置在、工具永远不出现」，且没有明显报错。通过 MCP 页导入（粘贴 JSON 或填表单）时，
+`CapabilityInstaller` 会自动补这层包装，不用自己写；直接手写文件则要自己写 `cmd /c`。
+macOS / Linux 直接写 `npx`。
 - 项目级 `.pi` 属于「需要信任」的配置（技能、MCP、`AGENTS.md` 都会进上下文）。
   桌面助理默认信任你选的工作区，`settings.json` 里把 `TrustWorkspace` 设为 `false` 可以关掉，
   关掉后只读全局 `~/.pi/agent`。
@@ -197,19 +201,21 @@ UI ──► Abstractions ◄── Agent ──► Pi.CodingAgent ──► Pi.
 - 技能页的「导入文件夹」选一个直接含 `SKILL.md` 的目录；「导入 zip」选一个 `.zip` 技能包。
   包里可以带一层外层目录，也可以把 `SKILL.md` 放在压缩包根上（用包名当技能名）；
   一个包只装一个技能，重名会拒绝，装完自动让会话重建。校验与解压在 `Storage/CapabilityInstaller`。
+- MCP 页的「导入 JSON」认三种写法：`{"mcpServers": {...}}`、VS Code 的 `{"servers": {...}}`
+  （含外面再套一层 `mcp`）、以及直接一层「名称 → 配置」。字段原样保留（`env` / `headers` /
+  `url` / `cwd` 都不动），只做三件事：缺 `exposure` 补 `direct`、`npx` 这类命令补 Windows 启动层、
+  校验能起得来；同名默认跳过，勾「覆盖同名」才替换。JSON 里的尾逗号和注释会被容忍。
 
 ## 内置工具
 
-自建工具（`AvaloniaAssistant.Agent/Tools`）。只留日常办公和写代码用得上的 8 个：
+工具分两拨，但同一件事只留一个实现：读文件、列目录、搜内容交给 CodingAgent 的内置工具，
+自建工具（`AvaloniaAssistant.Agent/Tools`）只补它没有的能力，一共 5 个。
 系统信息、进程管理、在浏览器打开这类低频动作用 `run_command` 或系统自带工具做，
 少一个工具就少一次选错。
 
 | 工具 | 说明 | 权限 |
 | --- | --- | --- |
-| `list_directory` | 浏览目录 | 只读 |
-| `read_file` | 读文本文件（默认 20k 字符） | 只读 |
-| `write_file` | 写工作区文件 | 工作区可写 / 只读拦截 |
-| `search_files` | 按文件名或内容搜索 | 只读 |
+| `write_file` | 写工作区文件（含追加、自动建父目录） | 工作区可写 / 只读拦截 |
 | `open_path` | 用系统程序打开文件/文件夹 | 只读 |
 | `run_command` | 执行 shell 命令（60s 超时） | 需确认 |
 | `fetch_url` | 抓网页正文 | 只读 |
@@ -224,7 +230,11 @@ CodingAgent 提供的内置工具（`tools` allowlist 里固定启用）：
 | `find` | glob 找文件，遵循 `.gitignore` | 只读 |
 | `ls` | 列目录 | 只读 |
 | `edit` | 最小替换改文件 | 需确认 / 只读模式不启用 |
+| `write` | 新建或整写文件 | 需确认 / 仅完全访问 |
 | `mcp__<server>__<tool>` | MCP 服务端暴露的工具 | 需确认 / 只读模式拦截 |
+
+写文件为什么还留 `write_file`：内置 `write` 只在「完全访问」启用，默认权限下新建文件走 `write_file`，
+它带工作区沙箱、支持追加，且在工作区内写入不弹确认；改已有文件的单行才用 `edit`。
 
 路径默认限制在当前工作区；要越界需要切到「完全访问」。
 `open_path` 不会直接启动 `.exe` / `.bat` / `.ps1` 等可执行文件；需要运行时走 `run_command` 并确认。

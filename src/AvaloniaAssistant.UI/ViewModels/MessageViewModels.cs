@@ -109,7 +109,7 @@ public sealed partial class AssistantMessageViewModel : MessageViewModel
 
     public ObservableCollection<ToolCallViewModel> Tools { get; } = [];
 
-    public Action? RetryRequested { get; set; }
+    public Func<Task>? RetryRequested { get; set; }
 
     public Action? ScrollRequested { get; set; }
 
@@ -125,6 +125,7 @@ public sealed partial class AssistantMessageViewModel : MessageViewModel
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasError))]
+    [NotifyPropertyChangedFor(nameof(ShowActions))]
     private string? error;
 
     [ObservableProperty]
@@ -160,7 +161,11 @@ public sealed partial class AssistantMessageViewModel : MessageViewModel
 
     public bool ShowTyping => IsStreaming && !HasText && !HasTools;
 
-    public bool ShowActions => !IsStreaming && HasText;
+    /// <summary>
+    /// 只有回复真的结束了才挂操作菜单。失败、被中断、或者整轮只调了工具没出文字时，
+    /// 用户更需要「重试」，所以不把没有正文当成不显示的理由。
+    /// </summary>
+    public bool ShowActions => !IsStreaming && (HasText || HasError || HasTools);
 
     public string TokenText => $"输入 {Format(InputTokens)} · 输出 {Format(OutputTokens)}";
 
@@ -202,7 +207,7 @@ public sealed partial class AssistantMessageViewModel : MessageViewModel
     private async Task CopyAsync() => await Services.Ui.CopyTextAsync(Text);
 
     [RelayCommand]
-    private void Retry() => RetryRequested?.Invoke();
+    private Task RetryAsync() => RetryRequested?.Invoke() ?? Task.CompletedTask;
 
     private void EnsureTimer()
     {
@@ -237,6 +242,7 @@ public sealed partial class AssistantMessageViewModel : MessageViewModel
     {
         OnPropertyChanged(nameof(HasTools));
         OnPropertyChanged(nameof(ShowTyping));
+        OnPropertyChanged(nameof(ShowActions));
     }
 
     private static string Format(long value) => value switch

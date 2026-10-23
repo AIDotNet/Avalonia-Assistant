@@ -39,6 +39,9 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
 
     public event EventHandler? StopRequested;
 
+    /// <summary>权限档位变化。对话页据此插一条提示，让用户知道确认行为变了。</summary>
+    public event EventHandler<PermissionMode>? PermissionChanged;
+
     public ObservableCollection<ModelOption> Models { get; } = [];
 
     [ObservableProperty]
@@ -78,6 +81,39 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
     public string ModelLabel => _settings.Current.Model;
 
     public string PermissionLabel => PermissionModeText.Describe(_settings.Current.Permission);
+
+    /// <summary>当前档位，权限浮层据此画选中态。</summary>
+    public PermissionMode Permission => _settings.Current.Permission;
+
+    /// <summary>权限说明，展示在权限浮层顶部。</summary>
+    public string PermissionDetail => PermissionModeText.Detail(_settings.Current.Permission);
+
+    public string PermissionTooltip => $"工具权限：{PermissionLabel}";
+
+    /// <summary>是否处于完全访问。开关直接绑定这个属性，读写都走 <see cref="SetPermissionAsync"/>。</summary>
+    public bool IsFullAccess
+    {
+        get => _settings.Current.Permission == PermissionMode.FullAccess;
+        set
+        {
+            if (value == IsFullAccess)
+            {
+                return;
+            }
+
+            _ = SetPermissionAsync(value ? PermissionMode.FullAccess : PermissionMode.Workspace);
+        }
+    }
+
+    public bool IsReadOnlyMode => _settings.Current.Permission == PermissionMode.ReadOnly;
+
+    /// <summary>完全访问用警示色，平时跟普通 pill 一样低调。</summary>
+    public IBrush PermissionForeground => _settings.Current.Permission == PermissionMode.FullAccess
+        ? new SolidColorBrush(Color.Parse("#8A4B00"))
+        : new SolidColorBrush(Color.Parse("#6F6F69"));
+
+    /// <summary>完全访问时在输入框下方给一条常驻提醒。</summary>
+    public bool ShowFullAccessNotice => _settings.Current.Permission == PermissionMode.FullAccess;
 
     public string WorkspaceLabel => ShortWorkspace(_settings.Current.WorkspacePath);
 
@@ -223,10 +259,24 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
 
     public async Task SetPermissionAsync(PermissionMode permission)
     {
+        if (_settings.Current.Permission == permission)
+        {
+            return;
+        }
+
         _settings.Current.Permission = permission;
         Refresh();
+        PermissionChanged?.Invoke(this, permission);
         await _settings.SaveAsync(_settings.Current);
     }
+
+    /// <summary>浮层里的「只用只读」快捷入口。</summary>
+    [RelayCommand]
+    private async Task UseReadOnlyAsync() => await SetPermissionAsync(PermissionMode.ReadOnly);
+
+    /// <summary>切回默认权限。</summary>
+    [RelayCommand]
+    private async Task UseDefaultPermissionAsync() => await SetPermissionAsync(PermissionMode.Workspace);
 
     public void Dispose() => _settings.Changed -= _settingsChanged;
 
@@ -235,6 +285,13 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
         RefreshModels();
         OnPropertyChanged(nameof(ModelLabel));
         OnPropertyChanged(nameof(PermissionLabel));
+        OnPropertyChanged(nameof(Permission));
+        OnPropertyChanged(nameof(PermissionDetail));
+        OnPropertyChanged(nameof(PermissionTooltip));
+        OnPropertyChanged(nameof(IsFullAccess));
+        OnPropertyChanged(nameof(IsReadOnlyMode));
+        OnPropertyChanged(nameof(PermissionForeground));
+        OnPropertyChanged(nameof(ShowFullAccessNotice));
         OnPropertyChanged(nameof(WorkspaceLabel));
         OnPropertyChanged(nameof(WorkspacePath));
         OnPropertyChanged(nameof(IsConfigured));

@@ -125,18 +125,4 @@ internal static class ToolText
 {
     public static string Cap(string text, int limit = 20_000)
         => text.Length <= limit ? text : text[..limit] + $"\n…（已截断，共 {text.Length} 字符）";
-
-    public static string HumanSize(long bytes)
-    {
-        string[] units = ["B", "KB", "MB", "GB", "TB"];
-        double size = bytes;
-        var unit = 0;
-        while (size >= 1024 && unit < units.Length - 1)
-        {
-            size /= 1024;
-            unit++;
-        }
-
-        return $"{size:0.##} {units[unit]}";
-    }
 }

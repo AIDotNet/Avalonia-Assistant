@@ -23,7 +23,7 @@ public sealed record ProviderPreset(
         "DeepSeek",
         "OpenAI 兼容接口，国内直连",
         "https://api.deepseek.com/v1",
-        "deepseek-v4-flash",
+        "deepseek-flash",
         AgentProtocol.OpenAiCompatible);
 
     public static readonly ProviderPreset OpenAI = new(
@@ -31,7 +31,7 @@ public sealed record ProviderPreset(
         "OpenAI",
         "官方 OpenAI 接口",
         "https://api.openai.com/v1",
-        "gpt-5.5",
+        "gpt-6.1-sol",
         AgentProtocol.OpenAiCompatible);
 
     public static readonly ProviderPreset Anthropic = new(
@@ -47,7 +47,7 @@ public sealed record ProviderPreset(
         "自定义",
         "任意 OpenAI 兼容端点（vLLM / Ollama / One-API…）",
         "http://localhost:11434/v1",
-        "qwen3.5:9b",
+        "qwen3.8:27b",
         AgentProtocol.OpenAiCompatible);
 
     public static readonly IReadOnlyList<ProviderPreset> All = [DeepSeek, OpenAI, Anthropic, Custom];
@@ -69,10 +69,10 @@ public enum PermissionMode
     /// <summary>只能读取工作区，所有写入与命令都被拒绝。</summary>
     ReadOnly,
 
-    /// <summary>工作区内可读写，命令与越界写入需要用户逐次确认。</summary>
+    /// <summary>默认权限：工作区可读写，命令与越界写入需要用户逐次确认。</summary>
     Workspace,
 
-    /// <summary>全部工具直接执行，不再逐次确认。</summary>
+    /// <summary>完全访问：全部工具直接执行，不再逐次确认。</summary>
     FullAccess,
 }
 
@@ -82,15 +82,18 @@ public static class PermissionModeText
     {
         PermissionMode.ReadOnly => "只读",
         PermissionMode.FullAccess => "完全访问",
-        _ => "工作区",
+        _ => "默认权限",
     };
 
     public static string Detail(PermissionMode mode) => mode switch
     {
-        PermissionMode.ReadOnly => "只能读取工作区内容，不会修改任何文件",
-        PermissionMode.FullAccess => "所有工具直接执行，请只在信任的任务中使用",
-        _ => "工作区可读写；执行命令、越界访问需要确认",
+        PermissionMode.ReadOnly => "只能读取工作区内容，不修改文件、不执行命令。",
+        PermissionMode.FullAccess => "所有工具直接执行，不再逐次确认。请注意数据安全，建议只交给可信任的任务。",
+        _ => "读写工作区内的文件；执行命令、调用 MCP 工具之前会先问你。",
     };
+
+    /// <summary>该权限下是否跳过逐次授权（完全访问直接放行）。</summary>
+    public static bool SkipsApproval(PermissionMode mode) => mode == PermissionMode.FullAccess;
 }
 
 /// <summary>本地设置。持久化在 %APPDATA%/AvaloniaAssistant/settings.json。</summary>

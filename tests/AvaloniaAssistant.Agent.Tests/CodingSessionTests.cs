@@ -50,6 +50,42 @@ public sealed class CodingSessionTests
         Assert.Equal(tools.Count, catalog.Count);
     }
 
+    /// <summary>
+    /// 自建工具只补 CodingAgent 没有的能力；读文件 / 列目录 / 搜内容这些由内置工具负责，
+    /// 两边同名会变成两份实现抢同一个活儿，模型选哪个全看运气。
+    /// </summary>
+    [Fact]
+    public void CustomToolsDoNotDuplicateBuiltinTools()
+    {
+        var names = new AgentToolRegistry().Tools.Select(info => info.Name).ToList();
+        var builtins = CodingSessionFactory.BuiltinTools(PermissionMode.Workspace);
+
+        Assert.Empty(names.Intersect(builtins, StringComparer.Ordinal));
+        Assert.Equal(
+            ["current_time", "fetch_url", "open_path", "run_command", "write_file"],
+            names.Order(StringComparer.Ordinal));
+    }
+
+    /// <summary>
+    /// 上下文压缩不是我们接的：SDK 装配出来的会话默认就开着自动压缩，阈值取自
+    /// settings.json 的 <c>compaction</c> 段，触发点按模型上下文窗口算（本项目注册模型时定死 128k）。
+    /// 用一条断言钉住这个默认值，Pi 上游改默认时能立刻发现。
+    /// </summary>
+    [Fact]
+    public async Task EmbeddedSessionKeepsAutoCompactionOn()
+    {
+        using var workspace = new TempWorkspace();
+
+        var session = await CodingSessionFactory.CreateAsync(
+            new TestSettings().Current, workspace.Path, [], null, CancellationToken.None);
+
+        Assert.True(session.AutoCompactionEnabled);
+
+        var usage = session.GetContextUsage();
+        Assert.NotNull(usage);
+        Assert.Equal(128_000, usage!.ContextWindow);
+    }
+
     [Fact]
     public async Task ReadOnlySessionDropsMutatingBuiltinTools()
     {

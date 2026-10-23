@@ -10,17 +10,16 @@ namespace AvaloniaAssistant.Agent.Tests;
 public sealed class ToolExecutionTests
 {
     [Fact]
-    public async Task ListsAndReadsFilesInsideWorkspace()
+    public async Task WritesWithCustomToolAndReadsBackWithBuiltin()
     {
         var workspace = Path.Combine(Path.GetTempPath(), "ava-tools", Guid.NewGuid().ToString("n"));
         Directory.CreateDirectory(workspace);
-        await File.WriteAllTextAsync(Path.Combine(workspace, "hello.txt"), "hello from workspace");
 
         var stream = new ScriptedStreamFactory(
         [
-            Faux.Response.ToolUse(new ToolCallContent("call-1", "list_directory", new { path = "." })),
-            Faux.Response.ToolUse(new ToolCallContent("call-2", "read_file", new { path = "hello.txt" })),
-            Faux.Response.Text("读到了。"),
+            Faux.Response.ToolUse(new ToolCallContent("call-1", "write_file", new { path = "hello.txt", content = "hello from workspace" })),
+            Faux.Response.ToolUse(new ToolCallContent("call-2", "read", new { path = "hello.txt" })),
+            Faux.Response.Text("写好了。"),
         ]);
 
         var runtime = new PiAgentRuntime(new TestSettings(workspace), stream);
@@ -28,7 +27,7 @@ public sealed class ToolExecutionTests
 
         var results = events.OfType<AgentStreamEvent.ToolFinished>().ToList();
         Assert.Equal(2, results.Count);
-        Assert.All(results, item => Assert.False(item.IsError));
+        Assert.All(results, item => Assert.False(item.IsError, item.Result));
         Assert.Contains("hello.txt", results[0].Result);
         Assert.Contains("hello from workspace", results[1].Result);
 

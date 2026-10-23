@@ -173,6 +173,247 @@ public static class CapabilityInstaller
         File.WriteAllText(configPath, root.ToJsonString(WriteOptions));
     }
 
+    /// <summary>
+    /// 把一整段标准 JSON 里的服务端批量写进 <c>mcp.json</c>。认三种常见写法：
+    /// <c>{ "mcpServers": { ... } }</c>、VS Code 的 <c>{ "servers": { ... } }</c>（含 <c>{"mcp":{"servers":…}}</c>）、
+    /// 以及直接给一层「名称 → 配置」。
+    /// 每条配置原样保留（<c>env</c> / <c>headers</c> / <c>url</c> / <c>cwd</c> 都不动），只做三件事：
+    /// 缺 <c>exposure</c> 时补 <c>direct</c>、npm 这类命令补 Windows 启动层、校验能起得来。
+    /// </summary>
+    public static McpImportResult ImportMcpServers(string configPath, string json, bool overwrite = false)
+    {
+        if (string.IsNullOrWhiteSpace(configPath))
+        {
+            throw new InvalidOperationException("mcp.json 路径不可用，先选一个工作区。");
+        }
+
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            throw new InvalidOperationException("先把 JSON 粘贴进来，或者从文件导入。");
+        }
+
+        var imported = ReadServerEntries(json);
+
+        JsonObject root;
+        if (File.Exists(configPath))
+        {
+            try
+            {
+                root = JsonNode.Parse(File.ReadAllText(configPath)) as JsonObject ?? new JsonObject();
+            }
+            catch (JsonException ex)
+            {
+                throw new InvalidOperationException($"{Path.GetFileName(configPath)} 不是合法 JSON：{ex.Message}");
+            }
+        }
+        else
+        {
+            root = new JsonObject();
+        }
+
+        var servers = root["mcpServers"] as JsonObject ?? new JsonObject();
+        var added = new List<string>();
+        var replaced = new List<string>();
+        var skipped = new List<string>();
+
+        foreach (var (name, entry) in imported)
+        {
+            if (servers.ContainsKey(name) && !overwrite)
+            {
+                skipped.Add(name);
+                continue;
+            }
+
+            if (servers.ContainsKey(name))
+            {
+                replaced.Add(name);
+            }
+            else
+            {
+                added.Add(name);
+            }
+
+            servers[name] = entry;
+        }
+
+        if (added.Count > 0 || replaced.Count > 0)
+        {
+            root["mcpServers"] = servers;
+
+            var directory = Path.GetDirectoryName(configPath);
+            if (!string.IsNullOrEmpty(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            File.WriteAllText(configPath, root.ToJsonString(WriteOptions));
+        }
+
+        return new McpImportResult(added, replaced, skipped);
+    }
+
+    /// <summary>
+    /// 解析粘贴进来的 JSON，挑出服务端那一层并逐条整理成可写入的配置。
+    /// 结构性错误（不是对象、没有 command/url、名字不合法）直接抛，不做半截导入。
+    /// </summary>
+    private static List<(string Name, JsonObject Entry)> ReadServerEntries(string json)
+    {
+        JsonNode? parsed;
+        try
+        {
+            parsed = JsonNode.Parse(json, documentOptions: new JsonDocumentOptions
+            {
+                // 从聊天窗 / 文档里复制过来的 JSON 常带尾逗号和注释，读的时候放过它们。
+                AllowTrailingCommas = true,
+                CommentHandling = JsonCommentHandling.Skip,
+            });
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidOperationException($"粘贴的内容不是合法 JSON：{ex.Message}");
+        }
+
+        if (parsed is not JsonObject root)
+        {
+            throw new InvalidOperationException("顶层要是一个对象，例如 { \"mcpServers\": { … } }。");
+        }
+
+        var block = ExtractServerBlock(root);
+        if (block.Count == 0)
+        {
+            throw new InvalidOperationException("这份 JSON 里没有服务端配置。");
+        }
+
+        var results = new List<(string Name, JsonObject Entry)>(block.Count);
+        var badNames = new List<string>();
+
+        foreach (var (rawName, node) in block)
+        {
+            var name = rawName.Trim();
+            if (!IsValidServerName(name))
+            {
+                badNames.Add(rawName);
+                continue;
+            }
+
+            if (node is not JsonObject entry)
+            {
+                throw new InvalidOperationException($"「{name}」的配置要是一个对象，现在是 {node?.GetValueKind().ToString() ?? "空"}。");
+            }
+
+            if (ReadString(entry["command"]) is null && ReadString(entry["url"]) is null)
+            {
+                throw new InvalidOperationException($"「{name}」既没有 command 也没有 url，不知道该怎么连。");
+            }
+
+            results.Add((name, PrepareEntry(entry)));
+        }
+
+        if (badNames.Count > 0)
+        {
+            throw new InvalidOperationException(
+                $"服务端名称只能用字母、数字、下划线和短横线：{string.Join('、', badNames)}。");
+        }
+
+        return results;
+    }
+
+    /// <summary>
+    /// 三种写法都认：<c>mcpServers</c>、VS Code 的 <c>servers</c>（含外面套一层 <c>mcp</c>）、
+    /// 以及直接「名称 → 配置」的一层映射。都不匹配就当空。
+    /// </summary>
+    private static JsonObject ExtractServerBlock(JsonObject root)
+    {
+        if (root["mcpServers"] is JsonObject mcpServers)
+        {
+            return mcpServers;
+        }
+
+        if (root["servers"] is JsonObject servers)
+        {
+            return servers;
+        }
+
+        if (root["mcp"] is JsonObject mcp && mcp["servers"] is JsonObject nested)
+        {
+            return nested;
+        }
+
+        if (root.Count > 0 && root.All(pair => pair.Value is JsonObject))
+        {
+            return root;
+        }
+
+        return new JsonObject();
+    }
+
+    /// <summary>拷一份再动，别把调用方传进来的节点挪了位置：补 exposure、补 Windows 启动层。</summary>
+    private static JsonObject PrepareEntry(JsonObject entry)
+    {
+        var copy = entry.DeepClone().AsObject();
+
+        var command = ReadString(copy["command"]);
+        if (command is not null && ReadArgs(copy["args"]) is { } args)
+        {
+            var (normalized, normalizedArgs) = NormalizeCommand(command, args);
+            if (!string.Equals(normalized, command, StringComparison.Ordinal))
+            {
+                var array = new JsonArray();
+                foreach (var arg in normalizedArgs)
+                {
+                    array.Add(arg);
+                }
+
+                copy["command"] = normalized;
+                copy["args"] = array;
+            }
+        }
+
+        // 不写 exposure 的话模型直接调不到这个服务端的工具。
+        if (copy["exposure"] is null)
+        {
+            copy["exposure"] = "direct";
+        }
+
+        return copy;
+    }
+
+    private static string? ReadString(JsonNode? node)
+        => node is JsonValue value
+           && value.TryGetValue<string>(out var text)
+           && !string.IsNullOrWhiteSpace(text)
+            ? text.Trim()
+            : null;
+
+    /// <summary>args 是字符串数组就返回列表；没写返回空列表；写法奇怪返回 <c>null</c>（保持原样不动）。</summary>
+    private static List<string>? ReadArgs(JsonNode? node)
+    {
+        if (node is null)
+        {
+            return [];
+        }
+
+        if (node is not JsonArray array)
+        {
+            return null;
+        }
+
+        var args = new List<string>(array.Count);
+        foreach (var item in array)
+        {
+            if (item is JsonValue value && value.TryGetValue<string>(out var text) && text is not null)
+            {
+                args.Add(text);
+            }
+            else
+            {
+                return null;
+            }
+        }
+
+        return args;
+    }
+
     /// <summary>删掉 <c>mcp.json</c> 里的一个服务端；删到空时保留空对象，不删文件。</summary>
     public static bool RemoveMcpServer(string configPath, string name)
     {

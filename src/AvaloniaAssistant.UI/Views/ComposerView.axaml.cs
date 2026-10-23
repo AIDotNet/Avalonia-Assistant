@@ -1,8 +1,11 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Layout;
 using Avalonia.Markup.Xaml;
+using Avalonia.Media;
 using Avalonia.Threading;
 using AvaloniaAssistant.Abstractions;
 using AvaloniaAssistant.UI.ViewModels;
@@ -109,21 +112,148 @@ public partial class ComposerView : UserControl
             return;
         }
 
-        var flyout = new MenuFlyout();
-        foreach (var (mode, label) in new[]
-                 {
-                     (PermissionMode.ReadOnly, "只读：不改文件、不执行命令"),
-                     (PermissionMode.Workspace, "工作区：可读写工作区，命令需确认"),
-                     (PermissionMode.FullAccess, "完全访问：所有工具直接执行"),
-                 })
+        _permissionFlyout?.Hide();
+        _permissionFlyout = BuildPermissionFlyout(viewModel);
+        _permissionFlyout.ShowAt(target);
+    }
+
+    private Flyout? _permissionFlyout;
+
+    /// <summary>
+    /// 权限浮层：一句当前说明 + 三个档位。完全访问是危险态，选中它之后所有工具直接执行。
+    /// </summary>
+    private Flyout BuildPermissionFlyout(ComposerViewModel viewModel)
+    {
+        var stack = new StackPanel { Width = 306, Spacing = 9 };
+
+        stack.Children.Add(new TextBlock
         {
-            var item = new MenuItem { Header = label };
-            item.Click += async (_, _) => await viewModel.SetPermissionAsync(mode);
-            flyout.Items.Add(item);
+            Text = "工具权限",
+            FontSize = 12.5,
+            FontWeight = FontWeight.SemiBold,
+            Foreground = ThemeBrush("TextPrimaryBrush", Brushes.Black),
+        });
+
+        stack.Children.Add(new TextBlock
+        {
+            Text = viewModel.PermissionDetail,
+            FontSize = 11.5,
+            LineHeight = 17,
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = ThemeBrush("TextSecondaryBrush", Brushes.Gray),
+        });
+
+        stack.Children.Add(new Border
+        {
+            Height = 1,
+            Margin = new Thickness(0, 2),
+            Background = ThemeBrush("BorderBrush", Brushes.Gainsboro),
+        });
+
+        stack.Children.Add(BuildPermissionOption(viewModel, PermissionMode.Workspace, "默认权限", "执行命令、调用 MCP 前先问你"));
+        stack.Children.Add(BuildPermissionOption(viewModel, PermissionMode.FullAccess, "完全访问", "所有工具直接执行，不再逐次确认"));
+        stack.Children.Add(BuildPermissionOption(viewModel, PermissionMode.ReadOnly, "只读", "不改文件、不执行命令"));
+
+        return new Flyout
+        {
+            Placement = PlacementMode.TopEdgeAlignedRight,
+            Content = new Border
+            {
+                Padding = new Thickness(14, 12),
+                CornerRadius = new CornerRadius(14),
+                Background = ThemeBrush("SurfaceBrush", Brushes.White),
+                BorderBrush = ThemeBrush("BorderStrongBrush", Brushes.Gainsboro),
+                BorderThickness = new Thickness(1),
+                BoxShadow = ThemeShadow("ComposerShadow"),
+                Child = stack,
+            },
+        };
+    }
+
+    private Button BuildPermissionOption(
+        ComposerViewModel viewModel,
+        PermissionMode mode,
+        string title,
+        string description)
+    {
+        var selected = viewModel.Permission == mode;
+        var accent = mode == PermissionMode.FullAccess
+            ? ThemeBrush("WarningBrush", Brushes.DarkOrange)
+            : ThemeBrush("TextPrimaryBrush", Brushes.Black);
+
+        var grid = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("16,*,Auto"),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
+        grid.Children.Add(new TextBlock
+        {
+            Text = "✓",
+            FontSize = 12,
+            IsVisible = selected,
+            Foreground = accent,
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+
+        var texts = new StackPanel { Spacing = 1 };
+        texts.Children.Add(new TextBlock
+        {
+            Text = title,
+            FontSize = 12.5,
+            Foreground = accent,
+        });
+        texts.Children.Add(new TextBlock
+        {
+            Text = description,
+            FontSize = 11,
+            Foreground = ThemeBrush("TextMutedBrush", Brushes.Gray),
+        });
+        Grid.SetColumn(texts, 1);
+        grid.Children.Add(texts);
+
+        var button = new Button
+        {
+            Classes = { "permission-option" },
+            Content = grid,
+            Tag = mode,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+        };
+        if (selected)
+        {
+            button.Classes.Add("active");
         }
 
-        flyout.ShowAt(target);
+        button.Click += OnPermissionOptionClick;
+        return button;
     }
+
+    private async void OnPermissionOptionClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: PermissionMode mode } || ViewModel is null)
+        {
+            return;
+        }
+
+        _permissionFlyout?.Hide();
+
+        // 切到完全访问等于把确认步骤全关掉，先让用户明确点一次同意。
+        if (mode == PermissionMode.FullAccess && !PermissionModeText.SkipsApproval(ViewModel.Permission))
+        {
+            if (!await PermissionConfirmDialog.ShowAsync(this))
+            {
+                return;
+            }
+        }
+
+        await ViewModel.SetPermissionAsync(mode);
+    }
+
+    private static IBrush ThemeBrush(string key, IBrush fallback)
+        => Application.Current?.FindResource(key) as IBrush ?? fallback;
+
+    private static BoxShadows ThemeShadow(string key)
+        => Application.Current?.FindResource(key) is BoxShadows shadow ? shadow : default;
 
     private void OnWorkspaceClick(object? sender, RoutedEventArgs e)
     {

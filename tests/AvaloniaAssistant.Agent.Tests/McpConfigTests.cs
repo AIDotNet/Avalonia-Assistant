@@ -92,6 +92,135 @@ public sealed class McpConfigTests : IDisposable
         Assert.NotNull(servers["two"]);
     }
 
+    [Fact]
+    public void ImportsStandardBlockAndKeepsEveryField()
+    {
+        var result = CapabilityInstaller.ImportMcpServers(Config, """
+            {
+              "mcpServers": {
+                "fs": {
+                  "command": "node",
+                  "args": ["server.js", "--root", "D:/work"],
+                  "env": { "TOKEN": "abc" },
+                  "cwd": "D:/work"
+                },
+                "docs": {
+                  "type": "http",
+                  "url": "https://mcp.example.com/mcp",
+                  "headers": { "Authorization": "Bearer t" },
+                  "exposure": "tools"
+                }
+              }
+            }
+            """);
+
+        Assert.Equal(["fs", "docs"], result.Added);
+        Assert.Equal(2, result.Written);
+
+        var servers = ReadServers();
+        var fs = servers["fs"]!.AsObject();
+        Assert.Equal("direct", fs["exposure"]!.GetValue<string>());
+        Assert.Equal("abc", fs["env"]!["TOKEN"]!.GetValue<string>());
+        Assert.Equal("D:/work", fs["cwd"]!.GetValue<string>());
+
+        var docs = servers["docs"]!.AsObject();
+        Assert.Equal("https://mcp.example.com/mcp", docs["url"]!.GetValue<string>());
+        Assert.Equal("Bearer t", docs["headers"]!["Authorization"]!.GetValue<string>());
+        // 自己写了 exposure 就尊重它，不覆盖成 direct。
+        Assert.Equal("tools", docs["exposure"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void ImportWrapsNpmFamilyCommandOnWindows()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        CapabilityInstaller.ImportMcpServers(Config, """
+            { "mcpServers": { "fs": { "command": "npx", "args": ["-y", "pkg"] } } }
+            """);
+
+        var fs = ReadServers()["fs"]!.AsObject();
+        Assert.Equal("cmd", fs["command"]!.GetValue<string>());
+        Assert.Equal(
+            ["/c", "npx", "-y", "pkg"],
+            fs["args"]!.AsArray().Select(node => node!.GetValue<string>()).ToArray());
+    }
+
+    [Fact]
+    public void ImportAcceptsVsCodeAndBareMapShapes()
+    {
+        CapabilityInstaller.ImportMcpServers(Config, """
+            { "servers": { "a": { "type": "stdio", "command": "node" } } }
+            """);
+        CapabilityInstaller.ImportMcpServers(Config, """
+            { "mcp": { "servers": { "b": { "url": "https://x/mcp" } } } }
+            """);
+        CapabilityInstaller.ImportMcpServers(Config, """
+            { "c": { "command": "node" } }
+            """);
+
+        var servers = ReadServers();
+        Assert.Equal("node", servers["a"]!["command"]!.GetValue<string>());
+        Assert.Equal("https://x/mcp", servers["b"]!["url"]!.GetValue<string>());
+        Assert.Equal("direct", servers["c"]!["exposure"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void ImportSkipsDuplicatesUnlessOverwriteIsOn()
+    {
+        CapabilityInstaller.AddMcpServer(Config, "fs", "node", "old.js");
+
+        var skipped = CapabilityInstaller.ImportMcpServers(
+            Config, """{ "mcpServers": { "fs": { "command": "node", "args": ["new.js"] } } }""");
+
+        Assert.Equal(["fs"], skipped.Skipped);
+        Assert.Equal(0, skipped.Written);
+        Assert.Equal(["old.js"], ReadServers()["fs"]!["args"]!.AsArray().Select(n => n!.GetValue<string>()).ToArray());
+
+        var replaced = CapabilityInstaller.ImportMcpServers(
+            Config, """{ "mcpServers": { "fs": { "command": "node", "args": ["new.js"] } } }""", overwrite: true);
+
+        Assert.Equal(["fs"], replaced.Replaced);
+        Assert.Equal(["new.js"], ReadServers()["fs"]!["args"]!.AsArray().Select(n => n!.GetValue<string>()).ToArray());
+    }
+
+    [Fact]
+    public void ImportRejectsBrokenInput()
+    {
+        Assert.Contains("不是合法 JSON", Assert.Throws<InvalidOperationException>(
+            () => CapabilityInstaller.ImportMcpServers(Config, "{ nope ")).Message);
+
+        Assert.Contains("没有服务端", Assert.Throws<InvalidOperationException>(
+            () => CapabilityInstaller.ImportMcpServers(Config, """{ "mcpServers": {} }""")).Message);
+
+        Assert.Contains("command", Assert.Throws<InvalidOperationException>(
+            () => CapabilityInstaller.ImportMcpServers(Config, """{ "mcpServers": { "x": { "env": {} } } }""")).Message);
+
+        Assert.Contains("名称", Assert.Throws<InvalidOperationException>(
+            () => CapabilityInstaller.ImportMcpServers(Config, """{ "mcpServers": { "bad name": { "command": "node" } } }""")).Message);
+
+        // 出错时一个字节都不该落盘。
+        Assert.False(File.Exists(Config));
+    }
+
+    [Fact]
+    public void ImportToleratesTrailingCommasAndComments()
+    {
+        CapabilityInstaller.ImportMcpServers(Config, """
+            {
+              // 从文档里复制过来的常见写法
+              "mcpServers": {
+                "fs": { "command": "node", "args": ["a.js"], },
+              },
+            }
+            """);
+
+        Assert.Equal(["a.js"], ReadServers()["fs"]!["args"]!.AsArray().Select(n => n!.GetValue<string>()).ToArray());
+    }
+
     private JsonObject ReadServers()
         => JsonNode.Parse(File.ReadAllText(Config))!["mcpServers"]!.AsObject();
 

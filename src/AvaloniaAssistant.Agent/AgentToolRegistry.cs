@@ -163,15 +163,13 @@ public sealed class AgentToolRegistry
     }
 
     /// <summary>
-    /// 日常办公和写代码真正用得上的一组；系统信息、进程管理、开浏览器这些低频动作不进来，
-    /// 需要时用 <c>run_command</c> 或系统自带工具做，少一个工具就少一次选错。
+    /// 只补 CodingAgent 没有的能力。读文件 / 列目录 / 搜内容已经有 <c>read</c> / <c>ls</c> /
+    /// <c>grep</c> / <c>find</c>，不再重复实现一遍；系统信息、进程管理、开浏览器这些低频动作
+    /// 用 <c>run_command</c> 或系统自带工具做。少一个工具就少一次选错。
     /// </summary>
     private static IEnumerable<IAgentTool> DefaultTools() =>
     [
-        new ListDirectoryTool(),
-        new ReadFileTool(),
         new WriteFileTool(),
-        new SearchFilesTool(),
         new OpenPathTool(),
         new RunCommandTool(),
         new FetchUrlTool(),

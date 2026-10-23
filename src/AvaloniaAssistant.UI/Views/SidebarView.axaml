@@ -195,7 +195,7 @@
                           Width="22"
                           Height="22"
                           Click="OnWorkspaceMenuClick"
-                          ToolTip.Tip="重新选择目录或移除">
+                          ToolTip.Tip="{x:Null}">
                     <TextBlock Text="⋯" FontSize="14" VerticalAlignment="Center" />
                   </Button>
                 </Grid>

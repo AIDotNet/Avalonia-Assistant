@@ -22,12 +22,31 @@ internal sealed class CodingSessionFactory
 
     /// <summary>
     /// 会话默认启用的内置工具。read 必须留着：技能的正文要靠它按需加载；
-    /// grep/find 补上自建 search_files 缺的精确检索；edit 是唯一能改单行的工具。
+    /// 自建工具里已经没有读文件 / 列目录 / 搜内容了，全靠 read / grep / find / ls 顶上；
+    /// edit 是唯一能改单行的工具；write 只在完全访问时启用，用来新建文件。
     /// </summary>
-    public static IReadOnlyList<string> BuiltinTools(PermissionMode permission) =>
-        permission == PermissionMode.ReadOnly
-            ? ["read", "grep", "find", "ls"]
-            : ["read", "grep", "find", "ls", "edit"];
+    public static IReadOnlyList<string> BuiltinTools(PermissionMode permission) => permission switch
+    {
+        PermissionMode.ReadOnly => ["read", "grep", "find", "ls"],
+        PermissionMode.FullAccess => ["read", "grep", "find", "ls", "edit", "write"],
+        _ => ["read", "grep", "find", "ls", "edit"],
+    };
+
+    /// <summary>
+    /// 内置工具的中文名。它们不在自建工具的 catalog 里，界面拿不到 Label，
+    /// 不补这一层工具卡片就只剩英文名（标题和副标题还是重复的同一个词）。
+    /// </summary>
+    public static string BuiltinLabel(string name) => name switch
+    {
+        "read" => "读取文件",
+        "grep" => "搜索内容",
+        "find" => "查找文件",
+        "ls" => "列出目录",
+        "edit" => "编辑文件",
+        "write" => "写入文件",
+        "bash" or "powershell" => "执行命令",
+        _ => name,
+    };
 
     public static async Task<AgentSession> CreateAsync(
         AssistantSettings settings,

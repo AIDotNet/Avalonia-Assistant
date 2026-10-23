@@ -67,7 +67,7 @@
                      Text="{Binding BaseUrl, Mode=TwoWay}" />
 
           <arc:Input Label="模型"
-                     Placeholder="deepseek-v4-flash"
+                     Placeholder="deepseek-flash"
                      Text="{Binding Model, Mode=TwoWay}" />
 
           <Grid ColumnDefinitions="*,*">
@@ -96,15 +96,14 @@
                     Classes.active="{Binding IsWorkspaceSelected}"
                     Command="{Binding SetPermissionCommand}"
                     CommandParameter="workspace"
-                    Content="工作区" />
+                    Content="默认权限" />
             <Button Classes="chip"
                     Classes.active="{Binding IsFullAccessSelected}"
-                    Command="{Binding SetPermissionCommand}"
-                    CommandParameter="full"
+                    Click="OnFullAccessClick"
                     Content="完全访问" />
           </StackPanel>
 
-          <TextBlock Text="只读：只能读取工作区。工作区：可读写工作区，执行命令需确认。完全访问：所有工具直接执行。"
+          <TextBlock Text="只读：只读工作区，不改文件、不执行命令。默认权限：工作区可读写，执行命令与调用 MCP 前先问你。完全访问：所有工具直接执行，不再逐次确认。"
                      Classes="caption"
                      TextWrapping="Wrap"
                      LineHeight="18" />

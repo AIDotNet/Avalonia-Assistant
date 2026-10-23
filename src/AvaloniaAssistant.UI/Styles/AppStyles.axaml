@@ -101,6 +101,65 @@
     <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
   </Style>
 
+  <!-- 权限切到「完全访问」时，入口要一眼看得出来是危险态 -->
+  <Style Selector="Button.permission-pill.full">
+    <Setter Property="Background" Value="{StaticResource WarningSubtleBrush}" />
+  </Style>
+  <Style Selector="Button.permission-pill.full:pointerover">
+    <Setter Property="Background" Value="#FBE7C6" />
+  </Style>
+
+  <!-- 权限浮层里的档位行 -->
+  <Style Selector="Button.permission-option">
+    <Setter Property="Padding" Value="8,7" />
+    <Setter Property="CornerRadius" Value="9" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.permission-option:pointerover">
+    <Setter Property="Background" Value="{StaticResource SurfaceMutedBrush}" />
+  </Style>
+  <Style Selector="Button.permission-option.active">
+    <Setter Property="Background" Value="{StaticResource SurfaceMutedBrush}" />
+  </Style>
+
+  <!-- 完全访问确认层：主按钮是危险操作，未勾选风险时置灰 -->
+  <Style Selector="Button.danger">
+    <Setter Property="Height" Value="34" />
+    <Setter Property="Padding" Value="16,0" />
+    <Setter Property="CornerRadius" Value="9" />
+    <Setter Property="Background" Value="{StaticResource DangerBrush}" />
+    <Setter Property="Foreground" Value="#FFFFFF" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="FontSize" Value="12.5" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.danger:pointerover">
+    <Setter Property="Background" Value="#8F1E17" />
+    <Setter Property="Foreground" Value="#FFFFFF" />
+  </Style>
+  <Style Selector="Button.danger:disabled">
+    <Setter Property="Background" Value="{StaticResource DangerSubtleBrush}" />
+    <Setter Property="Foreground" Value="#C68C87" />
+  </Style>
+
+  <!-- 勾选行：整行可点，本身不要按钮的底色和轮廓 -->
+  <Style Selector="Button.agree">
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="HorizontalContentAlignment" Value="Left" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.agree:pointerover">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
   <Style Selector="Button.send">
     <Setter Property="Width" Value="34" />
     <Setter Property="Height" Value="34" />

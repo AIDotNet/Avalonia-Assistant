@@ -107,6 +107,11 @@ ChatViewModel 更新 MessageViewModel
    - 需要授权的工具调用 `IToolApprovalGate.RequestAsync`，用户拒绝则返回 `Block=true`；
    - 文件工具再用 `ToolPaths.Resolve` 做工作区边界检查，`FullAccess` 才放行越界。
 
+CodingAgent 的内置工具（`read` / `grep` / `find` / `ls` / `edit` / `write`）和 MCP 工具没有
+`AgentToolInfo`，由 `ToolAccess` 按名字分类：`edit` / `write` / `bash` / `powershell` 与
+`mcp__*` 视为 mutating 且逐次授权，其余按只读处理。工作区内的文件写入走自建 `write_file`，
+不弹确认；`edit` 改已有文件仍要确认。
+
 `run_command` 还有 60 秒超时、进程树 kill、20 万字符输出上限；
 `open_path` 拒绝直接启动 `.exe` / `.bat` / `.ps1` 等可执行文件，避免把“打开”变成“运行”。
 
@@ -140,7 +145,7 @@ MainWindow (1280×820)
     └── ContentControl + DataTemplate
         ├── HomeView        欢迎、模式、快捷提示、建议卡、输入框
         ├── ChatView        会话头、消息列表、授权卡、输入框
-        ├── ToolsView       8 个工具分组、开关与技能导入
+        ├── ToolsView       5 个自建工具、开关与技能导入
         ├── McpView         MCP 服务端列表与添加表单
         ├── LibraryView     工作区顶层文件
         └── SettingsView    模型 / 权限 / 工作区 / 关于
@@ -195,7 +200,7 @@ UI 的技能页与系统提示里的工具清单都会自动更新。
 | --- | --- |
 | `PiAgentRuntimeTests` | Faux 模型驱动的完整循环、工具调用、只读拦截、授权拒绝、缺 Key |
 | `OpenAiWireTests` | 本机 TCP 起一个 OpenAI 兼容 SSE 端点，走真实 HTTP/流式解析，断言工具声明在请求体里 |
-| `ToolExecutionTests` | `list_directory` / `read_file` 正常，越界写被工作区沙箱拦下 |
+| `ToolExecutionTests` | 自建 `write_file` 写入正常，CodingAgent 的 `read` 能读回来，越界写被工作区沙箱拦下 |
 | `CapabilityInstallerTests` | 技能文件夹 / zip 导入、缺清单、多技能、重名与非法扩展名 |
 | `StorageTests` | settings / session 的 JSON 往返与删除 |
 
