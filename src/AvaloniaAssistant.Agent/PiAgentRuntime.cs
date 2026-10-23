@@ -24,9 +24,9 @@ public sealed class PiAgentRuntime : IAssistantRuntime
 {
     private static readonly Dictionary<AgentProviderKind, string[]> KnownModels = new()
     {
-        [AgentProviderKind.DeepSeek] = ["deepseek-chat", "deepseek-reasoner"],
-        [AgentProviderKind.OpenAI] = ["gpt-4.1", "gpt-4.1-mini", "gpt-4o"],
-        [AgentProviderKind.Anthropic] = ["claude-sonnet-4-5", "claude-opus-4-1", "claude-haiku-4-5"],
+        [AgentProviderKind.DeepSeek] = ["deepseek-v4-flash", "deepseek-v4-pro"],
+        [AgentProviderKind.OpenAI] = ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini"],
+        [AgentProviderKind.Anthropic] = ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-fable-5-1"],
         [AgentProviderKind.Custom] = [],
     };
 

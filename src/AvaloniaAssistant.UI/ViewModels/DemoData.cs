@@ -27,7 +27,7 @@ internal static class DemoData
                 {
                     Kind = ChatEntryKind.Assistant,
                     CreatedAt = now.AddMinutes(-12),
-                    Model = "deepseek-chat",
+                    Model = "deepseek-v4-flash",
                     InputTokens = 1284,
                     OutputTokens = 213,
                     Reasoning = "先跑一条命令查系统信息，确认 CPU、内存和磁盘；再把结果写成文件，最后用一段话说明写到了哪里。",
@@ -64,7 +64,7 @@ internal static class DemoData
                 {
                     Kind = ChatEntryKind.Assistant,
                     CreatedAt = now.AddMinutes(-2),
-                    Model = "deepseek-chat",
+                    Model = "deepseek-v4-flash",
                     InputTokens = 1650,
                     OutputTokens = 168,
                     ToolCalls =

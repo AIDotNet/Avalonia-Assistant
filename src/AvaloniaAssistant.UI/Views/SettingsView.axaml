@@ -67,7 +67,7 @@
                      Text="{Binding BaseUrl, Mode=TwoWay}" />
 
           <arc:Input Label="模型"
-                     Placeholder="deepseek-chat"
+                     Placeholder="deepseek-v4-flash"
                      Text="{Binding Model, Mode=TwoWay}" />
 
           <Grid ColumnDefinitions="*,*">

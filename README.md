@@ -81,12 +81,18 @@ dotnet run --project src/AvaloniaAssistant.Desktop
 
 默认配置：
 
-| 服务商 | Base URL | 默认模型 |
-| --- | --- | --- |
-| DeepSeek | `https://api.deepseek.com/v1` | `deepseek-chat` |
-| OpenAI | `https://api.openai.com/v1` | `gpt-4.1` |
-| Anthropic | `https://api.anthropic.com` | `claude-sonnet-4-5` |
-| 自定义 | `http://localhost:11434/v1` | `qwen3:8b` |
+| 服务商 | Base URL | 默认模型 | 备选 |
+| --- | --- | --- | --- |
+| DeepSeek | `https://api.deepseek.com/v1` | `deepseek-v4-flash` | `deepseek-v4-pro` |
+| OpenAI | `https://api.openai.com/v1` | `gpt-5.5` | `gpt-5.4`、`gpt-5.4-mini` |
+| Anthropic | `https://api.anthropic.com` | `claude-sonnet-5-5` | `claude-opus-5-5`、`claude-haiku-5-5` |
+| 自定义 | `http://localhost:11434/v1` | `qwen3.5:9b` | 填你本地实际拉取的模型 |
+
+> 默认走「够用且便宜」的那一档：DeepSeek 用 Flash、Anthropic 用 Sonnet。要更强就把模型换成
+> `deepseek-v4-pro` 或 `claude-opus-5-5`，Token 消耗也会跟着上去。
+>
+> 模型名填的是厂商 API 的 `model` 字段，不是 App 里的展示名。旧的 `deepseek-chat` /
+> `deepseek-reasoner` 已于 2026-07-24 下线，请不要再填。
 
 > 自定义端点必须是 OpenAI 兼容的 `/chat/completions`。本地 LLM 不再走 LLamaSharp，
 > 用 Ollama / LM Studio 暴露一个兼容端点即可。

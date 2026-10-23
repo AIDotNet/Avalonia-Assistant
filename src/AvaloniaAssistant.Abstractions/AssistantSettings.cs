@@ -23,7 +23,7 @@ public sealed record ProviderPreset(
         "DeepSeek",
         "OpenAI 兼容接口，国内直连",
         "https://api.deepseek.com/v1",
-        "deepseek-chat",
+        "deepseek-v4-flash",
         AgentProtocol.OpenAiCompatible);
 
     public static readonly ProviderPreset OpenAI = new(
@@ -31,7 +31,7 @@ public sealed record ProviderPreset(
         "OpenAI",
         "官方 OpenAI 接口",
         "https://api.openai.com/v1",
-        "gpt-4.1",
+        "gpt-5.5",
         AgentProtocol.OpenAiCompatible);
 
     public static readonly ProviderPreset Anthropic = new(
@@ -39,7 +39,7 @@ public sealed record ProviderPreset(
         "Anthropic",
         "Claude Messages 接口",
         "https://api.anthropic.com",
-        "claude-sonnet-4-5",
+        "claude-sonnet-5-5",
         AgentProtocol.AnthropicMessages);
 
     public static readonly ProviderPreset Custom = new(
@@ -47,7 +47,7 @@ public sealed record ProviderPreset(
         "自定义",
         "任意 OpenAI 兼容端点（vLLM / Ollama / One-API…）",
         "http://localhost:11434/v1",
-        "qwen3:8b",
+        "qwen3.5:9b",
         AgentProtocol.OpenAiCompatible);
 
     public static readonly IReadOnlyList<ProviderPreset> All = [DeepSeek, OpenAI, Anthropic, Custom];

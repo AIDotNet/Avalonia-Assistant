@@ -18,7 +18,7 @@ public sealed class StorageTests
         var settings = provider.Current;
         settings.Provider = AgentProviderKind.OpenAI;
         settings.ApiKey = "sk-test";
-        settings.Model = "gpt-4.1";
+        settings.Model = "gpt-5.5";
         settings.Permission = PermissionMode.FullAccess;
         settings.DisabledTools.Add("run_command");
         await provider.SaveAsync(settings);
@@ -28,7 +28,7 @@ public sealed class StorageTests
 
         Assert.Equal(AgentProviderKind.OpenAI, reloaded.Current.Provider);
         Assert.Equal("sk-test", reloaded.Current.ApiKey);
-        Assert.Equal("gpt-4.1", reloaded.Current.Model);
+        Assert.Equal("gpt-5.5", reloaded.Current.Model);
         Assert.Equal(PermissionMode.FullAccess, reloaded.Current.Permission);
         Assert.Contains("run_command", reloaded.Current.DisabledTools);
 
