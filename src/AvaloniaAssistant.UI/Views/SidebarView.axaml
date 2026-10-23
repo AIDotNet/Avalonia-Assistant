@@ -1,0 +1,221 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:arc="https://github.com/AtomUICommunity/TKCode.Arc"
+             x:Class="AvaloniaAssistant.UI.Views.SidebarView">
+  <Border Background="{StaticResource SidebarBrush}" Padding="12,16,12,10">
+    <Grid RowDefinitions="Auto,Auto,*,Auto">
+      <Grid ColumnDefinitions="Auto,*,Auto">
+        <Border Width="30" Height="30" CornerRadius="9" Background="{StaticResource AccentBrush}">
+          <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Sparkles}"
+                        Size="17"
+                        Foreground="{StaticResource AccentForegroundBrush}"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center" />
+        </Border>
+        <StackPanel Grid.Column="1" Margin="9,0,0,0" VerticalAlignment="Center" Spacing="1">
+          <TextBlock Text="Avalonia Assistant" FontSize="13" FontWeight="SemiBold" />
+          <TextBlock Text="{Binding VersionText}" Classes="caption" FontSize="10.5" />
+        </StackPanel>
+        <Button Grid.Column="2"
+                Classes="icon"
+                Command="{Binding ToggleSidebarCommand}"
+                ToolTip.Tip="收起侧边栏">
+          <arc:ArcGlyph Data="{x:Static arc:ArcIcons.PanelLeft}" Size="15" />
+        </Button>
+      </Grid>
+
+      <Button Grid.Row="1"
+              Margin="0,14,0,0"
+              Height="38"
+              CornerRadius="10"
+              Background="{StaticResource SurfaceBrush}"
+              BorderBrush="{StaticResource BorderBrush}"
+              BorderThickness="1"
+              HorizontalContentAlignment="Left"
+              Command="{Binding NewTaskCommand}">
+        <StackPanel Orientation="Horizontal" Spacing="8" Margin="4,0,0,0">
+          <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Plus}" Size="15" />
+          <TextBlock Text="新建任务" FontSize="13" FontWeight="Medium" VerticalAlignment="Center" />
+        </StackPanel>
+      </Button>
+
+      <ScrollViewer Grid.Row="2"
+                    Margin="0,12,0,0"
+                    VerticalScrollBarVisibility="Auto"
+                    HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Spacing="2">
+          <Button Classes="nav" Classes.active="{Binding IsHomeSelected}" Command="{Binding OpenHomeCommand}">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Sparkles}"
+                            Size="16"
+                            Foreground="{Binding $parent[Button].Foreground}" />
+              <TextBlock Grid.Column="1" Text="助理" Margin="9,0,0,0" VerticalAlignment="Center" />
+              <Border Grid.Column="2"
+                      Background="{StaticResource SurfaceMutedBrush}"
+                      CornerRadius="4"
+                      Padding="4,1"
+                      VerticalAlignment="Center">
+                <TextBlock Text="BETA" FontSize="8.5" Foreground="{StaticResource TextMutedBrush}" />
+              </Border>
+            </Grid>
+          </Button>
+
+          <Button Classes="nav" Classes.active="{Binding IsToolsSelected}" Command="{Binding OpenToolsCommand}">
+            <StackPanel Orientation="Horizontal" Spacing="9">
+              <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Zap}"
+                            Size="16"
+                            Foreground="{Binding $parent[Button].Foreground}" />
+              <TextBlock Text="技能" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+
+          <Button Classes="nav" Classes.active="{Binding IsLibrarySelected}" Command="{Binding OpenLibraryCommand}">
+            <StackPanel Orientation="Horizontal" Spacing="9">
+              <arc:ArcGlyph Data="{x:Static arc:ArcIcons.FolderOpen}"
+                            Size="16"
+                            Foreground="{Binding $parent[Button].Foreground}" />
+              <TextBlock Text="资料库" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+
+          <Button Classes="nav" Classes.active="{Binding IsSettingsSelected}" Command="{Binding OpenSettingsCommand}">
+            <StackPanel Orientation="Horizontal" Spacing="9">
+              <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Settings}"
+                            Size="16"
+                            Foreground="{Binding $parent[Button].Foreground}" />
+              <TextBlock Text="设置" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+
+          <Border Height="1" Background="{StaticResource BorderBrush}" Margin="8,12,8,10" />
+
+          <Grid ColumnDefinitions="*,Auto" Margin="8,0,4,4">
+            <TextBlock Text="{Binding SessionCountText}" Classes="section-title" />
+          </Grid>
+
+          <TextBlock Text="还没有任务，点上面「新建任务」开始。"
+                     Classes="caption"
+                     FontSize="10.5"
+                     Margin="8,2,0,4"
+                     TextWrapping="Wrap"
+                     IsVisible="{Binding HasNoSessions}" />
+
+          <ItemsControl ItemsSource="{Binding SessionGroups}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <StackPanel Margin="0,4,0,0">
+                  <TextBlock Text="{Binding Header}" Classes="caption" Margin="8,2,0,4" FontSize="10.5" />
+                  <ItemsControl ItemsSource="{Binding Items}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate>
+                        <Grid Classes="task-row" ColumnDefinitions="*,Auto">
+                          <Button Classes="task"
+                                  Classes.active="{Binding IsActive}"
+                                  Command="{Binding OpenCommand}">
+                            <StackPanel Spacing="2">
+                              <TextBlock Text="{Binding Title}"
+                                         FontSize="12.5"
+                                         TextTrimming="CharacterEllipsis" />
+                              <TextBlock Text="{Binding TimeText}"
+                                         FontSize="10.5"
+                                         Foreground="{StaticResource TextMutedBrush}" />
+                            </StackPanel>
+                          </Button>
+                          <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Button Classes="icon delete"
+                                    Command="{Binding DeleteCommand}"
+                                    IsVisible="{Binding !ConfirmDelete}"
+                                    ToolTip.Tip="删除任务">
+                              <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Trash2}" Size="13" />
+                            </Button>
+                            <Button Classes="ghost-action"
+                                    Command="{Binding DeleteCommand}"
+                                    Content="确认"
+                                    IsVisible="{Binding ConfirmDelete}"
+                                    Foreground="{StaticResource DangerBrush}" />
+                          </StackPanel>
+                        </Grid>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+
+          <Border Height="1" Background="{StaticResource BorderBrush}" Margin="8,14,8,10" />
+
+          <Grid ColumnDefinitions="*,Auto" Margin="8,0,4,4">
+            <TextBlock Text="空间" Classes="section-title" />
+            <Button Grid.Column="1"
+                    Classes="icon"
+                    Width="22"
+                    Height="22"
+                    Command="{Binding AddWorkspaceCommand}"
+                    ToolTip.Tip="添加工作区">
+              <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Plus}" Size="13" />
+            </Button>
+          </Grid>
+
+          <ItemsControl ItemsSource="{Binding Workspaces}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Button Classes="nav"
+                        Classes.active="{Binding IsActive}"
+                        Command="{Binding SelectCommand}"
+                        ToolTip.Tip="{Binding Path}">
+                  <StackPanel Orientation="Horizontal" Spacing="9">
+                    <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Folder}"
+                                  Size="15"
+                                  Foreground="{Binding $parent[Button].Foreground}" />
+                    <TextBlock Text="{Binding Name}"
+                               VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis" />
+                  </StackPanel>
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+
+          <Button Classes="nav" Command="{Binding AddWorkspaceCommand}">
+            <StackPanel Orientation="Horizontal" Spacing="9">
+              <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Plus}"
+                            Size="15"
+                            Foreground="{Binding $parent[Button].Foreground}" />
+              <TextBlock Text="添加工作区" VerticalAlignment="Center" Foreground="{StaticResource TextMutedBrush}" />
+            </StackPanel>
+          </Button>
+        </StackPanel>
+      </ScrollViewer>
+
+      <Border Grid.Row="3"
+              Margin="0,10,0,0"
+              Padding="8,8"
+              CornerRadius="12"
+              Background="{StaticResource SurfaceBrush}"
+              BorderBrush="{StaticResource BorderBrush}"
+              BorderThickness="1">
+        <Grid ColumnDefinitions="Auto,*,Auto">
+          <Border Width="30" Height="30" CornerRadius="15" Background="#E4E1F7">
+            <TextBlock Text="{Binding UserInitial}"
+                       FontSize="13"
+                       FontWeight="SemiBold"
+                       Foreground="#4B3FA8"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center" />
+          </Border>
+          <StackPanel Grid.Column="1" Margin="9,0,0,0" VerticalAlignment="Center" Spacing="1">
+            <TextBlock Text="{Binding UserName}" FontSize="12.5" FontWeight="Medium" />
+            <TextBlock Text="{Binding PlanText}" Classes="caption" FontSize="9.5" />
+          </StackPanel>
+          <Button Grid.Column="2"
+                  Classes="icon"
+                  Command="{Binding OpenSettingsCommand}"
+                  ToolTip.Tip="设置">
+            <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Settings}" Size="14" />
+          </Button>
+        </Grid>
+      </Border>
+    </Grid>
+  </Border>
+</UserControl>

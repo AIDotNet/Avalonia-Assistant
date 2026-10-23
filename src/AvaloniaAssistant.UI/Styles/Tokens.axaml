@@ -1,0 +1,46 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <FontFamily x:Key="AppFontFamily">Inter, Microsoft YaHei UI, Microsoft YaHei, Segoe UI</FontFamily>
+  <FontFamily x:Key="MonoFontFamily">Cascadia Mono, Consolas, Microsoft YaHei UI</FontFamily>
+
+  <Color x:Key="AppBackgroundColor">#F4F4F2</Color>
+  <Color x:Key="SidebarColor">#F1F1EF</Color>
+  <Color x:Key="SurfaceColor">#FFFFFF</Color>
+  <Color x:Key="SurfaceMutedColor">#F8F8F6</Color>
+  <Color x:Key="SurfaceHoverColor">#EDEDEA</Color>
+  <Color x:Key="BorderColor">#E8E8E4</Color>
+  <Color x:Key="BorderStrongColor">#D9D9D3</Color>
+  <Color x:Key="TextPrimaryColor">#1D1D1B</Color>
+  <Color x:Key="TextSecondaryColor">#6F6F69</Color>
+  <Color x:Key="TextMutedColor">#9C9C94</Color>
+  <Color x:Key="AccentColor">#1C1C1A</Color>
+  <Color x:Key="DangerColor">#B3261E</Color>
+  <Color x:Key="WarningColor">#A15C07</Color>
+  <Color x:Key="SuccessColor">#2E7D32</Color>
+
+  <SolidColorBrush x:Key="AppBackgroundBrush" Color="{StaticResource AppBackgroundColor}" />
+  <SolidColorBrush x:Key="SidebarBrush" Color="{StaticResource SidebarColor}" />
+  <SolidColorBrush x:Key="SurfaceBrush" Color="{StaticResource SurfaceColor}" />
+  <SolidColorBrush x:Key="SurfaceMutedBrush" Color="{StaticResource SurfaceMutedColor}" />
+  <SolidColorBrush x:Key="SurfaceHoverBrush" Color="{StaticResource SurfaceHoverColor}" />
+  <SolidColorBrush x:Key="BorderBrush" Color="{StaticResource BorderColor}" />
+  <SolidColorBrush x:Key="BorderStrongBrush" Color="{StaticResource BorderStrongColor}" />
+  <SolidColorBrush x:Key="TextPrimaryBrush" Color="{StaticResource TextPrimaryColor}" />
+  <SolidColorBrush x:Key="TextSecondaryBrush" Color="{StaticResource TextSecondaryColor}" />
+  <SolidColorBrush x:Key="TextMutedBrush" Color="{StaticResource TextMutedColor}" />
+  <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource AccentColor}" />
+  <SolidColorBrush x:Key="AccentForegroundBrush" Color="#FFFFFF" />
+  <SolidColorBrush x:Key="DangerBrush" Color="{StaticResource DangerColor}" />
+  <SolidColorBrush x:Key="DangerSubtleBrush" Color="#FBEAE8" />
+  <SolidColorBrush x:Key="WarningBrush" Color="{StaticResource WarningColor}" />
+  <SolidColorBrush x:Key="WarningSubtleBrush" Color="#FDF3E2" />
+  <SolidColorBrush x:Key="SuccessBrush" Color="{StaticResource SuccessColor}" />
+  <SolidColorBrush x:Key="SuccessSubtleBrush" Color="#EAF4EA" />
+  <SolidColorBrush x:Key="UserBubbleBrush" Color="#EFEFEC" />
+  <SolidColorBrush x:Key="CodeBackgroundBrush" Color="#F6F6F3" />
+
+  <BoxShadows x:Key="ComposerShadow">0 10 30 0 #12000000</BoxShadows>
+  <BoxShadows x:Key="CardShadow">0 1 2 0 #0A000000</BoxShadows>
+
+  <Thickness x:Key="PagePadding">28</Thickness>
+</ResourceDictionary>

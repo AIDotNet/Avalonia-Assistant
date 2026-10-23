@@ -1,0 +1,167 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:arc="https://github.com/AtomUICommunity/TKCode.Arc"
+             xmlns:views="using:AvaloniaAssistant.UI.Views"
+             x:Class="AvaloniaAssistant.UI.Views.HomeView">
+  <Grid RowDefinitions="Auto,*">
+    <Grid Margin="26,16,22,0" ColumnDefinitions="*,Auto">
+      <TextBlock Text="{Binding Greeting}"
+                 Classes="caption"
+                 FontSize="12"
+                 VerticalAlignment="Center" />
+      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
+        <Button Classes="pill" Command="{Binding AddWorkspaceCommand}" ToolTip.Tip="切换工作区">
+          <StackPanel Orientation="Horizontal" Spacing="5">
+            <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Folder}" Size="12" />
+            <TextBlock Text="工作区" FontSize="11.5" />
+          </StackPanel>
+        </Button>
+        <Button Classes="icon" Command="{Binding OpenSettingsCommand}" ToolTip.Tip="设置">
+          <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Settings}" Size="15" />
+        </Button>
+      </StackPanel>
+    </Grid>
+
+    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+      <StackPanel MaxWidth="800"
+                  HorizontalAlignment="Center"
+                  Margin="28,26,28,40">
+
+        <Border Width="46" Height="46" CornerRadius="14" Background="{StaticResource AccentBrush}" HorizontalAlignment="Center">
+          <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Sparkles}"
+                        Size="23"
+                        Foreground="{StaticResource AccentForegroundBrush}"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center" />
+        </Border>
+
+        <TextBlock Text="{Binding Headline}"
+                   FontSize="33"
+                   FontWeight="SemiBold"
+                   HorizontalAlignment="Center"
+                   Margin="0,18,0,0" />
+
+        <TextBlock Text="{Binding Subtitle}"
+                   Classes="muted"
+                   FontSize="13"
+                   HorizontalAlignment="Center"
+                   Margin="0,9,0,0" />
+
+        <StackPanel Orientation="Horizontal"
+                    HorizontalAlignment="Center"
+                    Spacing="8"
+                    Margin="0,20,0,0">
+          <Button Classes="chip"
+                  Classes.active="{Binding IsOffice}"
+                  Command="{Binding SetModeCommand}"
+                  CommandParameter="office"
+                  Content="办公" />
+          <Button Classes="chip"
+                  Classes.active="{Binding IsDevelopment}"
+                  Command="{Binding SetModeCommand}"
+                  CommandParameter="development"
+                  Content="开发" />
+          <Button Classes="chip"
+                  Classes.active="{Binding IsDesign}"
+                  Command="{Binding SetModeCommand}"
+                  CommandParameter="design"
+                  Content="设计" />
+        </StackPanel>
+
+        <Border IsVisible="{Binding ShowSetupBanner}"
+                Background="{StaticResource WarningSubtleBrush}"
+                BorderBrush="#EFD9B8"
+                BorderThickness="1"
+                CornerRadius="12"
+                Padding="14,11"
+                Margin="0,16,0,0">
+          <Grid ColumnDefinitions="Auto,*,Auto">
+            <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Key}"
+                          Size="16"
+                          Foreground="{StaticResource WarningBrush}"
+                          VerticalAlignment="Center" />
+            <StackPanel Grid.Column="1" Margin="9,0,0,0" Spacing="2">
+              <TextBlock Text="还没有配置模型服务" FontSize="12.5" FontWeight="Medium" />
+              <TextBlock Text="填入 API Key 后就能开始；密钥只保存在本机。" Classes="caption" />
+            </StackPanel>
+            <Button Grid.Column="2"
+                    Classes="ghost-action"
+                    Command="{Binding OpenSettingsCommand}"
+                    Content="去设置"
+                    Foreground="{StaticResource TextPrimaryBrush}" />
+          </Grid>
+        </Border>
+
+        <views:ComposerView DataContext="{Binding Composer}" Margin="0,18,0,0" />
+
+        <ItemsControl ItemsSource="{Binding QuickPrompts}" Margin="0,15,0,0">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <WrapPanel ItemSpacing="8" LineSpacing="8" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <Button Classes="chip"
+                      Height="31"
+                      Padding="12,0"
+                      CornerRadius="16"
+                      FontSize="11.5"
+                      Content="{Binding Label}"
+                      Command="{Binding $parent[ItemsControl].DataContext.UseQuickPromptCommand}"
+                      CommandParameter="{Binding}" />
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <TextBlock Text="或者，从这些开始"
+                   Classes="section-title"
+                   Margin="2,30,0,10" />
+
+        <ItemsControl ItemsSource="{Binding Cards}">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <WrapPanel ItemWidth="372" ItemSpacing="12" LineSpacing="12" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <Button Classes="card-button"
+                      Command="{Binding $parent[ItemsControl].DataContext.UseCardCommand}"
+                      CommandParameter="{Binding}">
+                <Border Classes="card" Padding="15" Height="104">
+                  <Grid ColumnDefinitions="Auto,*,Auto">
+                    <Border Width="34" Height="34" CornerRadius="10" Background="{StaticResource SurfaceMutedBrush}" VerticalAlignment="Top">
+                      <arc:ArcGlyph Data="{Binding Icon}"
+                                    Size="17"
+                                    Foreground="{StaticResource TextSecondaryBrush}"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel Grid.Column="1" Margin="11,1,8,0" Spacing="4">
+                      <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="Medium" />
+                      <TextBlock Text="{Binding Subtitle}"
+                                 Classes="caption"
+                                 TextWrapping="Wrap"
+                                 LineHeight="17" />
+                    </StackPanel>
+                    <arc:ArcGlyph Grid.Column="2"
+                                  Data="{x:Static arc:ArcIcons.ArrowUpRight}"
+                                  Size="14"
+                                  Foreground="{StaticResource TextMutedBrush}"
+                                  VerticalAlignment="Top" />
+                  </Grid>
+                </Border>
+              </Button>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <TextBlock Text="内容由 AI 生成，请核对重要信息。"
+                   Classes="caption"
+                   HorizontalAlignment="Center"
+                   Margin="0,26,0,0" />
+      </StackPanel>
+    </ScrollViewer>
+  </Grid>
+</UserControl>

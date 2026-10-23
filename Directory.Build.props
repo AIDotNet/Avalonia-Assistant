@@ -1,6 +1,12 @@
 <Project>
   <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
-    <AvaloniaVersion>11.0.6</AvaloniaVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <AvaloniaVersion>12.1.4</AvaloniaVersion>
+    <ArcVersion>0.3.0-preview.1</ArcVersion>
+    <PiVersion>1.4.1</PiVersion>
   </PropertyGroup>
 </Project>

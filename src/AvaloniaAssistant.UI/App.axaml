@@ -1,0 +1,36 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:AvaloniaAssistant.UI.ViewModels"
+             xmlns:views="using:AvaloniaAssistant.UI.Views"
+             x:Class="AvaloniaAssistant.UI.AssistantApp"
+             RequestedThemeVariant="Light">
+  <Application.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <ResourceInclude Source="avares://AvaloniaAssistant.UI/Styles/Tokens.axaml" />
+      </ResourceDictionary.MergedDictionaries>
+    </ResourceDictionary>
+  </Application.Resources>
+
+  <Application.Styles>
+    <StyleInclude Source="avares://AvaloniaAssistant.UI/Styles/AppStyles.axaml" />
+  </Application.Styles>
+
+  <Application.DataTemplates>
+    <DataTemplate DataType="{x:Type vm:HomeViewModel}">
+      <views:HomeView />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type vm:ChatViewModel}">
+      <views:ChatView />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type vm:SettingsViewModel}">
+      <views:SettingsView />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type vm:ToolsViewModel}">
+      <views:ToolsView />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type vm:LibraryViewModel}">
+      <views:LibraryView />
+    </DataTemplate>
+  </Application.DataTemplates>
+</Application>

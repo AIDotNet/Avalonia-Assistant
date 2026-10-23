@@ -1,0 +1,91 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:arc="https://github.com/AtomUICommunity/TKCode.Arc"
+             x:Class="AvaloniaAssistant.UI.Views.LibraryView">
+  <Grid RowDefinitions="Auto,*">
+    <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="18,12,20,12">
+      <Grid ColumnDefinitions="Auto,*,Auto">
+        <Button Classes="icon" Command="{Binding BackCommand}" ToolTip.Tip="返回">
+          <arc:ArcGlyph Data="{x:Static arc:ArcIcons.ChevronLeft}" Size="16" />
+        </Button>
+        <StackPanel Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Center" Spacing="1">
+          <TextBlock Text="{Binding WorkspaceName}" FontSize="14" FontWeight="Medium" TextTrimming="CharacterEllipsis" />
+          <TextBlock Text="{Binding WorkspacePath}" Classes="caption" FontSize="10.5" TextTrimming="CharacterEllipsis" />
+        </StackPanel>
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2">
+          <Button Classes="icon" Command="{Binding PickWorkspaceCommand}" ToolTip.Tip="切换工作区">
+            <arc:ArcGlyph Data="{x:Static arc:ArcIcons.FolderOpen}" Size="15" />
+          </Button>
+          <Button Classes="icon" Command="{Binding OpenWorkspaceCommand}" ToolTip.Tip="在资源管理器中打开">
+            <arc:ArcGlyph Data="{x:Static arc:ArcIcons.ArrowUpRight}" Size="15" />
+          </Button>
+          <Button Classes="icon" Command="{Binding RefreshCommand}" ToolTip.Tip="刷新">
+            <arc:ArcGlyph Data="{x:Static arc:ArcIcons.RefreshCw}" Size="15" />
+          </Button>
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <Grid Grid.Row="1">
+      <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel MaxWidth="820" Margin="28,18,28,28" HorizontalAlignment="Center" Spacing="10">
+          <TextBlock Text="{Binding StatusText}" Classes="section-title" Margin="2,0,0,4" />
+
+          <ItemsControl ItemsSource="{Binding Items}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Button Classes="nav"
+                        Height="52"
+                        Command="{Binding OpenCommand}"
+                        ToolTip.Tip="{Binding FullPath}"
+                        Margin="0,0,0,2">
+                  <Grid ColumnDefinitions="Auto,*,Auto" VerticalAlignment="Center">
+                    <Border Width="30" Height="30" CornerRadius="8" Background="{StaticResource SurfaceMutedBrush}">
+                      <arc:ArcGlyph Data="{Binding Icon}"
+                                    Size="15"
+                                    Foreground="{StaticResource TextSecondaryBrush}"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel Grid.Column="1" Margin="10,0,0,0" Spacing="1" VerticalAlignment="Center">
+                      <TextBlock Text="{Binding Name}" FontSize="12.5" TextTrimming="CharacterEllipsis" />
+                      <TextBlock Text="{Binding Detail}" Classes="caption" FontSize="10" />
+                    </StackPanel>
+                    <arc:ArcGlyph Grid.Column="2"
+                                  Data="{x:Static arc:ArcIcons.ArrowUpRight}"
+                                  Size="13"
+                                  Foreground="{StaticResource TextMutedBrush}" />
+                  </Grid>
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </ScrollViewer>
+
+      <StackPanel IsVisible="{Binding IsEmpty}"
+                  HorizontalAlignment="Center"
+                  VerticalAlignment="Center"
+                  Spacing="10"
+                  MaxWidth="360">
+        <Border Width="44" Height="44" CornerRadius="13" Background="{StaticResource SurfaceMutedBrush}" HorizontalAlignment="Center">
+          <arc:ArcGlyph Data="{x:Static arc:ArcIcons.FolderOpen}"
+                        Size="20"
+                        Foreground="{StaticResource TextMutedBrush}"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center" />
+        </Border>
+        <TextBlock Text="{Binding StatusText}" FontSize="13" FontWeight="Medium" HorizontalAlignment="Center" />
+        <TextBlock Text="资料库展示当前工作区的顶层文件。换一个工作区，或让助手先写点东西进来。"
+                   Classes="caption"
+                   TextWrapping="Wrap"
+                   TextAlignment="Center"
+                   LineHeight="18" />
+        <Button Classes="chip"
+                Command="{Binding PickWorkspaceCommand}"
+                Content="选择工作区"
+                HorizontalAlignment="Center" />
+      </StackPanel>
+    </Grid>
+  </Grid>
+</UserControl>

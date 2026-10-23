@@ -1,0 +1,174 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:arc="https://github.com/AtomUICommunity/TKCode.Arc"
+             x:Class="AvaloniaAssistant.UI.Views.SettingsView">
+  <Grid RowDefinitions="Auto,*,Auto">
+    <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="18,12,20,12">
+      <Grid ColumnDefinitions="Auto,*">
+        <Button Classes="icon" Command="{Binding BackCommand}" ToolTip.Tip="返回">
+          <arc:ArcGlyph Data="{x:Static arc:ArcIcons.ChevronLeft}" Size="16" />
+        </Button>
+        <StackPanel Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Center" Spacing="1">
+          <TextBlock Text="设置" FontSize="14" FontWeight="Medium" />
+          <TextBlock Text="模型服务、权限与工作区" Classes="caption" FontSize="10.5" />
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+      <StackPanel MaxWidth="780" Margin="28,24,28,28" Spacing="22" HorizontalAlignment="Center">
+
+        <StackPanel Spacing="10">
+          <TextBlock Text="模型服务" FontSize="15" FontWeight="SemiBold" />
+          <TextBlock Text="所有请求直接发往你填写的端点；密钥只保存在本机的 settings.json。"
+                     Classes="caption"
+                     TextWrapping="Wrap" />
+
+          <ItemsControl ItemsSource="{Binding Providers}" Margin="0,2,0,0">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <UniformGrid Columns="2" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Button Classes="provider"
+                        Classes.selected="{Binding IsSelected}"
+                        Command="{Binding SelectCommand}"
+                        Margin="0,0,8,8">
+                  <StackPanel Spacing="3">
+                    <TextBlock Text="{Binding Name}" FontSize="12.5" FontWeight="Medium" />
+                    <TextBlock Text="{Binding Description}"
+                               Classes="caption"
+                               FontSize="10.5"
+                               TextWrapping="Wrap" />
+                  </StackPanel>
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+
+          <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,4,0,0">
+            <TextBlock Text="API Key" FontSize="12" VerticalAlignment="Center" Width="86" />
+            <TextBox x:Name="KeyBox"
+                     Grid.Column="1"
+                     Classes="field"
+                     Text="{Binding ApiKey, Mode=TwoWay}"
+                     PasswordChar="●"
+                     PlaceholderText="sk-..." />
+            <Button Grid.Column="2"
+                    Classes="icon"
+                    Click="OnRevealKeyClick"
+                    ToolTip.Tip="显示/隐藏密钥"
+                    Margin="6,0,0,0">
+              <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Eye}" Size="15" />
+            </Button>
+          </Grid>
+
+          <Grid ColumnDefinitions="86,*" Margin="0,2,0,0">
+            <TextBlock Text="Base URL" FontSize="12" VerticalAlignment="Center" />
+            <TextBox Grid.Column="1"
+                     Classes="field"
+                     Text="{Binding BaseUrl, Mode=TwoWay}"
+                     PlaceholderText="https://api.deepseek.com/v1" />
+          </Grid>
+
+          <Grid ColumnDefinitions="86,*" Margin="0,2,0,0">
+            <TextBlock Text="模型" FontSize="12" VerticalAlignment="Center" />
+            <TextBox Grid.Column="1"
+                     Classes="field"
+                     Text="{Binding Model, Mode=TwoWay}"
+                     PlaceholderText="deepseek-chat" />
+          </Grid>
+
+          <Grid ColumnDefinitions="86,*,86,*" Margin="0,2,0,0">
+            <TextBlock Text="Temperature" FontSize="12" VerticalAlignment="Center" />
+            <TextBox Grid.Column="1"
+                     Classes="field"
+                     Text="{Binding Temperature, Mode=TwoWay}"
+                     Margin="0,0,16,0" />
+            <TextBlock Grid.Column="2" Text="Max tokens" FontSize="12" VerticalAlignment="Center" />
+            <TextBox Grid.Column="3"
+                     Classes="field"
+                     Text="{Binding MaxTokens, Mode=TwoWay}" />
+          </Grid>
+        </StackPanel>
+
+        <Border Height="1" Background="{StaticResource BorderBrush}" />
+
+        <StackPanel Spacing="10">
+          <TextBlock Text="权限与工作区" FontSize="15" FontWeight="SemiBold" />
+
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Button Classes="chip"
+                    Classes.active="{Binding IsReadOnlySelected}"
+                    Command="{Binding SetPermissionCommand}"
+                    CommandParameter="readonly"
+                    Content="只读" />
+            <Button Classes="chip"
+                    Classes.active="{Binding IsWorkspaceSelected}"
+                    Command="{Binding SetPermissionCommand}"
+                    CommandParameter="workspace"
+                    Content="工作区" />
+            <Button Classes="chip"
+                    Classes.active="{Binding IsFullAccessSelected}"
+                    Command="{Binding SetPermissionCommand}"
+                    CommandParameter="full"
+                    Content="完全访问" />
+          </StackPanel>
+
+          <TextBlock Text="只读：只能读取工作区。工作区：可读写工作区，执行命令需确认。完全访问：所有工具直接执行。"
+                     Classes="caption"
+                     TextWrapping="Wrap"
+                     LineHeight="18" />
+
+          <Grid ColumnDefinitions="86,*,Auto" Margin="0,4,0,0">
+            <TextBlock Text="工作区" FontSize="12" VerticalAlignment="Center" />
+            <TextBox Grid.Column="1"
+                     Classes="field"
+                     Text="{Binding WorkspacePath}"
+                     IsReadOnly="True" />
+            <Button Grid.Column="2"
+                    Classes="ghost-action"
+                    Height="36"
+                    Padding="12,0"
+                    Margin="6,0,0,0"
+                    Command="{Binding BrowseWorkspaceCommand}"
+                    Content="选择…" />
+          </Grid>
+        </StackPanel>
+
+        <Border Height="1" Background="{StaticResource BorderBrush}" />
+
+        <StackPanel Spacing="8">
+          <TextBlock Text="关于" FontSize="15" FontWeight="SemiBold" />
+          <Grid ColumnDefinitions="86,*" RowDefinitions="Auto,Auto,Auto" >
+            <TextBlock Text="版本" FontSize="12" Margin="0,4" />
+            <TextBlock Grid.Column="1" Text="Avalonia Assistant 1.0.0" FontSize="12" Margin="0,4" />
+            <TextBlock Grid.Row="1" Text="技术栈" FontSize="12" Margin="0,4" />
+            <TextBlock Grid.Row="1" Grid.Column="1" Text="Avalonia 12 · TKCode.Arc · pi.net" FontSize="12" Margin="0,4" />
+            <TextBlock Grid.Row="2" Text="数据目录" FontSize="12" Margin="0,4" />
+            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding DataFolder}" FontSize="12" Margin="0,4" TextTrimming="CharacterEllipsis" />
+          </Grid>
+          <Button Classes="ghost-action"
+                  HorizontalAlignment="Left"
+                  Command="{Binding OpenDataFolderCommand}"
+                  Content="打开数据目录" />
+        </StackPanel>
+      </StackPanel>
+    </ScrollViewer>
+
+    <Border Grid.Row="2" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0" Padding="28,12">
+      <Grid ColumnDefinitions="*,Auto,Auto">
+        <TextBlock Text="{Binding SavedText}" Classes="caption" VerticalAlignment="Center" />
+        <Button Grid.Column="2"
+                Classes="approve"
+                Height="34"
+                Padding="18,0"
+                Command="{Binding SaveCommand}"
+                IsEnabled="{Binding !IsSaving}"
+                Content="保存设置" />
+      </Grid>
+    </Border>
+  </Grid>
+</UserControl>

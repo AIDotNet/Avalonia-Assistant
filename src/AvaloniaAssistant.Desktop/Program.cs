@@ -1,0 +1,66 @@
+using AtomUI;
+using AtomUI.Desktop.Controls;
+using Avalonia;
+using AvaloniaAssistant.Abstractions;
+using AvaloniaAssistant.Agent;
+using AvaloniaAssistant.Storage;
+using AvaloniaAssistant.UI;
+using AvaloniaAssistant.UI.Services;
+using AvaloniaAssistant.UI.ViewModels;
+using AvaloniaAssistant.UI.Views;
+using Microsoft.Extensions.DependencyInjection;
+using TKCode.Arc;
+using TKCode.Arc.Fonts;
+
+namespace AvaloniaAssistant.Desktop;
+
+internal static class Program
+{
+    [STAThread]
+    public static void Main(string[] args)
+    {
+        ParseArguments(args);
+        AppPaths.EnsureCreated();
+
+        var services = new ServiceCollection();
+        services.AddSingleton<ISettingsProvider>(_ => new JsonSettingsProvider());
+        services.AddSingleton<ISessionStore>(_ => new JsonSessionStore());
+        services.AddSingleton<IFilePicker, StorageFilePicker>();
+        services.AddSingleton<IPiStreamFactory, PiStreamFactory>();
+        services.AddSingleton<AgentToolRegistry>();
+        services.AddSingleton<IAssistantRuntime, PiAgentRuntime>();
+        services.AddSingleton<MainWindowViewModel>();
+        services.AddSingleton<MainWindow>();
+
+        AssistantApp.Services = services.BuildServiceProvider();
+        BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+    }
+
+    public static AppBuilder BuildAvaloniaApp() =>
+        AppBuilder.Configure<AssistantApp>()
+                  .UsePlatformDetect()
+                  .WithInterFont()
+                  .WithArcFonts()
+                  .UseAtomUI(builder =>
+                  {
+                      builder.UseDesktopControls();
+                      builder.UseArc();
+                  })
+                  .LogToTrace();
+
+    private static void ParseArguments(string[] args)
+    {
+        for (var index = 0; index < args.Length; index++)
+        {
+            switch (args[index])
+            {
+                case "--screenshot" when index + 1 < args.Length:
+                    AppLaunchOptions.ScreenshotPath = args[++index];
+                    break;
+                case "--page" when index + 1 < args.Length:
+                    AppLaunchOptions.Page = args[++index];
+                    break;
+            }
+        }
+    }
+}

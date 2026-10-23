@@ -1,0 +1,261 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:arc="https://github.com/AtomUICommunity/TKCode.Arc"
+             xmlns:vm="using:AvaloniaAssistant.UI.ViewModels"
+             xmlns:views="using:AvaloniaAssistant.UI.Views"
+             x:Class="AvaloniaAssistant.UI.Views.ChatView">
+
+  <UserControl.DataTemplates>
+    <DataTemplate DataType="{x:Type vm:UserMessageViewModel}">
+      <Grid Margin="0,10,0,18" HorizontalAlignment="Right">
+        <Border Background="{StaticResource UserBubbleBrush}"
+                CornerRadius="16,16,4,16"
+                Padding="14,10"
+                MaxWidth="620">
+          <SelectableTextBlock Text="{Binding Text}"
+                               TextWrapping="Wrap"
+                               FontSize="13.5"
+                               LineHeight="21" />
+        </Border>
+      </Grid>
+    </DataTemplate>
+
+    <DataTemplate DataType="{x:Type vm:AssistantMessageViewModel}">
+      <Grid Margin="0,2,0,26" ColumnDefinitions="28,*">
+        <Border Width="26" Height="26" CornerRadius="8" Background="{StaticResource AccentBrush}" VerticalAlignment="Top" Margin="0,2,0,0">
+          <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Sparkles}"
+                        Size="14"
+                        Foreground="{StaticResource AccentForegroundBrush}"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center" />
+        </Border>
+
+        <StackPanel Grid.Column="1" Margin="10,0,0,0" Spacing="9">
+          <Border IsVisible="{Binding HasReasoning}"
+                  Background="{StaticResource SurfaceMutedBrush}"
+                  BorderBrush="{StaticResource BorderBrush}"
+                  BorderThickness="1"
+                  CornerRadius="10"
+                  Padding="10,7">
+            <StackPanel Spacing="4">
+              <Button Classes="ghost-action"
+                      HorizontalAlignment="Left"
+                      Command="{Binding ToggleReasoningCommand}">
+                <StackPanel Orientation="Horizontal" Spacing="5">
+                  <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Sparkles}" Size="12" />
+                  <TextBlock Text="思考过程" FontSize="11.5" />
+                  <arc:ArcGlyph Data="{x:Static arc:ArcIcons.ChevronDown}" Size="11" />
+                </StackPanel>
+              </Button>
+              <ScrollViewer MaxHeight="220"
+                            IsVisible="{Binding IsReasoningOpen}"
+                            VerticalScrollBarVisibility="Auto">
+                <TextBlock Text="{Binding Reasoning}"
+                           TextWrapping="Wrap"
+                           FontSize="11.5"
+                           LineHeight="18"
+                           Foreground="{StaticResource TextSecondaryBrush}" />
+              </ScrollViewer>
+            </StackPanel>
+          </Border>
+
+          <ItemsControl ItemsSource="{Binding Tools}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Border Classes="tool-card">
+                  <StackPanel>
+                    <Button Classes="tool-head" Command="{Binding ToggleCommand}">
+                      <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+                        <Border Width="26" Height="26" CornerRadius="8" Background="{StaticResource SurfaceBrush}">
+                          <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Zap}"
+                                        Size="13"
+                                        Foreground="{StaticResource TextSecondaryBrush}"
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Center" />
+                        </Border>
+                        <StackPanel Grid.Column="1" Margin="9,0,0,0" VerticalAlignment="Center" Spacing="1">
+                          <TextBlock Text="{Binding Label}" FontSize="12" FontWeight="Medium" />
+                          <TextBlock Text="{Binding Name}" Classes="caption" FontSize="10" />
+                        </StackPanel>
+                        <TextBlock Grid.Column="2"
+                                   Text="{Binding StatusText}"
+                                   Foreground="{Binding StatusBrush}"
+                                   FontSize="10.5"
+                                   VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="3"
+                                   Text="{Binding DurationText}"
+                                   Classes="caption"
+                                   FontSize="10"
+                                   Margin="8,0,2,0"
+                                   VerticalAlignment="Center" />
+                      </Grid>
+                    </Button>
+
+                    <Border IsVisible="{Binding IsExpanded}"
+                            BorderBrush="{StaticResource BorderBrush}"
+                            BorderThickness="0,1,0,0"
+                            Padding="12,9">
+                      <StackPanel Spacing="5">
+                        <TextBlock Text="参数" Classes="section-title" />
+                        <ScrollViewer MaxHeight="140" VerticalScrollBarVisibility="Auto">
+                          <SelectableTextBlock Text="{Binding Arguments}"
+                                               FontFamily="{StaticResource MonoFontFamily}"
+                                               FontSize="10.5"
+                                               TextWrapping="Wrap"
+                                               Foreground="{StaticResource TextSecondaryBrush}" />
+                        </ScrollViewer>
+                        <TextBlock Text="结果" Classes="section-title" IsVisible="{Binding HasResult}" Margin="0,4,0,0" />
+                        <ScrollViewer MaxHeight="200" IsVisible="{Binding HasResult}" VerticalScrollBarVisibility="Auto">
+                          <SelectableTextBlock Text="{Binding Result}"
+                                               FontFamily="{StaticResource MonoFontFamily}"
+                                               FontSize="10.5"
+                                               TextWrapping="Wrap"
+                                               Foreground="{StaticResource TextSecondaryBrush}" />
+                        </ScrollViewer>
+                      </StackPanel>
+                    </Border>
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+
+          <arc:Markdown Text="{Binding Text}" IsVisible="{Binding HasText}" />
+
+          <StackPanel IsVisible="{Binding ShowTyping}" Orientation="Horizontal" Spacing="7" Margin="0,2,0,0">
+            <arc:ArcSpinner Width="14" Height="14" Foreground="{StaticResource TextMutedBrush}" />
+            <TextBlock Text="正在处理…" Classes="caption" VerticalAlignment="Center" />
+          </StackPanel>
+
+          <Border IsVisible="{Binding HasError}"
+                  Background="{StaticResource DangerSubtleBrush}"
+                  BorderBrush="#F0CFCB"
+                  BorderThickness="1"
+                  CornerRadius="9"
+                  Padding="10,8">
+            <TextBlock Text="{Binding Error}"
+                       TextWrapping="Wrap"
+                       FontSize="12"
+                       Foreground="{StaticResource DangerBrush}" />
+          </Border>
+
+          <StackPanel IsVisible="{Binding ShowActions}" Orientation="Horizontal" Spacing="2" Margin="0,1,0,0">
+            <Button Classes="ghost-action" Command="{Binding CopyCommand}" Content="复制" />
+            <Button Classes="ghost-action" Command="{Binding RetryCommand}" Content="重试" />
+            <TextBlock Text="{Binding TokenText}"
+                       IsVisible="{Binding HasTokens}"
+                       Classes="caption"
+                       FontSize="10"
+                       Margin="8,0,0,0"
+                       VerticalAlignment="Center" />
+          </StackPanel>
+        </StackPanel>
+      </Grid>
+    </DataTemplate>
+
+    <DataTemplate DataType="{x:Type vm:ApprovalMessageViewModel}">
+      <Border Background="{StaticResource WarningSubtleBrush}"
+              BorderBrush="#EBCFA4"
+              BorderThickness="1"
+              CornerRadius="12"
+              Padding="13"
+              Margin="0,6,0,10">
+        <StackPanel Spacing="8">
+          <Grid ColumnDefinitions="Auto,*,Auto">
+            <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Shield}"
+                          Size="16"
+                          Foreground="{StaticResource WarningBrush}"
+                          VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1"
+                       Text="{Binding Label}"
+                       FontSize="12.5"
+                       FontWeight="Medium"
+                       Margin="8,0,0,0"
+                       VerticalAlignment="Center" />
+            <Border Grid.Column="2" Background="#FFFFFFAA" CornerRadius="5" Padding="6,2">
+              <TextBlock Text="{Binding ToolName}"
+                         FontFamily="{StaticResource MonoFontFamily}"
+                         FontSize="9.5"
+                         Foreground="{StaticResource WarningBrush}" />
+            </Border>
+          </Grid>
+          <TextBlock Text="{Binding Reason}"
+                     Classes="caption"
+                     FontSize="11.5"
+                     TextWrapping="Wrap" />
+          <Border Background="#FFFFFFAA" CornerRadius="8" Padding="10,7">
+            <ScrollViewer MaxHeight="120" VerticalScrollBarVisibility="Auto">
+              <SelectableTextBlock Text="{Binding Arguments}"
+                                   FontFamily="{StaticResource MonoFontFamily}"
+                                   FontSize="10.5"
+                                   TextWrapping="Wrap"
+                                   Foreground="{StaticResource TextSecondaryBrush}" />
+            </ScrollViewer>
+          </Border>
+          <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding ShowActions}">
+            <Button Classes="approve" Command="{Binding AllowCommand}" Content="允许一次" />
+            <Button Classes="deny" Command="{Binding DenyCommand}" Content="拒绝" />
+          </StackPanel>
+          <TextBlock Text="{Binding ResolutionText}"
+                     IsVisible="{Binding !ShowActions}"
+                     Classes="caption"
+                     FontSize="11.5"
+                     Foreground="{StaticResource TextSecondaryBrush}" />
+        </StackPanel>
+      </Border>
+    </DataTemplate>
+
+    <DataTemplate DataType="{x:Type vm:NoticeMessageViewModel}">
+      <Border Background="{StaticResource SurfaceMutedBrush}"
+              BorderBrush="{StaticResource BorderBrush}"
+              BorderThickness="1"
+              CornerRadius="10"
+              Padding="11,9"
+              Margin="0,4,0,12">
+        <TextBlock Text="{Binding Text}" TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" />
+      </Border>
+    </DataTemplate>
+  </UserControl.DataTemplates>
+
+  <Grid RowDefinitions="Auto,*,Auto">
+    <Border Grid.Row="0"
+            BorderBrush="{StaticResource BorderBrush}"
+            BorderThickness="0,0,0,1"
+            Padding="18,12,16,12">
+      <Grid ColumnDefinitions="Auto,*,Auto">
+        <Button Classes="icon" Command="{Binding BackCommand}" ToolTip.Tip="返回首页" Margin="0,0,6,0">
+          <arc:ArcGlyph Data="{x:Static arc:ArcIcons.ChevronLeft}" Size="16" />
+        </Button>
+        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+          <TextBlock Text="{Binding Title}" FontSize="13.5" FontWeight="Medium" TextTrimming="CharacterEllipsis" />
+          <TextBlock Text="{Binding HeaderSubtitle}" Classes="caption" FontSize="10.5" />
+        </StackPanel>
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+          <Border Background="{StaticResource SurfaceMutedBrush}" CornerRadius="11" Padding="10,4" VerticalAlignment="Center">
+            <TextBlock Text="{Binding StatusText}" Classes="caption" FontSize="10.5" />
+          </Border>
+          <Button Classes="icon" Command="{Binding RetryCommand}" ToolTip.Tip="重新生成">
+            <arc:ArcGlyph Data="{x:Static arc:ArcIcons.RefreshCw}" Size="15" />
+          </Button>
+          <Button Classes="icon" Command="{Binding StopCommand}" ToolTip.Tip="停止">
+            <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Square}" Size="13" />
+          </Button>
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <ScrollViewer x:Name="MessagesScroll"
+                  Grid.Row="1"
+                  VerticalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Disabled">
+      <ItemsControl ItemsSource="{Binding Messages}"
+                    MaxWidth="840"
+                    Margin="26,22,26,10"
+                    />
+    </ScrollViewer>
+
+    <Border Grid.Row="2" Padding="26,8,26,14" Background="{StaticResource SurfaceBrush}">
+      <views:ComposerView DataContext="{Binding Composer}" MaxWidth="840" />
+    </Border>
+  </Grid>
+</UserControl>

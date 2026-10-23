@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>AvaloniaAssistant.Desktop</RootNamespace>
+    <AssemblyName>AvaloniaAssistant</AssemblyName>
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Desktop" />
+    <PackageReference Include="Avalonia.Fonts.Inter" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\AvaloniaAssistant.Agent\AvaloniaAssistant.Agent.csproj" />
+    <ProjectReference Include="..\AvaloniaAssistant.Storage\AvaloniaAssistant.Storage.csproj" />
+    <ProjectReference Include="..\AvaloniaAssistant.UI\AvaloniaAssistant.UI.csproj" />
+  </ItemGroup>
+</Project>

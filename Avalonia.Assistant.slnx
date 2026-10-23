@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/AvaloniaAssistant.Abstractions/AvaloniaAssistant.Abstractions.csproj" />
+    <Project Path="src/AvaloniaAssistant.Agent/AvaloniaAssistant.Agent.csproj" />
+    <Project Path="src/AvaloniaAssistant.Storage/AvaloniaAssistant.Storage.csproj" />
+    <Project Path="src/AvaloniaAssistant.UI/AvaloniaAssistant.UI.csproj" />
+    <Project Path="src/AvaloniaAssistant.Desktop/AvaloniaAssistant.Desktop.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/AvaloniaAssistant.Agent.Tests/AvaloniaAssistant.Agent.Tests.csproj" />
+  </Folder>
+</Solution>
