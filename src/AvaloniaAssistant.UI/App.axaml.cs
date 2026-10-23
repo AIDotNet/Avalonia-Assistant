@@ -115,11 +115,14 @@ public partial class AssistantApp : Application
 
     private static void Capture(Window window, string path)
     {
+        // 位图的像素尺寸必须乘上系统缩放比例（例如 175%），否则渲染内容会被压到左上角、
+        // 右侧与底部留出空白，看起来像"截图不居中"。
+        var scaling = window.RenderScaling > 0 ? window.RenderScaling : 1.0;
         var size = new PixelSize(
-            Math.Max(1, (int)window.Bounds.Width),
-            Math.Max(1, (int)window.Bounds.Height));
+            Math.Max(1, (int)Math.Round(window.Bounds.Width * scaling)),
+            Math.Max(1, (int)Math.Round(window.Bounds.Height * scaling)));
 
-        var bitmap = new RenderTargetBitmap(size, new Vector(96, 96));
+        var bitmap = new RenderTargetBitmap(size, new Vector(96 * scaling, 96 * scaling));
         bitmap.Render(window);
 
         var directory = Path.GetDirectoryName(path);
