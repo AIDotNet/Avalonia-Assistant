@@ -104,6 +104,10 @@ public sealed class JsonSettingsProvider : ISettingsProvider
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Take(8)
             .ToList();
+        settings.CollapsedWorkspaces = (settings.CollapsedWorkspaces ?? [])
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
         settings.DisabledTools = settings.DisabledTools
             .Where(name => !string.IsNullOrWhiteSpace(name))
             .Distinct(StringComparer.Ordinal)

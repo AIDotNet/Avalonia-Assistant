@@ -129,6 +129,9 @@ public sealed class AssistantSettings
 
     public List<string> RecentWorkspaces { get; set; } = [];
 
+    /// <summary>被收起的工作区；没记在这里的一律按展开处理。</summary>
+    public List<string> CollapsedWorkspaces { get; set; } = [];
+
     public List<string> DisabledTools { get; set; } = [];
 
     public string Mode { get; set; } = "office";
@@ -150,6 +153,7 @@ public sealed class AssistantSettings
         TrustWorkspace = TrustWorkspace,
         UserName = UserName,
         RecentWorkspaces = [.. RecentWorkspaces],
+        CollapsedWorkspaces = [.. CollapsedWorkspaces],
         DisabledTools = [.. DisabledTools],
         Mode = Mode,
     };

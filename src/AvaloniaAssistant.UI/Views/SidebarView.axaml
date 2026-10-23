@@ -101,65 +101,68 @@
 
           <Border Height="1" Background="{StaticResource BorderBrush}" Margin="8,12,8,10" />
 
-          <Grid ColumnDefinitions="*,Auto" Margin="8,0,4,4">
-            <TextBlock Text="{Binding SessionCountText}" Classes="section-title" />
-          </Grid>
+          <!-- 「任务」只放没归到空间里的对话，空间里的对话挂在各自空间下面 -->
+          <StackPanel IsVisible="{Binding ShowTaskSection}">
+            <Grid ColumnDefinitions="*,Auto" Margin="8,0,4,4">
+              <TextBlock Text="{Binding SessionCountText}" Classes="section-title" />
+            </Grid>
 
-          <TextBlock Text="还没有任务，点上面「新建任务」开始。"
-                     Classes="caption"
-                     FontSize="10.5"
-                     Margin="8,2,0,4"
-                     TextWrapping="Wrap"
-                     IsVisible="{Binding HasNoSessions}" />
+            <TextBlock Text="还没有任务，点上面「新建任务」开始。"
+                       Classes="caption"
+                       FontSize="10.5"
+                       Margin="8,2,0,4"
+                       TextWrapping="Wrap"
+                       IsVisible="{Binding HasNoSessions}" />
 
-          <ItemsControl ItemsSource="{Binding SessionGroups}">
-            <ItemsControl.ItemTemplate>
-              <DataTemplate>
-                <StackPanel Margin="0,4,0,0">
-                  <TextBlock Text="{Binding Header}" Classes="caption" Margin="8,2,0,4" FontSize="10.5" />
-                  <ItemsControl ItemsSource="{Binding Items}">
-                    <ItemsControl.ItemTemplate>
-                      <DataTemplate>
-                        <Grid Classes="task-row" ColumnDefinitions="*,Auto">
-                          <Button Classes="task"
-                                  Classes.active="{Binding IsActive}"
-                                  Command="{Binding OpenCommand}">
-                            <Grid ColumnDefinitions="*,Auto">
-                              <TextBlock Text="{Binding Title}"
-                                         FontSize="12.5"
-                                         VerticalAlignment="Center"
-                                         TextTrimming="CharacterEllipsis" />
-                              <TextBlock Grid.Column="1"
-                                         Text="{Binding TimeText}"
-                                         FontSize="10"
-                                         Margin="8,0,0,0"
-                                         VerticalAlignment="Center"
-                                         Foreground="{StaticResource TextMutedBrush}" />
-                            </Grid>
-                          </Button>
-                          <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                            <Button Classes="icon delete"
-                                    Command="{Binding DeleteCommand}"
-                                    IsVisible="{Binding !ConfirmDelete}"
-                                    ToolTip.Tip="删除任务">
-                              <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Trash2}" Size="13" />
+            <ItemsControl ItemsSource="{Binding SessionGroups}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <StackPanel Margin="0,4,0,0">
+                    <TextBlock Text="{Binding Header}" Classes="caption" Margin="8,2,0,4" FontSize="10.5" />
+                    <ItemsControl ItemsSource="{Binding Items}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                          <Grid Classes="task-row" ColumnDefinitions="*,Auto">
+                            <Button Classes="task"
+                                    Classes.active="{Binding IsActive}"
+                                    Command="{Binding OpenCommand}">
+                              <Grid ColumnDefinitions="*,Auto">
+                                <TextBlock Text="{Binding Title}"
+                                           FontSize="12.5"
+                                           VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis" />
+                                <TextBlock Grid.Column="1"
+                                           Text="{Binding TimeText}"
+                                           FontSize="10"
+                                           Margin="8,0,0,0"
+                                           VerticalAlignment="Center"
+                                           Foreground="{StaticResource TextMutedBrush}" />
+                              </Grid>
                             </Button>
-                            <Button Classes="ghost-action"
-                                    Command="{Binding DeleteCommand}"
-                                    Content="确认"
-                                    IsVisible="{Binding ConfirmDelete}"
-                                    Foreground="{StaticResource DangerBrush}" />
-                          </StackPanel>
-                        </Grid>
-                      </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                  </ItemsControl>
-                </StackPanel>
-              </DataTemplate>
-            </ItemsControl.ItemTemplate>
-          </ItemsControl>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                              <Button Classes="icon delete"
+                                      Command="{Binding DeleteCommand}"
+                                      IsVisible="{Binding !ConfirmDelete}"
+                                      ToolTip.Tip="删除任务">
+                                <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Trash2}" Size="13" />
+                              </Button>
+                              <Button Classes="ghost-action"
+                                      Command="{Binding DeleteCommand}"
+                                      Content="确认"
+                                      IsVisible="{Binding ConfirmDelete}"
+                                      Foreground="{StaticResource DangerBrush}" />
+                            </StackPanel>
+                          </Grid>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
 
-          <Border Height="1" Background="{StaticResource BorderBrush}" Margin="8,14,8,10" />
+            <Border Height="1" Background="{StaticResource BorderBrush}" Margin="8,12,8,10" />
+          </StackPanel>
 
           <Grid ColumnDefinitions="*,Auto" Margin="8,0,4,4">
             <TextBlock Text="空间" Classes="section-title" />
@@ -176,29 +179,100 @@
           <ItemsControl ItemsSource="{Binding Workspaces}">
             <ItemsControl.ItemTemplate>
               <DataTemplate>
-                <Grid Classes="workspace-row" ColumnDefinitions="*,Auto">
-                  <Button Classes="nav"
-                          Classes.active="{Binding IsActive}"
-                          Command="{Binding SelectCommand}"
-                          ToolTip.Tip="{Binding Path}">
-                    <StackPanel Orientation="Horizontal" Spacing="9">
-                      <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Folder}"
-                                    Size="15"
-                                    Foreground="{Binding $parent[Button].Foreground}" />
-                      <TextBlock Text="{Binding Name}"
-                                 VerticalAlignment="Center"
-                                 TextTrimming="CharacterEllipsis" />
-                    </StackPanel>
-                  </Button>
-                  <Button Grid.Column="1"
-                          Classes="icon ws-more"
-                          Width="22"
-                          Height="22"
-                          Click="OnWorkspaceMenuClick"
-                          ToolTip.Tip="{x:Null}">
-                    <TextBlock Text="⋯" FontSize="14" VerticalAlignment="Center" />
-                  </Button>
-                </Grid>
+                <!-- 空间之间留一点空隙，免得两组对话连成一整片 -->
+                <StackPanel Margin="0,2,0,4">
+                  <Border Classes="ws-chip" Classes.active="{Binding IsActive}" CornerRadius="9">
+                    <Grid Classes="workspace-row" ColumnDefinitions="*,Auto">
+                      <Button Classes="nav ws-head"
+                              Classes.active="{Binding IsActive}"
+                              Command="{Binding ToggleCommand}">
+                        <Grid ColumnDefinitions="Auto,Auto,*,Auto">
+                          <Panel Width="12" VerticalAlignment="Center">
+                            <arc:ArcGlyph Data="{x:Static arc:ArcIcons.ChevronDown}"
+                                          Size="11"
+                                          IsVisible="{Binding IsExpanded}" />
+                            <arc:ArcGlyph Data="{x:Static arc:ArcIcons.ChevronRight}"
+                                          Size="11"
+                                          IsVisible="{Binding !IsExpanded}" />
+                          </Panel>
+                          <arc:ArcGlyph Grid.Column="1"
+                                        Data="{x:Static arc:ArcIcons.Folder}"
+                                        Size="15"
+                                        Margin="4,0,0,0"
+                                        VerticalAlignment="Center"
+                                        Foreground="{Binding $parent[Button].Foreground}" />
+                          <TextBlock Grid.Column="2"
+                                     Text="{Binding Name}"
+                                     Margin="9,0,0,0"
+                                     VerticalAlignment="Center"
+                                     TextTrimming="CharacterEllipsis" />
+                          <TextBlock Grid.Column="3"
+                                     Text="{Binding CountText}"
+                                     IsVisible="{Binding ShowCount}"
+                                     FontSize="10"
+                                     Margin="6,0,2,0"
+                                     VerticalAlignment="Center"
+                                     Foreground="{StaticResource TextMutedBrush}" />
+                        </Grid>
+                      </Button>
+                      <Button Grid.Column="1"
+                              Classes="icon ws-more"
+                              Width="22"
+                              Height="22"
+                              Margin="0,0,3,0"
+                              Click="OnWorkspaceMenuClick"
+                              ToolTip.Tip="{x:Null}">
+                        <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Ellipsis}" Size="14" />
+                      </Button>
+                    </Grid>
+                  </Border>
+
+                  <!-- 空间下的对话：一条竖线把层级挂住，收起来时整块不占位 -->
+                  <Border IsVisible="{Binding IsExpanded}"
+                          Margin="13,2,0,0"
+                          Padding="6,0,0,0"
+                          BorderBrush="{StaticResource BorderBrush}"
+                          BorderThickness="1,0,0,0">
+                    <ItemsControl ItemsSource="{Binding Sessions}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                          <Grid Classes="task-row" ColumnDefinitions="*,Auto">
+                            <Button Classes="task child"
+                                    Classes.active="{Binding IsActive}"
+                                    Command="{Binding OpenCommand}"
+                                    ToolTip.Tip="{Binding Title}">
+                              <Grid ColumnDefinitions="*,Auto">
+                                <TextBlock Text="{Binding Title}"
+                                           FontSize="12"
+                                           VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis" />
+                                <TextBlock Grid.Column="1"
+                                           Text="{Binding TimeText}"
+                                           FontSize="9.5"
+                                           Margin="6,0,0,0"
+                                           VerticalAlignment="Center"
+                                           Foreground="{StaticResource TextMutedBrush}" />
+                              </Grid>
+                            </Button>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                              <Button Classes="icon delete"
+                                      Command="{Binding DeleteCommand}"
+                                      IsVisible="{Binding !ConfirmDelete}"
+                                      ToolTip.Tip="删除任务">
+                                <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Trash2}" Size="12" />
+                              </Button>
+                              <Button Classes="ghost-action"
+                                      Command="{Binding DeleteCommand}"
+                                      Content="确认"
+                                      IsVisible="{Binding ConfirmDelete}"
+                                      Foreground="{StaticResource DangerBrush}" />
+                            </StackPanel>
+                          </Grid>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </Border>
+                </StackPanel>
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>

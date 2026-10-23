@@ -8,6 +8,8 @@ namespace AvaloniaAssistant.UI.ViewModels;
 
 public sealed partial class MainWindowViewModel : ObservableObject
 {
+    private const int MaxWorkspaces = 6;
+
     private readonly ISessionStore _sessions;
     private readonly Dictionary<string, ChatSession> _sessionCache = new(StringComparer.Ordinal);
 
@@ -63,6 +65,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public string SessionCountText => $"任务 ({SessionGroups.Sum(group => group.Items.Count)})";
 
     public bool HasNoSessions => SessionGroups.Count == 0;
+
+    /// <summary>「任务」这一块只放没归到空间里的对话；空间下的对话挂在空间自己身上。</summary>
+    public bool ShowTaskSection => SessionGroups.Count > 0 || !HasWorkspaces;
 
     /// <summary>「空间」里有没有东西可点；没有就说明当前是普通任务。</summary>
     public bool HasWorkspaces => Workspaces.Count > 0;
@@ -157,6 +162,14 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public async Task SaveSessionAsync(ChatSession session)
     {
         _sessionCache[session.Id] = session;
+
+        // 正在聊的这一轮要看得见：空间被收起时自动展开，别让新对话存进去却找不到。
+        if (!string.IsNullOrWhiteSpace(session.WorkspacePath) && IsCollapsed(Settings, session.WorkspacePath))
+        {
+            SetCollapsed(Settings, session.WorkspacePath, false);
+            await SettingsProvider.SaveAsync(Settings);
+        }
+
         await _sessions.SaveAsync(session);
         await ReloadSessionsAsync();
         await SetActiveSessionAsync(session.Id);
@@ -194,12 +207,26 @@ public sealed partial class MainWindowViewModel : ObservableObject
     {
         var settings = Settings;
         settings.WorkspacePath = folder;
-        settings.RecentWorkspaces.RemoveAll(path => string.Equals(path, folder, StringComparison.OrdinalIgnoreCase));
-        settings.RecentWorkspaces.Insert(0, folder);
+
+        // 只是切换当前工作区，不动列表顺序：空间按加入的先后排，点一下就跳位会让人找不到刚才那个。
+        if (!settings.RecentWorkspaces.Contains(folder, StringComparer.OrdinalIgnoreCase))
+        {
+            settings.RecentWorkspaces.Add(folder);
+        }
 
         Home.Refresh();
         await ReloadWorkspacesAsync();
         await SettingsProvider.SaveAsync(settings);
+    }
+
+    /// <summary>点空间标题：展开/收起它下面的对话，同时把这个空间设为当前工作区。</summary>
+    public void ToggleWorkspace(WorkspaceItemViewModel item)
+    {
+        var expand = !item.IsExpanded;
+        SetCollapsed(Settings, item.Path, !expand);
+        item.IsExpanded = expand;
+
+        _ = SelectWorkspaceAsync(item.Path);
     }
 
     /// <summary>把已有记录换成另一个目录；换的正好是当前工作区时，当前也跟着切过去。</summary>
@@ -214,16 +241,29 @@ public sealed partial class MainWindowViewModel : ObservableObject
         var settings = Settings;
         var wasActive = string.Equals(settings.WorkspacePath, oldPath, StringComparison.OrdinalIgnoreCase);
 
-        settings.RecentWorkspaces.RemoveAll(path =>
-            string.Equals(path, oldPath, StringComparison.OrdinalIgnoreCase)
-            || string.Equals(path, folder, StringComparison.OrdinalIgnoreCase));
+        // 换目录是原地替换，别把它挪到列表第一位
+        var index = settings.RecentWorkspaces.FindIndex(path => SamePath(path, oldPath));
+        settings.RecentWorkspaces.RemoveAll(path => SamePath(path, folder) || SamePath(path, oldPath));
+
+        if (index < 0 || index > settings.RecentWorkspaces.Count)
+        {
+            settings.RecentWorkspaces.Add(folder);
+        }
+        else
+        {
+            settings.RecentWorkspaces.Insert(index, folder);
+        }
 
         if (wasActive)
         {
             settings.WorkspacePath = folder;
         }
 
-        settings.RecentWorkspaces.Insert(0, folder);
+        // 收起状态跟着旧目录一起搬过去
+        if (IsCollapsed(settings, oldPath))
+        {
+            SetCollapsed(settings, folder, true);
+        }
 
         Home.Refresh();
         await ReloadWorkspacesAsync();
@@ -299,15 +339,20 @@ public sealed partial class MainWindowViewModel : ObservableObject
             settings.WorkspacePath = target;
         }
 
-        var index = settings.RecentWorkspaces.FindIndex(item =>
-            string.Equals(item, path, StringComparison.OrdinalIgnoreCase));
+        var index = settings.RecentWorkspaces.FindIndex(item => SamePath(item, path));
         if (index >= 0)
         {
             settings.RecentWorkspaces[index] = target;
         }
         else
         {
-            settings.RecentWorkspaces.Insert(0, target);
+            settings.RecentWorkspaces.Add(target);
+        }
+
+        // 收起状态跟着目录一起搬过去
+        if (IsCollapsed(settings, path))
+        {
+            SetCollapsed(settings, target, true);
         }
 
         Home.Refresh();
@@ -328,7 +373,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
             settings.WorkspacePath = string.Empty;
         }
 
-        settings.RecentWorkspaces.RemoveAll(item => string.Equals(item, path, StringComparison.OrdinalIgnoreCase));
+        settings.RecentWorkspaces.RemoveAll(item => SamePath(item, path));
+        SetCollapsed(settings, path, false);
 
         Home.Refresh();
         await ReloadWorkspacesAsync();
@@ -344,72 +390,124 @@ public sealed partial class MainWindowViewModel : ObservableObject
             _sessionCache[session.Id] = session;
         }
 
+        await Ui.OnUiAsync(RebuildSidebar);
+    }
+
+    public Task ReloadWorkspacesAsync() => Ui.OnUiAsync(RebuildSidebar);
+
+    /// <summary>
+    /// 侧边栏的统一重建入口：先按空间把对话分下去，剩下的按日期归到「任务」。
+    /// 空间顺序只看添加顺序，点和展开都不改变它。
+    /// </summary>
+    private void RebuildSidebar()
+    {
+        var settings = Settings;
         var activeId = (CurrentPage as ChatViewModel)?.Session.Id;
-        var groups = new List<SessionGroupViewModel>();
+        var sessions = _sessionCache.Values
+            .OrderByDescending(session => session.UpdatedAt)
+            .ToList();
 
-        foreach (var group in sessions
-                     .GroupBy(session => GroupName(session.UpdatedAt))
-                     .OrderBy(group => GroupOrder(group.Key)))
+        var claimed = new HashSet<string>(StringComparer.Ordinal);
+        var items = new List<WorkspaceItemViewModel>();
+
+        foreach (var path in WorkspacePaths(settings))
         {
-            var items = group
-                .OrderByDescending(session => session.UpdatedAt)
-                .Select(session => new SessionItemViewModel(
-                    session,
-                    id => _ = OpenSessionAsync(id),
-                    id => _ = DeleteSessionAsync(id))
-                {
-                    IsActive = session.Id == activeId,
-                });
+            var item = new WorkspaceItemViewModel(
+                path,
+                ToggleWorkspace,
+                OpenWorkspaceFolder,
+                RenameWorkspaceAsync,
+                RepickWorkspaceAsync,
+                RemoveWorkspaceAsync)
+            {
+                IsActive = SamePath(path, settings.WorkspacePath),
+                IsExpanded = !IsCollapsed(settings, path),
+            };
 
-            groups.Add(new SessionGroupViewModel(group.Key, items));
+            foreach (var session in sessions.Where(session => !claimed.Contains(session.Id) && SamePath(session.WorkspacePath, path)))
+            {
+                claimed.Add(session.Id);
+                item.Sessions.Add(CreateSessionItem(session, activeId));
+            }
+
+            item.RefreshSessions();
+            items.Add(item);
+        }
+
+        Workspaces.Clear();
+        foreach (var item in items)
+        {
+            Workspaces.Add(item);
         }
 
         SessionGroups.Clear();
-        foreach (var group in groups)
+        foreach (var group in sessions
+                     .Where(session => !claimed.Contains(session.Id))
+                     .GroupBy(session => GroupName(session.UpdatedAt))
+                     .OrderBy(group => GroupOrder(group.Key)))
         {
-            SessionGroups.Add(group);
+            SessionGroups.Add(new SessionGroupViewModel(
+                group.Key,
+                group.Select(session => CreateSessionItem(session, activeId))));
         }
 
         OnPropertyChanged(nameof(SessionCountText));
         OnPropertyChanged(nameof(HasNoSessions));
+        OnPropertyChanged(nameof(ShowTaskSection));
+        OnPropertyChanged(nameof(HasWorkspaces));
     }
 
-    public async Task ReloadWorkspacesAsync()
-    {
-        var settings = Settings;
-        var paths = new List<string>();
-        if (!string.IsNullOrWhiteSpace(settings.WorkspacePath))
+    private SessionItemViewModel CreateSessionItem(ChatSession session, string? activeId)
+        => new(
+            session,
+            id => _ = OpenSessionAsync(id),
+            id => _ = DeleteSessionAsync(id))
         {
-            paths.Add(settings.WorkspacePath);
-        }
+            IsActive = session.Id == activeId,
+        };
 
+    /// <summary>空间列表：按用户添加的先后排，当前工作区不在里面时补到最后。</summary>
+    private static List<string> WorkspacePaths(AssistantSettings settings)
+    {
+        var paths = new List<string>();
         foreach (var path in settings.RecentWorkspaces)
         {
-            if (!paths.Contains(path, StringComparer.OrdinalIgnoreCase))
+            if (!string.IsNullOrWhiteSpace(path) && !paths.Contains(path, StringComparer.OrdinalIgnoreCase))
             {
                 paths.Add(path);
             }
         }
 
-        await Ui.OnUiAsync(() =>
+        if (!string.IsNullOrWhiteSpace(settings.WorkspacePath)
+            && !paths.Contains(settings.WorkspacePath, StringComparer.OrdinalIgnoreCase))
         {
-            Workspaces.Clear();
-            foreach (var path in paths.Take(6))
-            {
-                Workspaces.Add(new WorkspaceItemViewModel(
-                    path,
-                    SelectWorkspace,
-                    OpenWorkspaceFolder,
-                    RenameWorkspaceAsync,
-                    RepickWorkspaceAsync,
-                    RemoveWorkspaceAsync)
-                {
-                    IsActive = string.Equals(path, settings.WorkspacePath, StringComparison.OrdinalIgnoreCase),
-                });
-            }
+            paths.Add(settings.WorkspacePath);
+        }
 
-            OnPropertyChanged(nameof(HasWorkspaces));
-        });
+        return paths.Take(MaxWorkspaces).ToList();
+    }
+
+    private static bool SamePath(string? left, string? right)
+        => !string.IsNullOrWhiteSpace(left)
+           && !string.IsNullOrWhiteSpace(right)
+           && string.Equals(
+               left.TrimEnd(System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar),
+               right.TrimEnd(System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar),
+               StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>这个空间是不是被收起了。收起状态跟着设置走，重启之后还是原样。</summary>
+    private static bool IsCollapsed(AssistantSettings settings, string path)
+        => settings.CollapsedWorkspaces?.Any(item => SamePath(item, path)) == true;
+
+    private static void SetCollapsed(AssistantSettings settings, string path, bool collapsed)
+    {
+        settings.CollapsedWorkspaces ??= [];
+        settings.CollapsedWorkspaces.RemoveAll(item => SamePath(item, path));
+
+        if (collapsed)
+        {
+            settings.CollapsedWorkspaces.Add(path);
+        }
     }
 
     public void LoadDemoChat()
@@ -418,45 +516,48 @@ public sealed partial class MainWindowViewModel : ObservableObject
         CurrentPage = new ChatViewModel(this, session);
     }
 
+    /// <summary>仅用于 --screenshot：塞几轮假对话，让侧栏的空间/任务分层能看出效果。</summary>
     public void LoadDemoSidebar()
     {
-        var demo = new List<SessionItemViewModel>
+        var paths = WorkspacePaths(Settings);
+        var now = DateTimeOffset.Now;
+
+        _sessionCache.Clear();
+
+        var demos = new (string Id, string Title, string? Workspace, TimeSpan Ago)[]
         {
-            new(new ChatSession
-            {
-                Id = "demo",
-                Title = "整理电脑配置清单",
-                UpdatedAt = DateTimeOffset.Now.AddMinutes(-12),
-            }, _ => { }, _ => { })
-            {
-                IsActive = true,
-            },
-            new(new ChatSession
-            {
-                Id = "demo-2",
-                Title = "把周报改成三段式",
-                UpdatedAt = DateTimeOffset.Now.AddHours(-3),
-            }, _ => { }, _ => { }),
-            new(new ChatSession
-            {
-                Id = "demo-3",
-                Title = "下载目录大文件排查",
-                UpdatedAt = DateTimeOffset.Now.AddDays(-1),
-            }, _ => { }, _ => { }),
+            ("demo", "整理电脑配置清单", paths.FirstOrDefault(), TimeSpan.FromMinutes(-12)),
+            ("demo-2", "把周报改成三段式", paths.FirstOrDefault(), TimeSpan.FromHours(-3)),
+            ("demo-3", "下载目录大文件排查", paths.FirstOrDefault(), TimeSpan.FromDays(-1)),
+            ("demo-4", "检查 pi 项目新版本并移植", paths.Skip(1).FirstOrDefault(), TimeSpan.FromHours(-6)),
+            ("demo-5", "配置 GitHub 工作流并发布", paths.Skip(1).FirstOrDefault(), TimeSpan.FromMinutes(-8)),
+            ("demo-6", "功能未真实生效的问题", null, TimeSpan.FromMinutes(-44)),
         };
 
-        SessionGroups.Clear();
-        SessionGroups.Add(new SessionGroupViewModel("今天", demo.Take(2)));
-        SessionGroups.Add(new SessionGroupViewModel("昨天", demo.Skip(2)));
-        OnPropertyChanged(nameof(SessionCountText));
-        OnPropertyChanged(nameof(HasNoSessions));
+        foreach (var demo in demos)
+        {
+            _sessionCache[demo.Id] = new ChatSession
+            {
+                Id = demo.Id,
+                Title = demo.Title,
+                WorkspacePath = demo.Workspace,
+                CreatedAt = now + demo.Ago,
+                UpdatedAt = now + demo.Ago,
+            };
+        }
+
+        RebuildSidebar();
     }
 
     private async Task SetActiveSessionAsync(string? sessionId)
     {
         await Ui.OnUiAsync(() =>
         {
-            foreach (var item in SessionGroups.SelectMany(group => group.Items))
+            var items = SessionGroups
+                .SelectMany(group => group.Items)
+                .Concat(Workspaces.SelectMany(workspace => workspace.Sessions));
+
+            foreach (var item in items)
             {
                 item.IsActive = item.Id == sessionId;
             }

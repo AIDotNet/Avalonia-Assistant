@@ -46,6 +46,20 @@
     <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
   </Style>
 
+  <!-- 空间下的对话：缩进后比普通任务行紧一档，一行能多放一点 -->
+  <Style Selector="Button.task.child">
+    <Setter Property="Padding" Value="8,4" />
+    <Setter Property="CornerRadius" Value="7" />
+  </Style>
+
+  <!-- 空间标题：比导航项矮一档，左边留出展开箭头的位置 -->
+  <Style Selector="Button.nav.ws-head">
+    <Setter Property="Height" Value="32" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="Padding" Value="7,0" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+  </Style>
+
   <Style Selector="Button.icon">
     <Setter Property="Width" Value="30" />
     <Setter Property="Height" Value="30" />
@@ -323,11 +337,31 @@
   </Style>
 
   <!-- 工作区的「⋯」平时藏起来，鼠标进这一行才露出来，免得侧栏一直挂着一排点 -->
-  <Style Selector="Grid.workspace-row Button.ws-more">
+  <Style Selector="Border.ws-chip:pointerover Button.ws-more">
+    <Setter Property="Opacity" Value="1" />
+  </Style>
+  <Style Selector="Button.ws-more">
     <Setter Property="Opacity" Value="0" />
   </Style>
-  <Style Selector="Grid.workspace-row:pointerover Button.ws-more">
-    <Setter Property="Opacity" Value="1" />
+
+  <!-- 空间这一行整块亮：名字和「⋯」落在同一个圆角块里，不在按钮和图标之间断开 -->
+  <Style Selector="Border.ws-chip">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Border.ws-chip:pointerover">
+    <Setter Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+  </Style>
+  <Style Selector="Border.ws-chip.active">
+    <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+  </Style>
+  <Style Selector="Border.ws-chip.active:pointerover">
+    <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+  </Style>
+  <Style Selector="Button.nav.ws-head:pointerover">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Button.nav.ws-head.active">
+    <Setter Property="Background" Value="Transparent" />
   </Style>
 
   <Style Selector="Button.tool-head">

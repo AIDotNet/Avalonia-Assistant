@@ -65,7 +65,7 @@ public sealed partial class SessionItemViewModel : ObservableObject
 
 public sealed partial class WorkspaceItemViewModel : ObservableObject
 {
-    private readonly Action<string> _select;
+    private readonly Action<WorkspaceItemViewModel> _toggle;
     private readonly Action<string> _open;
     private readonly Func<string, string, Task<string?>> _rename;
     private readonly Func<string, Task> _repick;
@@ -73,7 +73,7 @@ public sealed partial class WorkspaceItemViewModel : ObservableObject
 
     public WorkspaceItemViewModel(
         string path,
-        Action<string> select,
+        Action<WorkspaceItemViewModel> toggle,
         Action<string> open,
         Func<string, string, Task<string?>> rename,
         Func<string, Task> repick,
@@ -85,7 +85,7 @@ public sealed partial class WorkspaceItemViewModel : ObservableObject
             : System.IO.Path.GetFileName(path.TrimEnd(System.IO.Path.DirectorySeparatorChar)) is { Length: > 0 } name
                 ? name
                 : path;
-        _select = select;
+        _toggle = toggle;
         _open = open;
         _rename = rename;
         _repick = repick;
@@ -96,11 +96,32 @@ public sealed partial class WorkspaceItemViewModel : ObservableObject
 
     public string Name { get; }
 
+    /// <summary>这个空间下的对话，按最近更新时间排。</summary>
+    public ObservableCollection<SessionItemViewModel> Sessions { get; } = [];
+
+    public string CountText => Sessions.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>收起时才在标题右边露个条数，展开时对话本身就看得见，不用再挂一个数字。</summary>
+    public bool ShowCount => !IsExpanded && Sessions.Count > 0;
+
     [ObservableProperty]
     private bool isActive;
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CountText))]
+    [NotifyPropertyChangedFor(nameof(ShowCount))]
+    private bool isExpanded = true;
+
+    /// <summary>点标题：展开/收起空间下的对话，同时把它设为当前工作区。</summary>
     [RelayCommand]
-    private void Select() => _select(Path);
+    private void Toggle() => _toggle(this);
+
+    /// <summary>对话列表填完之后刷新一下标题上的条数。</summary>
+    public void RefreshSessions()
+    {
+        OnPropertyChanged(nameof(CountText));
+        OnPropertyChanged(nameof(ShowCount));
+    }
 
     /// <summary>在资源管理器里打开这个目录。</summary>
     public void OpenFolder() => _open(Path);

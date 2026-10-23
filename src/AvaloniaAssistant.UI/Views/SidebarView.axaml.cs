@@ -10,6 +10,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using AvaloniaAssistant.UI.ViewModels;
 using ArcGlyph = TKCode.Arc.ArcGlyph;
+using ArcInput = TKCode.Arc.Input;
 using ArcIcons = TKCode.Arc.ArcIcons;
 
 namespace AvaloniaAssistant.UI.Views;
@@ -52,6 +53,7 @@ public partial class SidebarView : UserControl
         flyout.ShowAt(target);
     }
 
+    /// <summary>菜单和重命名卡都在同一个弹层里，靠显隐切换，避免换窗口导致定位丢失。</summary>
     private Control BuildMenu(Flyout flyout, WorkspaceItemViewModel item)
     {
         var rows = new StackPanel { Spacing = 1 };
@@ -68,7 +70,15 @@ public partial class SidebarView : UserControl
             item.RepickCommand.Execute(null);
         }));
 
-        rows.Children.Add(MenuRow("重命名", ArcIcons.Pencil, () => flyout.Content = BuildRename(flyout, item)));
+        var (renameCard, input) = BuildRename(flyout, item);
+        renameCard.IsVisible = false;
+
+        rows.Children.Add(MenuRow("重命名", ArcIcons.Pencil, () =>
+        {
+            rows.IsVisible = false;
+            renameCard.IsVisible = true;
+            Dispatcher.UIThread.Post(() => input.Focus(), DispatcherPriority.Background);
+        }));
 
         rows.Children.Add(new Border
         {
@@ -96,17 +106,17 @@ public partial class SidebarView : UserControl
             BorderBrush = ThemeBrush("BorderStrongBrush", Brushes.Gainsboro),
             BorderThickness = new Thickness(1),
             BoxShadow = ThemeShadow("ComposerShadow"),
-            Child = rows,
+            Child = new Panel { Children = { rows, renameCard } },
         };
     }
 
-    /// <summary>重命名用的小卡片：一个输入框 + 确定/取消，出错就把原因写在下面。换掉菜单内容，弹层不重新定位。</summary>
-    private Control BuildRename(Flyout flyout, WorkspaceItemViewModel item)
+    /// <summary>重命名用的小卡片：一个输入框 + 确定/取消，出错就把原因写在下面。</summary>
+    private (Border Card, ArcInput Input) BuildRename(Flyout flyout, WorkspaceItemViewModel item)
     {
-        var input = new TextBox
+        // 用 Arc 的 Input 而不是 Avalonia 的 TextBox：这套主题没给 TextBox 配模板，放上去是一片空白
+        var input = new ArcInput
         {
             Text = item.Name,
-            Width = 214,
             FontSize = 12.5,
             Margin = new Thickness(0, 2, 0, 0),
         };
@@ -147,34 +157,27 @@ public partial class SidebarView : UserControl
             Children = { cancel, confirm },
         };
 
-        var card = new StackPanel
+        var card = new Border
         {
-            Width = 230,
-            Spacing = 8,
-            Children =
+            Width = 232,
+            Padding = new Thickness(8, 7, 8, 8),
+            Child = new StackPanel
             {
-                new TextBlock
+                Spacing = 8,
+                Children =
                 {
-                    Text = "重命名目录",
-                    FontSize = 12.5,
-                    FontWeight = FontWeight.SemiBold,
-                    Foreground = ThemeBrush("TextPrimaryBrush", Brushes.Black),
+                    new TextBlock
+                    {
+                        Text = "重命名目录",
+                        FontSize = 12.5,
+                        FontWeight = FontWeight.SemiBold,
+                        Foreground = ThemeBrush("TextPrimaryBrush", Brushes.Black),
+                    },
+                    input,
+                    error,
+                    actions,
                 },
-                input,
-                error,
-                actions,
             },
-        };
-
-        var border = new Border
-        {
-            Padding = new Thickness(12),
-            CornerRadius = new CornerRadius(12),
-            Background = ThemeBrush("SurfaceBrush", Brushes.White),
-            BorderBrush = ThemeBrush("BorderStrongBrush", Brushes.Gainsboro),
-            BorderThickness = new Thickness(1),
-            BoxShadow = ThemeShadow("ComposerShadow"),
-            Child = card,
         };
 
         cancel.Click += (_, _) => flyout.Hide();
@@ -206,14 +209,7 @@ public partial class SidebarView : UserControl
             }
         };
 
-        // 内容换进已打开的弹层里，聚焦放到下一帧，等它真正挂上视觉树
-        Dispatcher.UIThread.Post(() =>
-        {
-            input.Focus();
-            input.SelectAll();
-        }, DispatcherPriority.Background);
-
-        return border;
+        return (card, input);
     }
 
     /// <summary>
