@@ -366,12 +366,19 @@
     <Setter Property="Background" Value="{StaticResource SurfaceMutedBrush}" />
   </Style>
 
-  <!-- 工作区的「⋯」平时藏起来，鼠标进这一行才露出来，免得侧栏一直挂着一排点 -->
-  <Style Selector="Border.ws-chip:pointerover Button.ws-more">
-    <Setter Property="Opacity" Value="1" />
-  </Style>
+  <!-- 工作区的「⋯」平时藏起来，鼠标进这一行才露出来，免得侧栏一直挂着一排点。
+       顺序有讲究：Avalonia 按声明顺序应用样式，后声明的会盖掉前面那条，
+       所以默认值必须写在 hover 规则前面——写反了「⋯」就永远出不来。 -->
   <Style Selector="Button.ws-more">
     <Setter Property="Opacity" Value="0" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <DoubleTransition Property="Opacity" Duration="0:0:0.12" />
+      </Transitions>
+    </Setter>
+  </Style>
+  <Style Selector="Border.ws-chip:pointerover Button.ws-more">
+    <Setter Property="Opacity" Value="1" />
   </Style>
 
   <!-- 空间这一行整块亮：名字和「⋯」落在同一个圆角块里，不在按钮和图标之间断开 -->
