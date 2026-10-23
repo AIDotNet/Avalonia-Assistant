@@ -64,6 +64,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     public bool HasNoSessions => SessionGroups.Count == 0;
 
+    /// <summary>「空间」里有没有东西可点；没有就说明当前是普通任务。</summary>
+    public bool HasWorkspaces => Workspaces.Count > 0;
+
     public bool IsConfigured => !string.IsNullOrWhiteSpace(Settings.ApiKey);
 
     public bool IsHomeSelected => CurrentPage is HomeViewModel;
@@ -199,6 +202,53 @@ public sealed partial class MainWindowViewModel : ObservableObject
         await SettingsProvider.SaveAsync(settings);
     }
 
+    /// <summary>把已有记录换成另一个目录；换的正好是当前工作区时，当前也跟着切过去。</summary>
+    public async Task RepickWorkspaceAsync(string oldPath)
+    {
+        var folder = await Picker.PickFolderAsync("重新选择工作区目录");
+        if (string.IsNullOrWhiteSpace(folder))
+        {
+            return;
+        }
+
+        var settings = Settings;
+        var wasActive = string.Equals(settings.WorkspacePath, oldPath, StringComparison.OrdinalIgnoreCase);
+
+        settings.RecentWorkspaces.RemoveAll(path =>
+            string.Equals(path, oldPath, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(path, folder, StringComparison.OrdinalIgnoreCase));
+
+        if (wasActive)
+        {
+            settings.WorkspacePath = folder;
+        }
+
+        settings.RecentWorkspaces.Insert(0, folder);
+
+        Home.Refresh();
+        await ReloadWorkspacesAsync();
+        await SettingsProvider.SaveAsync(settings);
+    }
+
+    /// <summary>
+    /// 从「空间」里去掉一条记录。去掉的如果是当前工作区，就把工作区清空——
+    /// 之后新建的任务不再带工作区，按普通对话处理。
+    /// </summary>
+    public async Task RemoveWorkspaceAsync(string path)
+    {
+        var settings = Settings;
+        if (string.Equals(settings.WorkspacePath, path, StringComparison.OrdinalIgnoreCase))
+        {
+            settings.WorkspacePath = string.Empty;
+        }
+
+        settings.RecentWorkspaces.RemoveAll(item => string.Equals(item, path, StringComparison.OrdinalIgnoreCase));
+
+        Home.Refresh();
+        await ReloadWorkspacesAsync();
+        await SettingsProvider.SaveAsync(settings);
+    }
+
     public async Task ReloadSessionsAsync()
     {
         var sessions = await _sessions.LoadAllAsync();
@@ -260,11 +310,13 @@ public sealed partial class MainWindowViewModel : ObservableObject
             Workspaces.Clear();
             foreach (var path in paths.Take(6))
             {
-                Workspaces.Add(new WorkspaceItemViewModel(path, SelectWorkspace)
+                Workspaces.Add(new WorkspaceItemViewModel(path, SelectWorkspace, RepickWorkspaceAsync, RemoveWorkspaceAsync)
                 {
                     IsActive = string.Equals(path, settings.WorkspacePath, StringComparison.OrdinalIgnoreCase),
                 });
             }
+
+            OnPropertyChanged(nameof(HasWorkspaces));
         });
     }
 

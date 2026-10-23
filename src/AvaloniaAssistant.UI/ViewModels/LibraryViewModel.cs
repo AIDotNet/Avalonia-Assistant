@@ -67,6 +67,11 @@ public sealed partial class LibraryViewModel : ObservableObject
     {
         get
         {
+            if (string.IsNullOrWhiteSpace(WorkspacePath))
+            {
+                return "未绑定工作区";
+            }
+
             var path = WorkspacePath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
             var name = Path.GetFileName(path);
             return string.IsNullOrWhiteSpace(name) ? path : name;

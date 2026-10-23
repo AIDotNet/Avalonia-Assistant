@@ -58,7 +58,7 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
         get
         {
             var workspace = string.IsNullOrWhiteSpace(Session.WorkspacePath)
-                ? "未设置工作区"
+                ? "普通任务"
                 : Path.GetFileName(Session.WorkspacePath.TrimEnd(Path.DirectorySeparatorChar));
             return $"{workspace} · {_settings.Current.Model}";
         }

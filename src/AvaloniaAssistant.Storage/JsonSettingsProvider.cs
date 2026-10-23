@@ -85,11 +85,8 @@ public sealed class JsonSettingsProvider : ISettingsProvider
 
     private static void Normalize(AssistantSettings settings)
     {
-        if (string.IsNullOrWhiteSpace(settings.WorkspacePath))
-        {
-            settings.WorkspacePath = AppPaths.DefaultWorkspace;
-        }
-
+        // 工作区允许为空：用户把「空间」里的记录删干净后，任务就是普通对话。
+        // 空值不能再回落到默认工作区，否则删了下次启动又冒出来。
         if (string.IsNullOrWhiteSpace(settings.Model))
         {
             settings.Model = ProviderPreset.For(settings.Provider).Model;

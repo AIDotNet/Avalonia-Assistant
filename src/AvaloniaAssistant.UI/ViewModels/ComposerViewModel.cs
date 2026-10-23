@@ -260,7 +260,7 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
     {
         if (string.IsNullOrWhiteSpace(path))
         {
-            return "选择工作区";
+            return "普通任务";
         }
 
         var trimmed = path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);

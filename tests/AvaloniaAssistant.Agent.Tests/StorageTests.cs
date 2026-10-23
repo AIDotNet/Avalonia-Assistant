@@ -36,6 +36,32 @@ public sealed class StorageTests
     }
 
     [Fact]
+    public async Task EmptyWorkspaceStaysEmptyAfterReload()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "ava-tests", Guid.NewGuid().ToString("n"));
+        Directory.CreateDirectory(directory);
+        var file = Path.Combine(directory, "settings.json");
+
+        var provider = new JsonSettingsProvider(file);
+        await provider.LoadAsync();
+
+        // 用户把「空间」里的记录删干净：工作区留空，历史也清掉
+        var settings = provider.Current;
+        settings.WorkspacePath = string.Empty;
+        settings.RecentWorkspaces.Clear();
+        await provider.SaveAsync(settings);
+
+        var reloaded = new JsonSettingsProvider(file);
+        await reloaded.LoadAsync();
+
+        // 空工作区不能被回落成默认工作区，否则删掉的记录下次启动又冒出来
+        Assert.Equal(string.Empty, reloaded.Current.WorkspacePath);
+        Assert.Empty(reloaded.Current.RecentWorkspaces);
+
+        Directory.Delete(directory, recursive: true);
+    }
+
+    [Fact]
     public async Task SessionStoreRoundTripAndDelete()
     {
         var directory = Path.Combine(Path.GetTempPath(), "ava-tests", Guid.NewGuid().ToString("n"));

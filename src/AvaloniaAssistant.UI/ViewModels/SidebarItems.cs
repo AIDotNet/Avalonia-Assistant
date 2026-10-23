@@ -66,8 +66,14 @@ public sealed partial class SessionItemViewModel : ObservableObject
 public sealed partial class WorkspaceItemViewModel : ObservableObject
 {
     private readonly Action<string> _select;
+    private readonly Func<string, Task> _repick;
+    private readonly Func<string, Task> _remove;
 
-    public WorkspaceItemViewModel(string path, Action<string> select)
+    public WorkspaceItemViewModel(
+        string path,
+        Action<string> select,
+        Func<string, Task> repick,
+        Func<string, Task> remove)
     {
         Path = path;
         Name = string.IsNullOrWhiteSpace(path)
@@ -76,6 +82,8 @@ public sealed partial class WorkspaceItemViewModel : ObservableObject
                 ? name
                 : path;
         _select = select;
+        _repick = repick;
+        _remove = remove;
     }
 
     public string Path { get; }
@@ -87,4 +95,12 @@ public sealed partial class WorkspaceItemViewModel : ObservableObject
 
     [RelayCommand]
     private void Select() => _select(Path);
+
+    /// <summary>换一个目录顶替这条记录，原来选中的话跟着切过去。</summary>
+    [RelayCommand]
+    private Task RepickAsync() => _repick(Path);
+
+    /// <summary>从列表里去掉；如果它是当前工作区，清空后这一轮任务按普通对话处理。</summary>
+    [RelayCommand]
+    private Task RemoveAsync() => _remove(Path);
 }

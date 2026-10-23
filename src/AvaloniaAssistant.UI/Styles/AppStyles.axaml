@@ -263,6 +263,14 @@
     <Setter Property="Opacity" Value="1" />
   </Style>
 
+  <!-- 工作区的「⋯」平时藏起来，鼠标进这一行才露出来，免得侧栏一直挂着一排点 -->
+  <Style Selector="Grid.workspace-row Button.ws-more">
+    <Setter Property="Opacity" Value="0" />
+  </Style>
+  <Style Selector="Grid.workspace-row:pointerover Button.ws-more">
+    <Setter Property="Opacity" Value="1" />
+  </Style>
+
   <Style Selector="Button.tool-head">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />

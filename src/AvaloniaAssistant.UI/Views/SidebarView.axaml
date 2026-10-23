@@ -176,22 +176,39 @@
           <ItemsControl ItemsSource="{Binding Workspaces}">
             <ItemsControl.ItemTemplate>
               <DataTemplate>
-                <Button Classes="nav"
-                        Classes.active="{Binding IsActive}"
-                        Command="{Binding SelectCommand}"
-                        ToolTip.Tip="{Binding Path}">
-                  <StackPanel Orientation="Horizontal" Spacing="9">
-                    <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Folder}"
-                                  Size="15"
-                                  Foreground="{Binding $parent[Button].Foreground}" />
-                    <TextBlock Text="{Binding Name}"
-                               VerticalAlignment="Center"
-                               TextTrimming="CharacterEllipsis" />
-                  </StackPanel>
-                </Button>
+                <Grid Classes="workspace-row" ColumnDefinitions="*,Auto">
+                  <Button Classes="nav"
+                          Classes.active="{Binding IsActive}"
+                          Command="{Binding SelectCommand}"
+                          ToolTip.Tip="{Binding Path}">
+                    <StackPanel Orientation="Horizontal" Spacing="9">
+                      <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Folder}"
+                                    Size="15"
+                                    Foreground="{Binding $parent[Button].Foreground}" />
+                      <TextBlock Text="{Binding Name}"
+                                 VerticalAlignment="Center"
+                                 TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                  </Button>
+                  <Button Grid.Column="1"
+                          Classes="icon ws-more"
+                          Width="22"
+                          Height="22"
+                          Click="OnWorkspaceMenuClick"
+                          ToolTip.Tip="重新选择目录或移除">
+                    <TextBlock Text="⋯" FontSize="14" VerticalAlignment="Center" />
+                  </Button>
+                </Grid>
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>
+
+          <TextBlock Text="没有工作区，任务按普通对话处理。"
+                     Classes="caption"
+                     FontSize="10.5"
+                     Margin="8,2,0,2"
+                     TextWrapping="Wrap"
+                     IsVisible="{Binding !HasWorkspaces}" />
 
           <Button Classes="nav" Command="{Binding AddWorkspaceCommand}">
             <StackPanel Orientation="Horizontal" Spacing="9">
