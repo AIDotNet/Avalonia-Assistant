@@ -1,6 +1,13 @@
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:arc="https://github.com/AtomUICommunity/TKCode.Arc">
+  <!-- Arc 主题把 Button 的内容对齐默认设成 Stretch，纯文字按钮的文字会贴着上沿。
+       统一改成居中，带图标的按钮靠内容自身的 VerticalAlignment 对齐，不受影响。 -->
+  <Style Selector="Button">
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+
   <Style Selector="Button.nav">
     <Setter Property="Height" Value="36" />
     <Setter Property="Padding" Value="9,0" />
@@ -112,15 +119,21 @@
     <Setter Property="Background" Value="#C9C9C2" />
   </Style>
 
+  <!-- 停止：只有一个方形图标，做成和发送按钮同尺寸的圆形按钮 -->
   <Style Selector="Button.stop">
+    <Setter Property="Width" Value="34" />
     <Setter Property="Height" Value="34" />
-    <Setter Property="Padding" Value="12,0" />
+    <Setter Property="Padding" Value="0" />
     <Setter Property="CornerRadius" Value="17" />
     <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
     <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
     <Setter Property="BorderBrush" Value="{StaticResource BorderStrongBrush}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="FontSize" Value="12" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.stop:pointerover">
+    <Setter Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
   </Style>
 
   <Style Selector="Button.ghost-action">
@@ -264,22 +277,31 @@
 
   <Style Selector="Button.approve">
     <Setter Property="Height" Value="32" />
+    <Setter Property="MinWidth" Value="76" />
     <Setter Property="Padding" Value="14,0" />
     <Setter Property="CornerRadius" Value="9" />
     <Setter Property="Background" Value="{StaticResource AccentBrush}" />
     <Setter Property="Foreground" Value="{StaticResource AccentForegroundBrush}" />
     <Setter Property="BorderThickness" Value="0" />
-    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontSize" Value="12.5" />
+  </Style>
+  <Style Selector="Button.approve:pointerover">
+    <Setter Property="Background" Value="#3A3A36" />
   </Style>
   <Style Selector="Button.deny">
     <Setter Property="Height" Value="32" />
+    <Setter Property="MinWidth" Value="64" />
     <Setter Property="Padding" Value="14,0" />
     <Setter Property="CornerRadius" Value="9" />
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
     <Setter Property="BorderBrush" Value="{StaticResource BorderStrongBrush}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontSize" Value="12.5" />
+  </Style>
+  <Style Selector="Button.deny:pointerover">
+    <Setter Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource TextMutedBrush}" />
   </Style>
 
   <Style Selector="arc|Textarea.composer /template/ arc|Field arc|FieldFrame">
