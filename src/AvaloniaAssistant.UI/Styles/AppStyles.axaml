@@ -46,10 +46,42 @@
     <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
   </Style>
 
-  <!-- 空间下的对话：缩进后比普通任务行紧一档，一行能多放一点 -->
-  <Style Selector="Button.task.child">
-    <Setter Property="Padding" Value="8,4" />
-    <Setter Property="CornerRadius" Value="7" />
+  <!-- 对话行：默认显示时间；鼠标移到这一行，时间淡出、「⋯」出现，点击才展开菜单 -->
+  <Style Selector="Grid.task-row TextBlock.row-time">
+    <Setter Property="Opacity" Value="0" />
+  </Style>
+  <Style Selector="Grid.task-row:pointerover TextBlock.row-time">
+    <Setter Property="Opacity" Value="0" />
+  </Style>
+  <Style Selector="Button.row-more">
+    <Setter Property="IsVisible" Value="True" />
+  </Style>
+  <Style Selector="Grid.task-row:pointerover Button.row-more">
+    <Setter Property="IsVisible" Value="True" />
+  </Style>
+
+  <!-- 悬停信息卡：压在聊天区上面，白底 + 细边 + 轻阴影 -->
+  <Style Selector="Border.hover-card">
+    <Setter Property="Width" Value="236" />
+    <Setter Property="Padding" Value="12" />
+    <Setter Property="CornerRadius" Value="12" />
+    <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource BorderStrongBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BoxShadow" Value="{StaticResource ComposerShadow}" />
+  </Style>
+
+  <Style Selector="Border.tag">
+    <Setter Property="Background" Value="{StaticResource SurfaceMutedBrush}" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="Padding" Value="5,1" />
+  </Style>
+
+  <!-- 卡片自带一层皮，去掉 ToolTip 默认的内边距和底色，只留我们自己的 Border -->
+  <Style Selector="ToolTip">
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
   </Style>
 
   <!-- 空间标题：比导航项矮一档，左边留出展开箭头的位置 -->
@@ -327,13 +359,6 @@
   <Style Selector="Button.card-button:pointerover Border.card">
     <Setter Property="BorderBrush" Value="{StaticResource BorderStrongBrush}" />
     <Setter Property="Background" Value="{StaticResource SurfaceMutedBrush}" />
-  </Style>
-
-  <Style Selector="Grid.task-row Button.delete">
-    <Setter Property="Opacity" Value="0" />
-  </Style>
-  <Style Selector="Grid.task-row:pointerover Button.delete">
-    <Setter Property="Opacity" Value="1" />
   </Style>
 
   <!-- 工作区的「⋯」平时藏起来，鼠标进这一行才露出来，免得侧栏一直挂着一排点 -->

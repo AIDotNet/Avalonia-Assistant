@@ -1,0 +1,20 @@
+{
+  "Provider": 0,
+  "ApiKey": "",
+  "BaseUrl": "https://api.deepseek.com/v1",
+  "Model": "deepseek-flash",
+  "Temperature": 0.7,
+  "MaxTokens": 4096,
+  "SpeechModel": "whisper-1",
+  "Permission": 1,
+  "WorkspacePath": "D:/AI/AntBlazor/Avalonia-Assistant/.tmp-shot/ws-alpha",
+  "TrustWorkspace": true,
+  "UserName": "28651",
+  "RecentWorkspaces": [
+    "D:/AI/AntBlazor/Avalonia-Assistant/.tmp-shot/ws-alpha",
+    "D:/AI/AntBlazor/Avalonia-Assistant/.tmp-shot/ws-beta"
+  ],
+  "CollapsedWorkspaces": [],
+  "DisabledTools": [],
+  "Mode": "office"
+}

@@ -22,45 +22,59 @@ public sealed partial class SessionItemViewModel : ObservableObject
 {
     private readonly Action<string> _open;
     private readonly Action<string> _delete;
+    private readonly Func<string, string, Task<string?>> _rename;
 
-    public SessionItemViewModel(ChatSession session, Action<string> open, Action<string> delete)
+    public SessionItemViewModel(
+        ChatSession session,
+        string workspaceName,
+        Action<string> open,
+        Action<string> delete,
+        Func<string, string, Task<string?>> rename)
     {
         Id = session.Id;
         Title = session.Title;
         TimeText = SessionText.RelativeTime(session.UpdatedAt);
+        WorkspaceName = string.IsNullOrWhiteSpace(workspaceName) ? "普通对话" : workspaceName;
+        ModeText = session.Mode switch
+        {
+            "code" or "coding" => "代码开发",
+            "design" => "设计",
+            _ => "办公",
+        };
+        UpdatedText = "更新于 " + session.UpdatedAt.LocalDateTime.ToString("yyyy/MM/dd HH:mm");
         _open = open;
         _delete = delete;
+        _rename = rename;
     }
 
     public string Id { get; }
 
     public string Title { get; }
 
+    /// <summary>默认显示在行尾，鼠标移到这一行时让位给「⋯」。</summary>
     public string TimeText { get; }
+
+    public string WorkspaceName { get; }
+
+    public string ModeText { get; }
+
+    public string UpdatedText { get; }
 
     [ObservableProperty]
     private bool isActive;
 
+    /// <summary>悬停卡片是否展开。由视图在鼠标进入/离开这一行时置位。</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(DeleteText))]
-    private bool confirmDelete;
-
-    public string DeleteText => ConfirmDelete ? "确认" : "删除";
+    private bool isCardOpen;
 
     [RelayCommand]
     private void Open() => _open(Id);
 
-    [RelayCommand]
-    private void Delete()
-    {
-        if (!ConfirmDelete)
-        {
-            ConfirmDelete = true;
-            return;
-        }
+    /// <summary>「⋯」菜单里的删除，用户已经在菜单里点过一次，直接删。</summary>
+    public void Remove() => _delete(Id);
 
-        _delete(Id);
-    }
+    /// <summary>改名。成功返回 null，失败返回一句能直接展示的原因。</summary>
+    public Task<string?> RenameAsync(string newTitle) => _rename(Id, newTitle);
 }
 
 public sealed partial class WorkspaceItemViewModel : ObservableObject

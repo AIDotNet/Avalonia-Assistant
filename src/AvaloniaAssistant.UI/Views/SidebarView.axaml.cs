@@ -53,9 +53,247 @@ public partial class SidebarView : UserControl
         flyout.ShowAt(target);
     }
 
-    /// <summary>菜单和重命名卡都在同一个弹层里，靠显隐切换，避免换窗口导致定位丢失。</summary>
-    private Control BuildMenu(Flyout flyout, WorkspaceItemViewModel item)
+    /// <summary>
+    /// 对话行右边那个「⋯」。默认不显示，鼠标移到这一行才出现；点它才展开菜单。
+    /// 弹层同样用 Flyout 自己排，原因和上面工作区的「⋯」一样。
+    /// </summary>
+    private void OnSessionMenuClick(object? sender, RoutedEventArgs e)
     {
+        if (sender is not Control target || target.DataContext is not SessionItemViewModel item)
+        {
+            return;
+        }
+
+        // 悬停信息卡可能还开着，点「⋯」时一起收掉，免得卡片和菜单叠在一起
+        if (target.Parent is Grid row)
+        {
+            ToolTip.SetIsOpen(row, false);
+        }
+
+        CloseFlyouts();
+
+        var flyout = new Flyout
+        {
+            Placement = PlacementMode.BottomEdgeAlignedRight,
+        };
+
+        flyout.Content = BuildSessionMenu(flyout, item);
+        flyout.Opened += (_, _) => AttachDismiss(flyout, target);
+
+        _menuFlyout = flyout;
+        flyout.ShowAt(target);
+    }
+
+    private Control BuildSessionMenu(Flyout flyout, SessionItemViewModel item)
+    {
+        var rows = new StackPanel { Spacing = 1 };
+
+        rows.Children.Add(MenuRow("打开任务", ArcIcons.CornerDownRight, () =>
+        {
+            CloseFlyouts();
+            item.OpenCommand.Execute(null);
+        }));
+
+        var (renameCard, input) = BuildSessionRename(flyout, item);
+        renameCard.IsVisible = false;
+
+        rows.Children.Add(MenuRow("重命名", ArcIcons.Pencil, () =>
+        {
+            rows.IsVisible = false;
+            renameCard.IsVisible = true;
+            Dispatcher.UIThread.Post(() => input.Focus(), DispatcherPriority.Background);
+        }));
+
+        rows.Children.Add(new Border
+        {
+            Height = 1,
+            Margin = new Thickness(6, 4),
+            Background = ThemeBrush("BorderBrush", Brushes.Gainsboro),
+        });
+
+        var deleteCard = BuildSessionDelete(flyout, item);
+        deleteCard.IsVisible = false;
+
+        rows.Children.Add(MenuRow("删除任务", ArcIcons.Trash2, () =>
+        {
+            rows.IsVisible = false;
+            deleteCard.IsVisible = true;
+        }, ThemeBrush("DangerBrush", Brushes.IndianRed)));
+
+        return new Border
+        {
+            Padding = new Thickness(5),
+            CornerRadius = new CornerRadius(12),
+            Background = ThemeBrush("SurfaceBrush", Brushes.White),
+            BorderBrush = ThemeBrush("BorderStrongBrush", Brushes.Gainsboro),
+            BorderThickness = new Thickness(1),
+            BoxShadow = ThemeShadow("ComposerShadow"),
+            Child = new Panel { Children = { rows, renameCard, deleteCard } },
+        };
+    }
+
+    /// <summary>重命名任务（只改标题，不动磁盘上的文件名和顺序）。</summary>
+    private (Border Card, ArcInput Input) BuildSessionRename(Flyout flyout, SessionItemViewModel item)
+    {
+        var input = new ArcInput
+        {
+            Text = item.Title,
+            FontSize = 12.5,
+            Margin = new Thickness(0, 2, 0, 0),
+        };
+
+        var error = new TextBlock
+        {
+            FontSize = 11,
+            IsVisible = false,
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = ThemeBrush("DangerBrush", Brushes.IndianRed),
+        };
+
+        var cancel = SmallButton("取消");
+
+        var confirm = new Button
+        {
+            Content = "确定",
+            Height = 30,
+            Padding = new Thickness(14, 0),
+            FontSize = 12,
+            CornerRadius = new CornerRadius(8),
+        };
+
+        var card = Card(new StackPanel
+        {
+            Spacing = 8,
+            Children =
+            {
+                CardTitle("重命名任务"),
+                input,
+                error,
+                Actions(cancel, confirm),
+            },
+        });
+
+        cancel.Click += (_, _) => flyout.Hide();
+
+        confirm.Click += async (_, _) =>
+        {
+            var message = await item.RenameAsync(input.Text ?? string.Empty);
+            if (message is null)
+            {
+                flyout.Hide();
+                return;
+            }
+
+            error.Text = message;
+            error.IsVisible = true;
+        };
+
+        input.KeyDown += (_, args) =>
+        {
+            if (args.Key == Key.Enter)
+            {
+                args.Handled = true;
+                confirm.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            }
+            else if (args.Key == Key.Escape)
+            {
+                args.Handled = true;
+                flyout.Hide();
+            }
+        };
+
+        return (card, input);
+    }
+
+    /// <summary>删任务是不可逆的，菜单点完再确认一次。</summary>
+    private Border BuildSessionDelete(Flyout flyout, SessionItemViewModel item)
+    {
+        var cancel = SmallButton("取消");
+
+        var remove = new Button
+        {
+            Content = "删除",
+            Height = 30,
+            Padding = new Thickness(14, 0),
+            FontSize = 12,
+            CornerRadius = new CornerRadius(8),
+            Foreground = ThemeBrush("DangerBrush", Brushes.IndianRed),
+            BorderBrush = ThemeBrush("BorderStrongBrush", Brushes.Gainsboro),
+        };
+
+        var card = Card(new StackPanel
+        {
+            Spacing = 8,
+            Children =
+            {
+                CardTitle("删除这个任务？"),
+                new TextBlock
+                {
+                    Text = "对话记录和工具调用会一起删掉，删完不能恢复。",
+                    FontSize = 11,
+                    TextWrapping = TextWrapping.Wrap,
+                    Foreground = ThemeBrush("TextSecondaryBrush", Brushes.Gray),
+                },
+                Actions(cancel, remove),
+            },
+        });
+
+        cancel.Click += (_, _) => flyout.Hide();
+
+        remove.Click += (_, _) =>
+        {
+            CloseFlyouts();
+            item.Remove();
+        };
+
+        return card;
+    }
+
+    private Border Card(Control content) => new()
+    {
+        Width = 232,
+        Padding = new Thickness(8, 7, 8, 8),
+        Child = content,
+    };
+
+    private TextBlock CardTitle(string text) => new()
+    {
+        Text = text,
+        FontSize = 12.5,
+        FontWeight = FontWeight.SemiBold,
+        Foreground = ThemeBrush("TextPrimaryBrush", Brushes.Black),
+    };
+
+    private Button SmallButton(string text) => new()
+    {
+        Content = text,
+        Height = 30,
+        Padding = new Thickness(12, 0),
+        FontSize = 12,
+        Background = Brushes.Transparent,
+        BorderThickness = new Thickness(0),
+        Foreground = ThemeBrush("TextSecondaryBrush", Brushes.Gray),
+    };
+
+    private static StackPanel Actions(params Control[] buttons)
+    {
+        var panel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Spacing = 6,
+        };
+
+        foreach (var button in buttons)
+        {
+            panel.Children.Add(button);
+        }
+
+        return panel;
+    }
+
+    /// <summary>菜单和重命名卡都在同一个弹层里，靠显隐切换，避免换窗口导致定位丢失。</summary>
+    private Control BuildMenu(Flyout flyout, WorkspaceItemViewModel item)    {
         var rows = new StackPanel { Spacing = 1 };
 
         rows.Children.Add(MenuRow("打开文件夹", ArcIcons.FolderOpen, () =>

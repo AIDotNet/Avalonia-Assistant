@@ -3,6 +3,98 @@
              xmlns:arc="https://github.com/AtomUICommunity/TKCode.Arc"
              xmlns:controls="using:AvaloniaAssistant.UI.Controls"
              x:Class="AvaloniaAssistant.UI.Views.SidebarView">
+  <UserControl.Resources>
+    <!--
+      侧栏里的一条对话：默认只显示时间；鼠标移到这一行，时间淡出让位给「⋯」，右键区变成入口，
+      同时弹出一张信息卡（本地电脑 / 所属空间 / 更新时间）。时间用 Opacity 而不是 IsVisible，
+      为的是悬停时标题宽度不跳。
+    -->
+    <DataTemplate x:Key="SessionRowTemplate">
+      <Grid Classes="task-row"
+            PointerEntered="OnSessionRowPointerEntered"
+            PointerExited="OnSessionRowPointerExited">
+        <Button Classes="task"
+                Classes.active="{Binding IsActive}"
+                Command="{Binding OpenCommand}">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Text="{Binding Title}"
+                       FontSize="12.5"
+                       VerticalAlignment="Center"
+                       TextTrimming="CharacterEllipsis" />
+            <TextBlock Grid.Column="1"
+                       Classes="row-time"
+                       Text="{Binding TimeText}"
+                       FontSize="10"
+                       Margin="8,0,0,0"
+                       VerticalAlignment="Center"
+                       Foreground="{StaticResource TextMutedBrush}" />
+          </Grid>
+        </Button>
+
+        <Button Classes="icon row-more"
+                Width="22"
+                Height="22"
+                Margin="0,0,1,0"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Center"
+                Click="OnSessionMenuClick"
+                ToolTip.Tip="{x:Null}">
+          <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Ellipsis}" Size="14" />
+        </Button>
+
+        <!-- 悬停信息卡：贴在侧栏右边，压在聊天区上面；不吃鼠标事件，免得挡住点击 -->
+        <Popup IsOpen="{Binding IsCardOpen}"
+               Placement="Right"
+               HorizontalOffset="8"
+               IsLightDismissEnabled="False">
+          <Border Classes="hover-card" IsHitTestVisible="False">
+            <StackPanel Spacing="8">
+              <TextBlock Text="{Binding Title}"
+                         FontSize="12.5"
+                         FontWeight="SemiBold"
+                         TextWrapping="Wrap" />
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Laptop}"
+                              Size="12"
+                              VerticalAlignment="Center"
+                              Foreground="{StaticResource TextMutedBrush}" />
+                <TextBlock Text="本地电脑"
+                           FontSize="10.5"
+                           VerticalAlignment="Center"
+                           Foreground="{StaticResource TextSecondaryBrush}" />
+                <Border Classes="tag">
+                  <TextBlock Text="{Binding ModeText}"
+                             FontSize="10"
+                             Foreground="{StaticResource TextSecondaryBrush}" />
+                </Border>
+              </StackPanel>
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Folder}"
+                              Size="12"
+                              VerticalAlignment="Center"
+                              Foreground="{StaticResource TextMutedBrush}" />
+                <TextBlock Text="{Binding WorkspaceName, StringFormat='所属空间：{0}'}"
+                           FontSize="10.5"
+                           VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis"
+                           Foreground="{StaticResource TextSecondaryBrush}" />
+              </StackPanel>
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Clock}"
+                              Size="12"
+                              VerticalAlignment="Center"
+                              Foreground="{StaticResource TextMutedBrush}" />
+                <TextBlock Text="{Binding UpdatedText}"
+                           FontSize="10.5"
+                           VerticalAlignment="Center"
+                           Foreground="{StaticResource TextSecondaryBrush}" />
+              </StackPanel>
+            </StackPanel>
+          </Border>
+        </Popup>
+      </Grid>
+    </DataTemplate>
+  </UserControl.Resources>
   <Border Background="{StaticResource SidebarBrush}" Padding="12,16,12,10">
     <Grid RowDefinitions="Auto,Auto,*,Auto">
       <Grid ColumnDefinitions="Auto,*,Auto">
@@ -119,43 +211,8 @@
                 <DataTemplate>
                   <StackPanel Margin="0,4,0,0">
                     <TextBlock Text="{Binding Header}" Classes="caption" Margin="8,2,0,4" FontSize="10.5" />
-                    <ItemsControl ItemsSource="{Binding Items}">
-                      <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                          <Grid Classes="task-row" ColumnDefinitions="*,Auto">
-                            <Button Classes="task"
-                                    Classes.active="{Binding IsActive}"
-                                    Command="{Binding OpenCommand}">
-                              <Grid ColumnDefinitions="*,Auto">
-                                <TextBlock Text="{Binding Title}"
-                                           FontSize="12.5"
-                                           VerticalAlignment="Center"
-                                           TextTrimming="CharacterEllipsis" />
-                                <TextBlock Grid.Column="1"
-                                           Text="{Binding TimeText}"
-                                           FontSize="10"
-                                           Margin="8,0,0,0"
-                                           VerticalAlignment="Center"
-                                           Foreground="{StaticResource TextMutedBrush}" />
-                              </Grid>
-                            </Button>
-                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                              <Button Classes="icon delete"
-                                      Command="{Binding DeleteCommand}"
-                                      IsVisible="{Binding !ConfirmDelete}"
-                                      ToolTip.Tip="删除任务">
-                                <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Trash2}" Size="13" />
-                              </Button>
-                              <Button Classes="ghost-action"
-                                      Command="{Binding DeleteCommand}"
-                                      Content="确认"
-                                      IsVisible="{Binding ConfirmDelete}"
-                                      Foreground="{StaticResource DangerBrush}" />
-                            </StackPanel>
-                          </Grid>
-                        </DataTemplate>
-                      </ItemsControl.ItemTemplate>
-                    </ItemsControl>
+                    <ItemsControl ItemsSource="{Binding Items}"
+                                  ItemTemplate="{StaticResource SessionRowTemplate}" />
                   </StackPanel>
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
@@ -233,44 +290,8 @@
                           Padding="6,0,0,0"
                           BorderBrush="{StaticResource BorderBrush}"
                           BorderThickness="1,0,0,0">
-                    <ItemsControl ItemsSource="{Binding Sessions}">
-                      <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                          <Grid Classes="task-row" ColumnDefinitions="*,Auto">
-                            <Button Classes="task child"
-                                    Classes.active="{Binding IsActive}"
-                                    Command="{Binding OpenCommand}"
-                                    ToolTip.Tip="{Binding Title}">
-                              <Grid ColumnDefinitions="*,Auto">
-                                <TextBlock Text="{Binding Title}"
-                                           FontSize="12"
-                                           VerticalAlignment="Center"
-                                           TextTrimming="CharacterEllipsis" />
-                                <TextBlock Grid.Column="1"
-                                           Text="{Binding TimeText}"
-                                           FontSize="9.5"
-                                           Margin="6,0,0,0"
-                                           VerticalAlignment="Center"
-                                           Foreground="{StaticResource TextMutedBrush}" />
-                              </Grid>
-                            </Button>
-                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                              <Button Classes="icon delete"
-                                      Command="{Binding DeleteCommand}"
-                                      IsVisible="{Binding !ConfirmDelete}"
-                                      ToolTip.Tip="删除任务">
-                                <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Trash2}" Size="12" />
-                              </Button>
-                              <Button Classes="ghost-action"
-                                      Command="{Binding DeleteCommand}"
-                                      Content="确认"
-                                      IsVisible="{Binding ConfirmDelete}"
-                                      Foreground="{StaticResource DangerBrush}" />
-                            </StackPanel>
-                          </Grid>
-                        </DataTemplate>
-                      </ItemsControl.ItemTemplate>
-                    </ItemsControl>
+                    <ItemsControl ItemsSource="{Binding Sessions}"
+                                  ItemTemplate="{StaticResource SessionRowTemplate}" />
                   </Border>
                 </StackPanel>
               </DataTemplate>

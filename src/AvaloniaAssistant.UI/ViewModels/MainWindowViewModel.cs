@@ -427,7 +427,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             foreach (var session in sessions.Where(session => !claimed.Contains(session.Id) && SamePath(session.WorkspacePath, path)))
             {
                 claimed.Add(session.Id);
-                item.Sessions.Add(CreateSessionItem(session, activeId));
+                item.Sessions.Add(CreateSessionItem(session, activeId, item.Name));
             }
 
             item.RefreshSessions();
@@ -448,7 +448,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         {
             SessionGroups.Add(new SessionGroupViewModel(
                 group.Key,
-                group.Select(session => CreateSessionItem(session, activeId))));
+                group.Select(session => CreateSessionItem(session, activeId, LooseWorkspaceName(session)))));
         }
 
         OnPropertyChanged(nameof(SessionCountText));
@@ -457,14 +457,42 @@ public sealed partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(HasWorkspaces));
     }
 
-    private SessionItemViewModel CreateSessionItem(ChatSession session, string? activeId)
+    private SessionItemViewModel CreateSessionItem(ChatSession session, string? activeId, string workspaceName)
         => new(
             session,
+            workspaceName,
             id => _ = OpenSessionAsync(id),
-            id => _ = DeleteSessionAsync(id))
+            id => _ = DeleteSessionAsync(id),
+            RenameSessionAsync)
         {
             IsActive = session.Id == activeId,
         };
+
+    /// <summary>改任务标题。成功返回 null，失败返回一句能直接展示的原因。</summary>
+    public async Task<string?> RenameSessionAsync(string sessionId, string newTitle)
+    {
+        var title = (newTitle ?? string.Empty).Trim();
+        if (title.Length == 0)
+        {
+            return "名字不能为空";
+        }
+
+        if (title.Length > 60)
+        {
+            return "名字太长了，控制在 60 个字以内";
+        }
+
+        if (!_sessionCache.TryGetValue(sessionId, out var session))
+        {
+            return "任务不存在，可能已经被删除";
+        }
+
+        // 改名不动 UpdatedAt：侧栏按最近使用排序，改个名字不该把任务顶到最前面
+        session.Title = title;
+        await _sessions.SaveAsync(session);
+        await ReloadSessionsAsync();
+        return null;
+    }
 
     /// <summary>空间列表：按用户添加的先后排，当前工作区不在里面时补到最后。</summary>
     private static List<string> WorkspacePaths(AssistantSettings settings)
@@ -547,6 +575,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
 
         RebuildSidebar();
+
+        // TEMP: 截图验证悬停卡片用
+        if (Workspaces.FirstOrDefault()?.Sessions.FirstOrDefault() is { } first)
+        {
+            first.IsActive = true;
+        }
     }
 
     private async Task SetActiveSessionAsync(string? sessionId)
@@ -583,8 +617,20 @@ public sealed partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(IsSettingsSelected));
     }
 
-    private static string GroupName(DateTimeOffset updatedAt)
+    /// <summary>没挂到空间上的任务：以前带过工作区的话，悬停卡片里还看得到那个目录名。</summary>
+    private static string LooseWorkspaceName(ChatSession session)
     {
+        if (string.IsNullOrWhiteSpace(session.WorkspacePath))
+        {
+            return string.Empty;
+        }
+
+        return System.IO.Path.GetFileName(session.WorkspacePath.TrimEnd(
+            System.IO.Path.DirectorySeparatorChar,
+            System.IO.Path.AltDirectorySeparatorChar));
+    }
+
+    private static string GroupName(DateTimeOffset updatedAt)    {
         var today = DateTimeOffset.Now.Date;
         if (updatedAt.Date == today)
         {
