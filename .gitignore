@@ -370,3 +370,4 @@ FodyWeavers.xsd
 /.tmp-arc
 /.tmp-hang
 /.tmp-verify
+/.tmp-nospace
