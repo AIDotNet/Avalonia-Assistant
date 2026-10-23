@@ -143,16 +143,17 @@ public static class CapabilityInstaller
 
         var entry = new JsonObject
         {
-            ["command"] = command.Trim(),
             ["exposure"] = "direct",
         };
 
         var args = (arguments ?? string.Empty)
             .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (args.Length > 0)
+        var (commandName, commandArgs) = NormalizeCommand(command.Trim(), args);
+        entry["command"] = commandName;
+        if (commandArgs.Count > 0)
         {
             var array = new JsonArray();
-            foreach (var arg in args)
+            foreach (var arg in commandArgs)
             {
                 array.Add(arg);
             }
@@ -194,6 +195,47 @@ public static class CapabilityInstaller
     private static bool IsValidServerName(string name)
         => name.Length > 0
            && name.All(ch => char.IsAsciiLetterOrDigit(ch) || ch is '_' or '-');
+
+    /// <summary>npm / pnpm 这一族在 Windows 上只有 <c>.cmd</c> 垫片，直接当 FileName 起不来。</summary>
+    private static readonly HashSet<string> ScriptCommands = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "npx",
+        "npm",
+        "pnpm",
+        "yarn",
+        "bunx",
+        "corepack",
+    };
+
+    /// <summary>
+    /// Windows 上把 <c>npx foo</c> 包成 <c>cmd /c npx foo</c>。
+    /// MCP 的 stdio 传输用 <c>UseShellExecute = false</c> 直接启动进程，而 <c>CreateProcess</c>
+    /// 不认 <c>.cmd</c> / <c>.bat</c> 垫片：写 <c>"command": "npx"</c> 会静默失败（服务端永远连不上），
+    /// 只有 <c>cmd /c</c> 才是可用的写法。用户在表单里按直觉填 npx 时替他把这层补上。
+    /// </summary>
+    private static (string Command, IReadOnlyList<string> Args) NormalizeCommand(
+        string command,
+        IReadOnlyList<string> args)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return (command, args);
+        }
+
+        var fileName = Path.GetFileName(command);
+        var isScript = fileName.EndsWith(".cmd", StringComparison.OrdinalIgnoreCase)
+                       || fileName.EndsWith(".bat", StringComparison.OrdinalIgnoreCase)
+                       || (!Path.HasExtension(fileName) && ScriptCommands.Contains(fileName));
+
+        if (!isScript)
+        {
+            return (command, args);
+        }
+
+        var wrapped = new List<string>(args.Count + 2) { "/c", command };
+        wrapped.AddRange(args);
+        return ("cmd", wrapped);
+    }
 
     private static string InstallDirectory(string source, string name, string skillsRoot)
     {

@@ -164,20 +164,25 @@ UI ──► Abstractions ◄── Agent ──► Pi.CodingAgent ──► Pi.
 ```
 
 - 技能的正文由内置 `read` 工具按需加载，模型只先看到名字和描述；`/skill:<名称>` 也能显式触发。
-- MCP 服务端**必须写 `"exposure": "direct"`**，否则工具只留给 codemode，模型直接调不到：
+- MCP 服务端**必须写 `"exposure": "direct"`**，否则工具只留给 codemode，模型直接调不到。
+- **Windows 上手写 `mcp.json` 时，`npx` / `npm` 这类命令必须用 `cmd /c` 包一层**：
 
 ```json
 {
   "mcpServers": {
     "filesystem": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-filesystem", "D:/work"],
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "@modelcontextprotocol/server-filesystem", "D:/work"],
       "exposure": "direct"
     }
   }
 }
 ```
 
+原因是 MCP 的 stdio 传输用 `UseShellExecute = false` 直接起进程，而 `CreateProcess` 不认
+`.cmd` / `.bat` 垫片：写 `"command": "npx"`（或 `npx.cmd`）时服务端进程根本起不来，
+表现是「配置在、工具永远不出现」，且没有明显报错。通过 MCP 页的「添加服务端」表单填 `npx`
+时，`CapabilityInstaller` 会自动补这层包装，不用自己写。macOS / Linux 直接写 `npx`。
 - 项目级 `.pi` 属于「需要信任」的配置（技能、MCP、`AGENTS.md` 都会进上下文）。
   桌面助理默认信任你选的工作区，`settings.json` 里把 `TrustWorkspace` 设为 `false` 可以关掉，
   关掉后只读全局 `~/.pi/agent`。

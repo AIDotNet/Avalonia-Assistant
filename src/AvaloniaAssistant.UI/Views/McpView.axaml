@@ -91,7 +91,7 @@
                          Text="{Binding Args, Mode=TwoWay}" />
             </Grid>
             <Grid ColumnDefinitions="*,Auto">
-              <TextBlock Text="参数按空格拆成数组；exposure 自动写 direct，否则模型直接调不到。"
+              <TextBlock Text="参数按空格拆成数组；exposure 自动写 direct，npx / npm 会自动补 Windows 启动层。"
                          Classes="caption"
                          FontSize="10.5"
                          VerticalAlignment="Center" />
