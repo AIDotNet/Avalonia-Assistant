@@ -1,11 +1,13 @@
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Text;
+using System.Text.Json;
 using Avalonia.Media;
 using Avalonia.Threading;
 using AvaloniaAssistant.Abstractions;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using ArcIcons = TKCode.Arc.ArcIcons;
 
 namespace AvaloniaAssistant.UI.ViewModels;
 
@@ -40,12 +42,19 @@ public sealed partial class UserMessageViewModel : MessageViewModel
 
 public sealed partial class ToolCallViewModel : ObservableObject
 {
+    /// <summary>从参数里挑「这次动的是哪个东西」时优先看的字段，越靠前越具体。</summary>
+    private static readonly string[] TargetKeys =
+    [
+        "command", "path", "file_path", "filePath", "pattern", "url", "query", "name", "directory",
+    ];
+
     public ToolCallViewModel(string id, string name, string label, string arguments)
     {
         Id = id;
         Name = name;
         Label = label;
         Arguments = arguments;
+        Target = ExtractTarget(arguments);
     }
 
     public string Id { get; }
@@ -54,6 +63,27 @@ public sealed partial class ToolCallViewModel : ObservableObject
 
     public string Label { get; }
 
+    /// <summary>参数里最能说明「在操作什么」的那一段：命令、路径或查询词。</summary>
+    public string Target { get; }
+
+    /// <summary>对话流里那一行字，形如「执行命令：dotnet build」。</summary>
+    public string Summary => Target.Length == 0 ? Label : $"{Label}：{Target}";
+
+    public Geometry Icon => Name switch
+    {
+        "run_command" => ArcIcons.Command,
+        "read_file" => ArcIcons.FileText,
+        "write_file" or "edit" => ArcIcons.Pencil,
+        "search_files" or "grep" or "find" => ArcIcons.Search,
+        "list_directory" or "ls" => ArcIcons.Folder,
+        "fetch_url" or "open_url" => ArcIcons.Globe,
+        "current_time" => ArcIcons.Clock,
+        _ => ArcIcons.Zap,
+    };
+
+    /// <summary>成功时不占地方显示「完成」，只有还在跑或者失败了才需要状态。</summary>
+    public bool ShowStatus => IsRunning || IsError;
+
     [ObservableProperty]
     private string arguments;
 
@@ -61,11 +91,13 @@ public sealed partial class ToolCallViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(StatusText))]
     [NotifyPropertyChangedFor(nameof(StatusBrush))]
     [NotifyPropertyChangedFor(nameof(HasResult))]
+    [NotifyPropertyChangedFor(nameof(ShowStatus))]
     private string? result;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(StatusText))]
     [NotifyPropertyChangedFor(nameof(StatusBrush))]
+    [NotifyPropertyChangedFor(nameof(ShowStatus))]
     private bool isError;
 
     [ObservableProperty]
@@ -75,6 +107,7 @@ public sealed partial class ToolCallViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(StatusText))]
     [NotifyPropertyChangedFor(nameof(StatusBrush))]
+    [NotifyPropertyChangedFor(nameof(ShowStatus))]
     private bool isRunning = true;
 
     [ObservableProperty]
@@ -105,6 +138,47 @@ public sealed partial class ToolCallViewModel : ObservableObject
         {
             IsExpanded = true;
         }
+    }
+
+    private static string ExtractTarget(string arguments)
+    {
+        if (string.IsNullOrWhiteSpace(arguments))
+        {
+            return string.Empty;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(arguments);
+            if (document.RootElement.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var key in TargetKeys)
+                {
+                    if (document.RootElement.TryGetProperty(key, out var value)
+                        && value.ValueKind == JsonValueKind.String)
+                    {
+                        return Shorten(value.GetString());
+                    }
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            // MCP 或自定义工具的参数可能不是 JSON，退回整串的第一行
+        }
+
+        return Shorten(arguments);
+    }
+
+    private static string Shorten(string? value)
+    {
+        var text = (value ?? string.Empty).Trim().ReplaceLineEndings(" ");
+        if (text.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        return text.Length <= 72 ? text : text[..72] + "…";
     }
 }
 

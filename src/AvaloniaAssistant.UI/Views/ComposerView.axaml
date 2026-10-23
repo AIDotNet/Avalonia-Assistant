@@ -1,6 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:arc="https://github.com/AtomUICommunity/TKCode.Arc"
+             xmlns:arc="https://github.com/AIDotNet/TKCode.Arc"
              x:Class="AvaloniaAssistant.UI.Views.ComposerView">
   <UserControl.Resources>
     <!-- 基于 Arc 默认主题派生，只替换模板：直接新建 ControlTheme 会丢掉
@@ -139,7 +139,7 @@
           </ItemsControl.ItemsPanel>
           <ItemsControl.ItemTemplate>
             <DataTemplate>
-              <Border Classes="ref-chip">
+              <Border Classes="ref-chip" ToolTip.Tip="{Binding Detail}">
                 <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
                   <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Paperclip}"
                                 Size="11"
@@ -148,6 +148,10 @@
                              FontSize="11.5"
                              MaxWidth="180"
                              TextTrimming="CharacterEllipsis"
+                             VerticalAlignment="Center" />
+                  <TextBlock Text="{Binding SourceText}"
+                             FontSize="9"
+                             Foreground="{StaticResource TextMutedBrush}"
                              VerticalAlignment="Center" />
                   <Button Classes="ref-remove"
                           Command="{Binding $parent[ItemsControl].DataContext.RemoveReferenceCommand}"
@@ -171,7 +175,7 @@
                 Padding="5"
                 Margin="0,0,0,7">
           <StackPanel>
-            <TextBlock Text="引用资料库"
+            <TextBlock Text="引用文件"
                        Classes="section-title"
                        FontSize="10"
                        Margin="7,2,0,4"
@@ -183,7 +187,8 @@
                   <Button Classes="mention-row"
                           Classes.selected="{Binding IsSelected}"
                           Command="{Binding $parent[ItemsControl].DataContext.AcceptMentionCommand}"
-                          CommandParameter="{Binding}">
+                          CommandParameter="{Binding}"
+                          ToolTip.Tip="{Binding Detail}">
                     <Grid ColumnDefinitions="Auto,*,Auto" VerticalAlignment="Center">
                       <Border Width="24"
                               Height="24"
@@ -199,16 +204,16 @@
                         <TextBlock Text="{Binding Name}"
                                    FontSize="12"
                                    TextTrimming="CharacterEllipsis" />
-                        <TextBlock Text="{Binding Summary}"
+                        <TextBlock Text="{Binding Detail}"
                                    Classes="caption"
                                    FontSize="10"
                                    MaxLines="1"
                                    TextTrimming="CharacterEllipsis" />
                       </StackPanel>
                       <TextBlock Grid.Column="2"
-                                 Text="{Binding IndexText}"
+                                 Text="{Binding SourceText}"
                                  Classes="caption"
-                                 FontSize="10"
+                                 FontSize="9.5"
                                  VerticalAlignment="Center" />
                     </Grid>
                   </Button>
@@ -246,13 +251,13 @@
             </Button>
             <Button Classes="icon"
                     Command="{Binding OpenMentionCommand}"
-                    ToolTip.Tip="引用资料库里的文件（输入 @）">
+                    ToolTip.Tip="引用工作区或资料库里的文件（输入 @）">
               <TextBlock Text="@" FontSize="15" FontWeight="Medium" VerticalAlignment="Center" />
             </Button>
           </StackPanel>
 
           <TextBlock Grid.Column="1"
-                     Text="Enter 发送 · @ 引用资料"
+                     Text="Enter 发送 · @ 引用文件"
                      Classes="caption"
                      FontSize="10"
                      Margin="7,0,0,0"

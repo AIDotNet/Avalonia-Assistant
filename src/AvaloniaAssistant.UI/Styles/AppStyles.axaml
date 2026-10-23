@@ -1,6 +1,6 @@
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:arc="https://github.com/AtomUICommunity/TKCode.Arc">
+        xmlns:arc="https://github.com/AIDotNet/TKCode.Arc">
   <!-- Arc 主题把 Button 的内容对齐默认设成 Stretch，纯文字按钮的文字会贴着上沿。
        统一改成居中，带图标的按钮靠内容自身的 VerticalAlignment 对齐，不受影响。 -->
   <Style Selector="Button">

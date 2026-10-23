@@ -51,8 +51,8 @@ public sealed class ChatEntry
 }
 
 /// <summary>
-/// 一轮提问里引用的一份资料。只带模型真正需要的东西，不含磁盘路径——
-/// 会话存档换个工作区也还能用，不会指向一个已经不存在的位置。
+/// 一轮提问里引用的一份文件。只带模型真正需要的东西：
+/// 展示用路径、正文快照、以及读取时有没有被截断。
 /// </summary>
 public sealed class ChatAttachment
 {
@@ -60,14 +60,32 @@ public sealed class ChatAttachment
 
     public string Name { get; set; } = string.Empty;
 
+    /// <summary>展示与引用用的路径：工作区文件是相对路径，资料库条目是库里的名字。</summary>
+    public string? Path { get; set; }
+
+    /// <summary>来源：<c>workspace</c> 或 <c>library</c>。界面上据此标「工作区 / 资料库」。</summary>
+    public string Source { get; set; } = "workspace";
+
     public string Kind { get; set; } = "FILE";
 
     public long Size { get; set; }
 
-    /// <summary>正文快照，限长在导入时已经裁过；二进制文件为 null。</summary>
+    /// <summary>正文快照，限长在读取时已经裁过；二进制文件为 null。</summary>
     public string? Text { get; set; }
 
+    /// <summary>读取失败的原因。有值时正文为空，模型会看到「这个文件没读到」而不是一片空白。</summary>
+    public string? Error { get; set; }
+
+    public int LineCount { get; set; }
+
+    /// <summary>是否只读了一部分（行数或字数到达上限）。</summary>
+    public bool Truncated { get; set; }
+
     public bool HasText => !string.IsNullOrEmpty(Text);
+
+    public bool IsLibrary => string.Equals(Source, "library", StringComparison.OrdinalIgnoreCase);
+
+    public string DisplayPath => string.IsNullOrWhiteSpace(Path) ? Name : Path!;
 }
 
 public sealed class ToolCallRecord

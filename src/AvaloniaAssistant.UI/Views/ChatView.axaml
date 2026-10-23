@@ -1,6 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:arc="https://github.com/AtomUICommunity/TKCode.Arc"
+             xmlns:arc="https://github.com/AIDotNet/TKCode.Arc"
              xmlns:vm="using:AvaloniaAssistant.UI.ViewModels"
              xmlns:views="using:AvaloniaAssistant.UI.Views"
              x:Class="AvaloniaAssistant.UI.Views.ChatView">
@@ -9,6 +9,21 @@
     <!-- 消息列表的滚动条常驻显示：自动隐藏时只剩一条 2~3px 的细线，鼠标根本抓不住 -->
     <Style Selector="ScrollViewer.message-list /template/ ScrollBar">
       <Setter Property="AllowAutoHide" Value="False" />
+    </Style>
+
+    <!-- 工具调用压成一行：一次任务十几次调用，卡片会把人埋掉 -->
+    <Style Selector="Button.tool-line">
+      <Setter Property="MinHeight" Value="24" />
+      <Setter Property="Padding" Value="2,2" />
+      <Setter Property="CornerRadius" Value="7" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.tool-line:pointerover">
+      <Setter Property="Background" Value="{StaticResource SurfaceMutedBrush}" />
     </Style>
   </UserControl.Styles>
 
@@ -55,7 +70,7 @@
                         VerticalAlignment="Center" />
         </Border>
 
-        <StackPanel Grid.Column="1" Margin="10,0,0,0" Spacing="9">
+        <StackPanel Grid.Column="1" Margin="10,0,0,0" Spacing="7">
           <Border IsVisible="{Binding HasReasoning}"
                   Background="{StaticResource SurfaceMutedBrush}"
                   BorderBrush="{StaticResource BorderBrush}"
@@ -88,70 +103,60 @@
             <!-- 相邻的工具卡片之间留出间距，否则连续多次调用会贴成一整块 -->
             <ItemsControl.ItemsPanel>
               <ItemsPanelTemplate>
-                <StackPanel Spacing="6" />
+                <StackPanel Spacing="1" />
               </ItemsPanelTemplate>
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
               <DataTemplate>
-                <Border Classes="tool-card">
-                  <StackPanel>
-                    <Button Classes="tool-head" Command="{Binding ToggleCommand}">
-                      <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto">
-                        <Border Width="26" Height="26" CornerRadius="8" Background="{StaticResource SurfaceBrush}">
-                          <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Zap}"
-                                        Size="13"
-                                        Foreground="{StaticResource TextSecondaryBrush}"
-                                        HorizontalAlignment="Center"
-                                        VerticalAlignment="Center" />
-                        </Border>
-                        <StackPanel Grid.Column="1" Margin="9,0,0,0" VerticalAlignment="Center" Spacing="1">
-                          <TextBlock Text="{Binding Label}" FontSize="12" FontWeight="Medium" />
-                          <TextBlock Text="{Binding Name}" Classes="caption" FontSize="10" />
-                        </StackPanel>
-                        <TextBlock Grid.Column="2"
-                                   Text="{Binding StatusText}"
-                                   Foreground="{Binding StatusBrush}"
-                                   FontSize="10.5"
-                                   VerticalAlignment="Center" />
-                        <TextBlock Grid.Column="3"
-                                   Text="{Binding DurationText}"
-                                   Classes="caption"
-                                   FontSize="10"
-                                   Margin="8,0,6,0"
-                                   VerticalAlignment="Center" />
-                        <arc:ArcGlyph Grid.Column="4"
-                                      Data="{x:Static arc:ArcIcons.ChevronDown}"
-                                      Size="12"
-                                      Foreground="{StaticResource TextMutedBrush}"
-                                      VerticalAlignment="Center" />
-                      </Grid>
-                    </Button>
+                <StackPanel>
+                  <Button Classes="tool-line" Command="{Binding ToggleCommand}">
+                    <Grid ColumnDefinitions="Auto,*,Auto,Auto" VerticalAlignment="Center">
+                      <arc:ArcGlyph Data="{Binding Icon}"
+                                    Size="12"
+                                    Foreground="{StaticResource TextMutedBrush}"
+                                    VerticalAlignment="Center" />
+                      <TextBlock Grid.Column="1"
+                                 Margin="8,0,8,0"
+                                 Text="{Binding Summary}"
+                                 FontSize="12"
+                                 Foreground="{StaticResource TextSecondaryBrush}"
+                                 TextTrimming="CharacterEllipsis"
+                                 VerticalAlignment="Center" />
+                      <TextBlock Grid.Column="2"
+                                 Text="{Binding StatusText}"
+                                 IsVisible="{Binding ShowStatus}"
+                                 Foreground="{Binding StatusBrush}"
+                                 FontSize="10.5"
+                                 VerticalAlignment="Center" />
+                      <TextBlock Grid.Column="3"
+                                 Text="{Binding DurationText}"
+                                 Classes="caption"
+                                 FontSize="10"
+                                 Margin="8,0,2,0"
+                                 VerticalAlignment="Center" />
+                    </Grid>
+                  </Button>
 
-                    <Border IsVisible="{Binding IsExpanded}"
-                            BorderBrush="{StaticResource BorderBrush}"
-                            BorderThickness="0,1,0,0"
-                            Padding="12,9">
-                      <StackPanel Spacing="5">
-                        <TextBlock Text="参数" Classes="section-title" />
-                        <ScrollViewer MaxHeight="140" VerticalScrollBarVisibility="Auto">
-                          <SelectableTextBlock Text="{Binding Arguments}"
-                                               FontFamily="{StaticResource MonoFontFamily}"
-                                               FontSize="10.5"
-                                               TextWrapping="Wrap"
-                                               Foreground="{StaticResource TextSecondaryBrush}" />
-                        </ScrollViewer>
-                        <TextBlock Text="结果" Classes="section-title" IsVisible="{Binding HasResult}" Margin="0,4,0,0" />
-                        <ScrollViewer MaxHeight="200" IsVisible="{Binding HasResult}" VerticalScrollBarVisibility="Auto">
-                          <SelectableTextBlock Text="{Binding Result}"
-                                               FontFamily="{StaticResource MonoFontFamily}"
-                                               FontSize="10.5"
-                                               TextWrapping="Wrap"
-                                               Foreground="{StaticResource TextSecondaryBrush}" />
-                        </ScrollViewer>
-                      </StackPanel>
-                    </Border>
+                  <!-- 展开的细节不再套一层卡片，只缩进一档，跟正文同一条竖线 -->
+                  <StackPanel IsVisible="{Binding IsExpanded}" Margin="20,3,0,6" Spacing="4">
+                    <TextBlock Text="参数" Classes="section-title" FontSize="10" />
+                    <ScrollViewer MaxHeight="140" VerticalScrollBarVisibility="Auto">
+                      <SelectableTextBlock Text="{Binding Arguments}"
+                                           FontFamily="{StaticResource MonoFontFamily}"
+                                           FontSize="10.5"
+                                           TextWrapping="Wrap"
+                                           Foreground="{StaticResource TextSecondaryBrush}" />
+                    </ScrollViewer>
+                    <TextBlock Text="结果" Classes="section-title" FontSize="10" IsVisible="{Binding HasResult}" Margin="0,4,0,0" />
+                    <ScrollViewer MaxHeight="200" IsVisible="{Binding HasResult}" VerticalScrollBarVisibility="Auto">
+                      <SelectableTextBlock Text="{Binding Result}"
+                                           FontFamily="{StaticResource MonoFontFamily}"
+                                           FontSize="10.5"
+                                           TextWrapping="Wrap"
+                                           Foreground="{StaticResource TextSecondaryBrush}" />
+                    </ScrollViewer>
                   </StackPanel>
-                </Border>
+                </StackPanel>
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>

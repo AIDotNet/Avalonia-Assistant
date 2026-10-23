@@ -29,6 +29,7 @@ internal static class Program
         services.AddSingleton<IFilePicker, StorageFilePicker>();
         services.AddSingleton<IVoiceInput, NAudioVoiceInput>();
         services.AddSingleton<LibraryStore>();
+        services.AddSingleton<WorkspaceFileSearch>();
         services.AddSingleton<IPiStreamFactory, PiStreamFactory>();
         services.AddSingleton<AgentToolRegistry>();
         services.AddSingleton<IAssistantRuntime, PiAgentRuntime>();

@@ -131,6 +131,99 @@ public sealed partial class FileItemViewModel
 }
 
 /// <summary>
+/// @ 浮层里的一个候选。可能是工作区里的文件（直接引用，不用先导入），
+/// 也可能是资料库里的条目（跨会话收藏、已经建过索引）。
+/// </summary>
+public sealed partial class MentionItemViewModel : ObservableObject
+{
+    private MentionItemViewModel()
+    {
+    }
+
+    public static MentionItemViewModel FromWorkspace(WorkspaceFileEntry entry)
+    {
+        var style = FileTypeStyle.For(System.IO.Path.GetExtension(entry.Name));
+        return new MentionItemViewModel
+        {
+            Id = "ws:" + entry.RelativePath,
+            Name = entry.Name,
+            Path = entry.RelativePath,
+            FullPath = entry.FullPath,
+            Kind = style.Label,
+            Size = entry.Size,
+            IsLibrary = false,
+            TileBackground = style.Background,
+            IconBrush = style.Foreground,
+        };
+    }
+
+    public static MentionItemViewModel FromLibrary(LibraryDocument document)
+    {
+        var style = FileTypeStyle.For(document.Name);
+        return new MentionItemViewModel
+        {
+            Id = "lib:" + document.Id,
+            Name = document.Name,
+            Path = document.Name,
+            Document = document,
+            Kind = document.Kind,
+            Size = document.Size,
+            IsLibrary = true,
+            TileBackground = style.Background,
+            IconBrush = style.Foreground,
+        };
+    }
+
+    public string Id { get; private init; } = string.Empty;
+
+    public string Name { get; private init; } = string.Empty;
+
+    /// <summary>工作区文件是相对路径，资料库条目是库里的名字。</summary>
+    public string Path { get; private init; } = string.Empty;
+
+    public string? FullPath { get; private init; }
+
+    public LibraryDocument? Document { get; private init; }
+
+    public string Kind { get; private init; } = "FILE";
+
+    public long Size { get; private init; }
+
+    public bool IsLibrary { get; private init; }
+
+    public string SourceText => IsLibrary ? "资料库" : "工作区";
+
+    /// <summary>副标题：工作区给完整相对路径，资料库给「资料库 · 大小」。</summary>
+    public string Detail => IsLibrary
+        ? $"资料库 · {FormatSize(Size)}"
+        : Path;
+
+    public IBrush TileBackground { get; private init; } = FileTypeStyle.Tint("#F2F2EF");
+
+    public IBrush IconBrush { get; private init; } = FileTypeStyle.Tint("#6F6F69");
+
+    public Geometry Icon => ArcIcons.FileText;
+
+    /// <summary>键盘上下移动时的选中态。</summary>
+    [ObservableProperty]
+    private bool isSelected;
+
+    private static string FormatSize(long bytes)
+    {
+        string[] units = ["B", "KB", "MB", "GB"];
+        double size = bytes;
+        var unit = 0;
+        while (size >= 1024 && unit < units.Length - 1)
+        {
+            size /= 1024;
+            unit++;
+        }
+
+        return $"{size:0.##} {units[unit]}";
+    }
+}
+
+/// <summary>
 /// 资料库里的一条。和工作区文件长得像但是两种东西：这个是「已经收进库、能被 @ 引用」的副本，
 /// 点开看的是 <c>.library/files</c> 里那份，原文件后来被移动删除都不影响。
 /// </summary>

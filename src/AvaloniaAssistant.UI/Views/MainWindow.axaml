@@ -1,7 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:views="using:AvaloniaAssistant.UI.Views"
-        xmlns:arc="https://github.com/AtomUICommunity/TKCode.Arc"
+        xmlns:arc="https://github.com/AIDotNet/TKCode.Arc"
         x:Class="AvaloniaAssistant.UI.Views.MainWindow"
         Title="Avalonia Assistant"
         Icon="/Assets/app.ico"

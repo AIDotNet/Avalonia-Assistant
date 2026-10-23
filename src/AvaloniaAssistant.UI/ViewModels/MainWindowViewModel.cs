@@ -20,7 +20,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
         ISessionStore sessions,
         IFilePicker picker,
         IVoiceInput voice,
-        LibraryStore library)
+        LibraryStore library,
+        WorkspaceFileSearch fileSearch)
     {
         _sessions = sessions;
         Runtime = runtime;
@@ -28,6 +29,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         Picker = picker;
         Voice = voice;
         Library = library;
+        FileSearch = fileSearch;
         Home = new HomeViewModel(this);
 
         // SaveAsync 是在线程池上抛事件的，界面更新必须回 UI 线程，否则属性变更会跨线程打到绑定上。
@@ -51,6 +53,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     /// <summary>工作区资料库。composer 的 @ 引用和资料库页共用这一份，不各读各的索引。</summary>
     public LibraryStore Library { get; }
+
+    /// <summary>@ 时的工作区文件索引。带缓存，composer 和资料库页共用一个实例。</summary>
+    public WorkspaceFileSearch FileSearch { get; }
 
     public AssistantSettings Settings => SettingsProvider.Current;
 

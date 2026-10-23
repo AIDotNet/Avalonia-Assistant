@@ -22,13 +22,14 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
     private readonly EventHandler _settingsChanged;
 
     private readonly LibraryStore _library;
+    private readonly WorkspaceFileSearch _fileSearch;
     private IReadOnlyList<LibraryDocument> _documents = [];
     private string? _documentsWorkspace;
 
     /// <summary>自己在改 Text（补全 @、清空）时不要再弹一次浮层。</summary>
     private bool _suppressMention;
 
-    /// <summary>资料库候选的加载序号：并发输入时只认最后一次。</summary>
+    /// <summary>@ 候选的加载序号：并发输入时只认最后一次。</summary>
     private int _mentionVersion;
 
     private bool _documentsLoaded;
@@ -39,7 +40,8 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
         IFilePicker picker,
         IVoiceInput voice,
         Func<Task> openSettings,
-        LibraryStore library)
+        LibraryStore library,
+        WorkspaceFileSearch fileSearch)
     {
         _runtime = runtime;
         _settings = settings;
@@ -47,6 +49,7 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
         _voice = voice;
         _openSettings = openSettings;
         _library = library;
+        _fileSearch = fileSearch;
         _settingsChanged = (_, _) => Refresh();
         RefreshModels();
         _settings.Changed += _settingsChanged;
@@ -63,11 +66,11 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
 
     public ObservableCollection<ModelOption> Models { get; } = [];
 
-    /// <summary>这一轮 @ 进来的资料，发送时变成 <see cref="PromptRequest.Attachments"/>。</summary>
-    public ObservableCollection<LibraryItemViewModel> References { get; } = [];
+    /// <summary>这一轮 @ 进来的文件（工作区或资料库），发送时变成 <see cref="PromptRequest.Attachments"/>。</summary>
+    public ObservableCollection<MentionItemViewModel> References { get; } = [];
 
-    /// <summary>@ 浮层里的候选，最多 6 条。</summary>
-    public ObservableCollection<LibraryItemViewModel> MentionItems { get; } = [];
+    /// <summary>@ 浮层里的候选，最多 8 条。</summary>
+    public ObservableCollection<MentionItemViewModel> MentionItems { get; } = [];
 
     public bool HasReferences => References.Count > 0;
 
@@ -96,6 +99,11 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
     private bool isBusy;
 
     public bool ShowSend => !IsBusy;
+
+    /// <summary>正在读引用文件的正文，读完才真正发出。</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SendCommand))]
+    private bool isSending;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(MicTooltip))]
@@ -165,7 +173,7 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
     public IReadOnlyList<string> RecentWorkspaces => _settings.Current.RecentWorkspaces;
 
     [RelayCommand(CanExecute = nameof(CanSend))]
-    private void Send()
+    private async Task SendAsync()
     {
         if (IsRecording)
         {
@@ -184,26 +192,64 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
             return;
         }
 
-        var attachments = References
-            .Select(reference => new ChatAttachment
+        // 引用的是工作区文件时，正文要现场读：文件可能刚被改过，索引里的旧内容不作数。
+        IsSending = true;
+        try
+        {
+            var attachments = new List<ChatAttachment>(References.Count);
+            foreach (var reference in References)
             {
-                Id = reference.Document.Id,
-                Name = reference.Document.Name,
-                Kind = reference.Document.Kind,
-                Size = reference.Document.Size,
-                Text = reference.Document.Text,
-            })
-            .ToList();
+                attachments.Add(await BuildAttachmentAsync(reference));
+            }
 
-        Text = string.Empty;
-        References.Clear();
-        OnPropertyChanged(nameof(HasReferences));
-        CloseMention();
+            Text = string.Empty;
+            References.Clear();
+            OnPropertyChanged(nameof(HasReferences));
+            CloseMention();
 
-        SendRequested?.Invoke(this, new PromptRequest(value, attachments));
+            SendRequested?.Invoke(this, new PromptRequest(value, attachments));
+        }
+        finally
+        {
+            IsSending = false;
+        }
     }
 
-    private bool CanSend() => !IsBusy && !IsRecording && !string.IsNullOrWhiteSpace(Text);
+    /// <summary>把一个引用变成模型能读的附件：工作区读盘、资料库直接用索引里的正文。</summary>
+    private static async Task<ChatAttachment> BuildAttachmentAsync(MentionItemViewModel item)
+    {
+        var attachment = new ChatAttachment
+        {
+            Id = item.Id,
+            Name = item.Name,
+            Path = item.Path,
+            Source = item.IsLibrary ? "library" : "workspace",
+            Kind = item.Kind,
+            Size = item.Size,
+        };
+
+        if (item.Document is { } document)
+        {
+            attachment.Text = document.Text;
+            attachment.LineCount = document.HasText ? document.Text!.Count(character => character == '\n') + 1 : 0;
+            attachment.Truncated = document.HasText && document.Text!.Length >= LibraryStore.MaxIndexedChars;
+            return attachment;
+        }
+
+        if (string.IsNullOrWhiteSpace(item.FullPath) || !File.Exists(item.FullPath))
+        {
+            attachment.Error = "文件不存在，可能已经被移动或删除";
+            return attachment;
+        }
+
+        var (text, lines, truncated) = await Task.Run(() => FileContentReader.Read(item.FullPath!));
+        attachment.Text = text;
+        attachment.LineCount = lines;
+        attachment.Truncated = truncated;
+        return attachment;
+    }
+
+    private bool CanSend() => !IsBusy && !IsSending && !IsRecording && !string.IsNullOrWhiteSpace(Text);
 
     partial void OnTextChanged(string? value)
     {
@@ -242,25 +288,69 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
         }
 
         var query = MentionQuery;
-        var items = _documents
-            .Where(document => LibraryStore.Matches(document, query))
-            .OrderByDescending(document => document.AddedAt)
-            .Take(6)
+        var workspace = _settings.Current.WorkspacePath ?? string.Empty;
+
+        // 工作区要扫盘，丢线程池；资料库索引本来就在内存里
+        var files = await Task.Run(() => _fileSearch.Search(workspace, query, 12));
+        if (version != _mentionVersion)
+        {
+            return;
+        }
+
+        var candidates = new List<(MentionItemViewModel Item, int Score)>();
+        var rank = 0;
+
+        // 空查询时按「最近改过」的次序排，打分的意义只在有查询词时
+        foreach (var file in files)
+        {
+            var score = query.Length == 0
+                ? rank++
+                : WorkspaceFileSearch.Score(file.RelativePath, query);
+            candidates.Add((MentionItemViewModel.FromWorkspace(file), score));
+        }
+
+        // 同名的资料库条目排在后面一点点：用户多半指的是眼前工作区里那份
+        foreach (var document in _documents
+                     .Where(document => LibraryStore.Matches(document, query))
+                     .OrderByDescending(document => document.AddedAt)
+                     .Take(6))
+        {
+            var score = query.Length == 0
+                ? 100 + rank++
+                : WorkspaceFileSearch.Score(document.Name, query) + 5;
+            candidates.Add((MentionItemViewModel.FromLibrary(document), score));
+        }
+
+        var items = candidates
+            .OrderBy(candidate => candidate.Score)
+            .ThenBy(candidate => candidate.Item.Name, StringComparer.OrdinalIgnoreCase)
+            .Take(8)
+            .Select(candidate => candidate.Item)
             .ToList();
 
         MentionItems.Clear();
-        foreach (var document in items)
+        foreach (var item in items)
         {
-            MentionItems.Add(new LibraryItemViewModel(document));
+            MentionItems.Add(item);
         }
 
         MentionIndex = items.Count > 0 ? 0 : -1;
         ApplyMentionSelection();
-        MentionEmptyText = _documents.Count == 0
-            ? "资料库还是空的。去「资料库」把文件拖进去，之后在这里 @ 就能引用。"
-            : $"资料库里没有带「{query}」的内容。";
+        MentionEmptyText = BuildMentionEmptyText(workspace, query);
         ShowMention = true;
         OnPropertyChanged(nameof(HasMentionItems));
+    }
+
+    private string BuildMentionEmptyText(string workspace, string query)
+    {
+        if (string.IsNullOrWhiteSpace(workspace) || !Directory.Exists(workspace))
+        {
+            return "还没有工作区。选一个文件夹，@ 才能在工作区里找文件。";
+        }
+
+        return query.Length > 0
+            ? $"工作区和资料库里都没有带「{query}」的文件。"
+            : "工作区里还没有可引用的文件。";
     }
 
     private async Task EnsureDocumentsAsync()
@@ -272,17 +362,35 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
         }
 
         _documents = await _library.LoadAsync(workspace);
+
+        // 顺手在工作区预热一遍文件索引，别让用户第一次按 @ 时等扫盘
+        if (!string.IsNullOrWhiteSpace(workspace) && Directory.Exists(workspace))
+        {
+            await Task.Run(() => _fileSearch.List(workspace));
+        }
+
         _documentsWorkspace = workspace;
         _documentsLoaded = true;
     }
 
     /// <summary>
-    /// 按名字引用一份资料，不改输入框文字。给自动化验收用，
-    /// 将来资料库页做「引用到对话」也走这里。
+    /// 按名字引用一个文件，不改输入框文字。给自动化验收用，
+    /// 将来资料库页做「引用到对话」也走这里。先找工作区，再找资料库。
     /// </summary>
     public async Task<bool> ReferenceByNameAsync(string name)
     {
         await EnsureDocumentsAsync();
+
+        var workspace = _settings.Current.WorkspacePath ?? string.Empty;
+        var file = _fileSearch
+            .Search(workspace, name, 8)
+            .FirstOrDefault(entry => entry.RelativePath.Contains(name, StringComparison.OrdinalIgnoreCase));
+
+        if (file is not null)
+        {
+            AddReference(MentionItemViewModel.FromWorkspace(file));
+            return true;
+        }
 
         var document = _documents.FirstOrDefault(item =>
             item.Name.Contains(name, StringComparison.OrdinalIgnoreCase));
@@ -292,27 +400,32 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
             return false;
         }
 
-        if (References.All(reference => reference.Document.Id != document.Id))
-        {
-            References.Add(new LibraryItemViewModel(document));
-            OnPropertyChanged(nameof(HasReferences));
-        }
-
+        AddReference(MentionItemViewModel.FromLibrary(document));
         return true;
     }
 
+    private void AddReference(MentionItemViewModel item)
+    {
+        if (References.Any(reference => reference.Id == item.Id))
+        {
+            return;
+        }
+
+        References.Add(item);
+        OnPropertyChanged(nameof(HasReferences));
+    }
+
     [RelayCommand]
-    private void AcceptMention(LibraryItemViewModel? item)
+    private void AcceptMention(MentionItemViewModel? item)
     {
         if (item is null)
         {
             return;
         }
 
-        var document = item.Document;
         var text = Text ?? string.Empty;
         var match = MentionPattern.Match(text);
-        var replacement = "@" + document.Name + " ";
+        var replacement = "@" + item.Name + " ";
 
         if (match.Success)
         {
@@ -329,17 +442,12 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
         Text = text;
         _suppressMention = false;
 
-        if (References.All(reference => reference.Document.Id != document.Id))
-        {
-            References.Add(item);
-            OnPropertyChanged(nameof(HasReferences));
-        }
-
+        AddReference(item);
         CloseMention();
     }
 
     [RelayCommand]
-    private void RemoveReference(LibraryItemViewModel? item)
+    private void RemoveReference(MentionItemViewModel? item)
     {
         if (item is null || !References.Remove(item))
         {
