@@ -29,10 +29,8 @@ public partial class SidebarView : UserControl
     /// </summary>
     private void OnWorkspaceMenuClick(object? sender, RoutedEventArgs e)
     {
-        Diag.Log("click 进入 OnWorkspaceMenuClick");
         if (sender is not Control target || target.DataContext is not WorkspaceItemViewModel item)
         {
-            Diag.Log("click 未命中 dataContext");
             return;
         }
 
@@ -48,12 +46,10 @@ public partial class SidebarView : UserControl
 
         // 打开之后再挂「点外面收起」：刚开始展开时，打开它的那一下点击还在路上，
         // 提前挂上去会把菜单自己关掉，看着像点了没反应。
-        flyout.Opened += (_, _) => { Diag.Log("opened"); AttachDismiss(flyout, target); };
-        flyout.Closed += (_, _) => Diag.Log("closed");
+        flyout.Opened += (_, _) => AttachDismiss(flyout, target);
 
         _menuFlyout = flyout;
         flyout.ShowAt(target);
-        Diag.Log($"ShowAt 完成 IsOpen={flyout.IsOpen}");
     }
 
     private Control BuildMenu(Flyout flyout, WorkspaceItemViewModel item)
@@ -219,6 +215,7 @@ public partial class SidebarView : UserControl
 
         return border;
     }
+
     /// <summary>
     /// 当前主题下弹层自带的 light dismiss 不生效（点窗口别处不收起），这里自己接管：
     /// 窗口里任何一次按下、或者按 Esc，都把弹层收起来。弹层关掉时解绑，避免越挂越多。
@@ -240,7 +237,6 @@ public partial class SidebarView : UserControl
                 return;
             }
 
-            Diag.Log($"press source={e.Source?.GetType().Name}");
             if (e.Source is Visual source)
             {
                 // 弹层自己也挂在另一个 TopLevel 上：它的点击不该把弹层关掉
@@ -256,7 +252,6 @@ public partial class SidebarView : UserControl
                 }
             }
 
-            Diag.Log("press -> hide");
             flyout.Hide();
         }
 
@@ -276,24 +271,6 @@ public partial class SidebarView : UserControl
             topLevel.RemoveHandler(InputElement.PointerPressedEvent, OnPointerPressed);
             topLevel.RemoveHandler(InputElement.KeyDownEvent, OnKeyDown);
         };
-    }
-
-    private static class Diag
-    {
-        public static void Log(string message)
-        {
-            try
-            {
-                System.IO.File.AppendAllText(
-                    System.IO.Path.Combine(System.IO.Path.GetTempPath(), "aa-menu.log"),
-                    $"[{DateTime.Now:HH:mm:ss.fff}] {message}
-");
-            }
-            catch
-            {
-                // 诊断用，失败无所谓
-            }
-        }
     }
 
     private static bool IsWithin(Visual source, Visual? owner)
