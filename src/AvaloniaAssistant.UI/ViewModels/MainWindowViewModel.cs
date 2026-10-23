@@ -25,14 +25,15 @@ public sealed partial class MainWindowViewModel : ObservableObject
         Voice = voice;
         Home = new HomeViewModel(this);
 
-        SettingsProvider.Changed += (_, _) =>
+        // SaveAsync 是在线程池上抛事件的，界面更新必须回 UI 线程，否则属性变更会跨线程打到绑定上。
+        SettingsProvider.Changed += (_, _) => Ui.Post(() =>
         {
             Home.Refresh();
             OnPropertyChanged(nameof(IsConfigured));
             OnPropertyChanged(nameof(UserName));
             OnPropertyChanged(nameof(UserInitial));
             _ = ReloadWorkspacesAsync();
-        };
+        });
     }
 
     public IAssistantRuntime Runtime { get; }
@@ -171,6 +172,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
         await ReloadSessionsAsync();
     }
 
+    /// <summary>侧边栏「添加工作区」和资料库入口共用：选一个目录，设为当前工作区并记住它。</summary>
+    [RelayCommand]
     public async Task AddWorkspaceAsync()
     {
         var folder = await Picker.PickFolderAsync("选择工作区");
@@ -179,19 +182,21 @@ public sealed partial class MainWindowViewModel : ObservableObject
             return;
         }
 
-        SelectWorkspace(folder);
-        await SettingsProvider.SaveAsync(Settings);
+        await SelectWorkspaceAsync(folder);
     }
 
-    public void SelectWorkspace(string folder)
+    public void SelectWorkspace(string folder) => _ = SelectWorkspaceAsync(folder);
+
+    public async Task SelectWorkspaceAsync(string folder)
     {
         var settings = Settings;
         settings.WorkspacePath = folder;
         settings.RecentWorkspaces.RemoveAll(path => string.Equals(path, folder, StringComparison.OrdinalIgnoreCase));
         settings.RecentWorkspaces.Insert(0, folder);
+
         Home.Refresh();
-        _ = ReloadWorkspacesAsync();
-        _ = SettingsProvider.SaveAsync(settings);
+        await ReloadWorkspacesAsync();
+        await SettingsProvider.SaveAsync(settings);
     }
 
     public async Task ReloadSessionsAsync()
