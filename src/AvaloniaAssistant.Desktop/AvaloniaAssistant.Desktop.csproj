@@ -14,6 +14,7 @@
   <ItemGroup>
     <ProjectReference Include="..\AvaloniaAssistant.Agent\AvaloniaAssistant.Agent.csproj" />
     <ProjectReference Include="..\AvaloniaAssistant.Storage\AvaloniaAssistant.Storage.csproj" />
+    <ProjectReference Include="..\AvaloniaAssistant.Speech\AvaloniaAssistant.Speech.csproj" />
     <ProjectReference Include="..\AvaloniaAssistant.UI\AvaloniaAssistant.UI.csproj" />
   </ItemGroup>
 </Project>

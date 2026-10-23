@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace AvaloniaAssistant.Abstractions;
 
 /// <summary>模型服务协议。运行时据此选择 pi.net 的 provider 适配器。</summary>
@@ -106,6 +108,9 @@ public sealed class AssistantSettings
 
     public int MaxTokens { get; set; } = 4096;
 
+    /// <summary>语音转写模型；仅在端点支持 /audio/transcriptions 时可用。</summary>
+    public string SpeechModel { get; set; } = "whisper-1";
+
     public PermissionMode Permission { get; set; } = PermissionMode.Workspace;
 
     /// <summary>当前任务默认工作区；为空时使用用户主目录下的 AvaloniaAssistant/Workspace。</summary>
@@ -119,6 +124,7 @@ public sealed class AssistantSettings
 
     public string Mode { get; set; } = "office";
 
+    [JsonIgnore]
     public AgentProtocol Protocol => ProviderPreset.For(Provider).Protocol;
 
     public AssistantSettings Clone() => new()
@@ -129,6 +135,7 @@ public sealed class AssistantSettings
         Model = Model,
         Temperature = Temperature,
         MaxTokens = MaxTokens,
+        SpeechModel = SpeechModel,
         Permission = Permission,
         WorkspacePath = WorkspacePath,
         UserName = UserName,

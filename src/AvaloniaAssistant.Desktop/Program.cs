@@ -3,6 +3,7 @@ using AtomUI.Desktop.Controls;
 using Avalonia;
 using AvaloniaAssistant.Abstractions;
 using AvaloniaAssistant.Agent;
+using AvaloniaAssistant.Speech;
 using AvaloniaAssistant.Storage;
 using AvaloniaAssistant.UI;
 using AvaloniaAssistant.UI.Services;
@@ -26,6 +27,7 @@ internal static class Program
         services.AddSingleton<ISettingsProvider>(_ => new JsonSettingsProvider());
         services.AddSingleton<ISessionStore>(_ => new JsonSessionStore());
         services.AddSingleton<IFilePicker, StorageFilePicker>();
+        services.AddSingleton<IVoiceInput, NAudioVoiceInput>();
         services.AddSingleton<IPiStreamFactory, PiStreamFactory>();
         services.AddSingleton<AgentToolRegistry>();
         services.AddSingleton<IAssistantRuntime, PiAgentRuntime>();
@@ -59,6 +61,9 @@ internal static class Program
                     break;
                 case "--page" when index + 1 < args.Length:
                     AppLaunchOptions.Page = args[++index];
+                    break;
+                case "--run" when index + 1 < args.Length:
+                    AppLaunchOptions.RunPrompt = args[++index];
                     break;
             }
         }

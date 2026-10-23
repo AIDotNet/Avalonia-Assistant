@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>AvaloniaAssistant.Speech</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="NAudio" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\AvaloniaAssistant.Abstractions\AvaloniaAssistant.Abstractions.csproj" />
+  </ItemGroup>
+</Project>

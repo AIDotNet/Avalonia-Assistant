@@ -73,7 +73,7 @@ public sealed class JsonSettingsProvider : ISettingsProvider
             }
 
             File.Move(temp, _file, overwrite: true);
-            _settings = settings;
+            _settings = settings.Clone();
         }
         finally
         {

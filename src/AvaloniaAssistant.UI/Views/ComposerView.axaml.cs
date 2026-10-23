@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -15,6 +16,12 @@ public partial class ComposerView : UserControl
     }
 
     private ComposerViewModel? ViewModel => DataContext as ComposerViewModel;
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        ViewModel?.CancelRecording();
+        base.OnDetachedFromVisualTree(e);
+    }
 
     private void OnInputKeyDown(object? sender, KeyEventArgs e)
     {

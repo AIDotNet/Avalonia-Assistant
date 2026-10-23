@@ -1,5 +1,6 @@
 <Styles xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:arc="https://github.com/AtomUICommunity/TKCode.Arc">
   <Style Selector="Button.nav">
     <Setter Property="Height" Value="36" />
     <Setter Property="Padding" Value="9,0" />
@@ -258,5 +259,10 @@
     <Setter Property="BorderBrush" Value="{StaticResource BorderStrongBrush}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="FontSize" Value="12" />
+  </Style>
+
+  <Style Selector="arc|Textarea.composer arc|FieldFrame">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
   </Style>
 </Styles>

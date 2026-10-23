@@ -116,6 +116,7 @@ public sealed partial class AssistantMessageViewModel : MessageViewModel
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasText))]
     [NotifyPropertyChangedFor(nameof(ShowActions))]
+    [NotifyPropertyChangedFor(nameof(ShowTyping))]
     private string text = string.Empty;
 
     [ObservableProperty]
@@ -233,7 +234,10 @@ public sealed partial class AssistantMessageViewModel : MessageViewModel
     }
 
     private void OnToolsChanged(object? sender, NotifyCollectionChangedEventArgs e)
-        => OnPropertyChanged(nameof(HasTools));
+    {
+        OnPropertyChanged(nameof(HasTools));
+        OnPropertyChanged(nameof(ShowTyping));
+    }
 
     private static string Format(long value) => value switch
     {

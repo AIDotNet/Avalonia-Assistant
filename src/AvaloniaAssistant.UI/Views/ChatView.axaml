@@ -65,7 +65,7 @@
                 <Border Classes="tool-card">
                   <StackPanel>
                     <Button Classes="tool-head" Command="{Binding ToggleCommand}">
-                      <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+                      <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto">
                         <Border Width="26" Height="26" CornerRadius="8" Background="{StaticResource SurfaceBrush}">
                           <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Zap}"
                                         Size="13"
@@ -86,8 +86,13 @@
                                    Text="{Binding DurationText}"
                                    Classes="caption"
                                    FontSize="10"
-                                   Margin="8,0,2,0"
+                                   Margin="8,0,6,0"
                                    VerticalAlignment="Center" />
+                        <arc:ArcGlyph Grid.Column="4"
+                                      Data="{x:Static arc:ArcIcons.ChevronDown}"
+                                      Size="12"
+                                      Foreground="{StaticResource TextMutedBrush}"
+                                      VerticalAlignment="Center" />
                       </Grid>
                     </Button>
 

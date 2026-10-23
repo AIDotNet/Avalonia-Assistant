@@ -74,7 +74,7 @@ internal static class DemoData
                             Id = "demo-call-3",
                             Name = "list_directory",
                             Label = "浏览文件夹",
-                            Arguments = "{\n  \"path\": \"C:/Users/xuzey/Downloads\"\n}",
+                            Arguments = "{\n  \"path\": \"C:/Users/demo/Downloads\"\n}",
                             Result = "找到 3 个超过 100MB 的文件。",
                             DurationMs = 41,
                         },

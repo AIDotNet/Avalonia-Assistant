@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using Avalonia.Media;
 using AvaloniaAssistant.Abstractions;
 using AvaloniaAssistant.UI.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -6,25 +7,30 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace AvaloniaAssistant.UI.ViewModels;
 
-public sealed partial class ComposerViewModel : ObservableObject
+public sealed partial class ComposerViewModel : ObservableObject, IDisposable
 {
     private readonly IAssistantRuntime _runtime;
     private readonly ISettingsProvider _settings;
     private readonly IFilePicker _picker;
     private readonly Func<Task> _openSettings;
+    private readonly IVoiceInput _voice;
+    private readonly EventHandler _settingsChanged;
 
     public ComposerViewModel(
         IAssistantRuntime runtime,
         ISettingsProvider settings,
         IFilePicker picker,
+        IVoiceInput voice,
         Func<Task> openSettings)
     {
         _runtime = runtime;
         _settings = settings;
         _picker = picker;
+        _voice = voice;
         _openSettings = openSettings;
+        _settingsChanged = (_, _) => Refresh();
         RefreshModels();
-        _settings.Changed += (_, _) => Refresh();
+        _settings.Changed += _settingsChanged;
     }
 
     public event EventHandler<string>? SendRequested;
@@ -35,7 +41,6 @@ public sealed partial class ComposerViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SendCommand))]
-    [NotifyPropertyChangedFor(nameof(IsEmpty))]
     private string? text;
 
     [ObservableProperty]
@@ -44,9 +49,25 @@ public sealed partial class ComposerViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(ShowStop))]
     private bool isBusy;
 
-    public bool IsEmpty => string.IsNullOrWhiteSpace(Text);
-
     public bool ShowSend => !IsBusy;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(MicTooltip))]
+    [NotifyPropertyChangedFor(nameof(MicBrush))]
+    [NotifyCanExecuteChangedFor(nameof(SendCommand))]
+    private bool isRecording;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasVoiceError))]
+    private string? voiceError;
+
+    public bool HasVoiceError => !string.IsNullOrWhiteSpace(VoiceError);
+
+    public string MicTooltip => IsRecording ? "停止并转写" : "语音输入";
+
+    public IBrush MicBrush => IsRecording
+        ? new SolidColorBrush(Color.Parse("#B3261E"))
+        : new SolidColorBrush(Color.Parse("#6F6F69"));
 
     public bool ShowStop => IsBusy;
 
@@ -67,6 +88,11 @@ public sealed partial class ComposerViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanSend))]
     private void Send()
     {
+        if (IsRecording)
+        {
+            CancelRecording();
+        }
+
         var value = Text?.Trim() ?? string.Empty;
         if (value.Length == 0)
         {
@@ -83,10 +109,60 @@ public sealed partial class ComposerViewModel : ObservableObject
         SendRequested?.Invoke(this, value);
     }
 
-    private bool CanSend() => !IsBusy && !string.IsNullOrWhiteSpace(Text);
+    private bool CanSend() => !IsBusy && !IsRecording && !string.IsNullOrWhiteSpace(Text);
 
     [RelayCommand]
     private void Stop() => StopRequested?.Invoke(this, EventArgs.Empty);
+
+    public void CancelRecording()
+    {
+        if (!IsRecording)
+        {
+            return;
+        }
+
+        IsRecording = false;
+        _voice.Cancel();
+    }
+
+    [RelayCommand]
+    private async Task ToggleVoiceAsync()
+    {
+        if (IsBusy)
+        {
+            return;
+        }
+
+        if (!IsConfigured)
+        {
+            _ = _openSettings();
+            return;
+        }
+
+        try
+        {
+            VoiceError = null;
+
+            if (!IsRecording)
+            {
+                await _voice.StartAsync();
+                IsRecording = true;
+                return;
+            }
+
+            IsRecording = false;
+            var text = await _voice.StopAndTranscribeAsync();
+            if (!string.IsNullOrWhiteSpace(text))
+            {
+                Text = string.IsNullOrWhiteSpace(Text) ? text : $"{Text.TrimEnd()} {text}";
+            }
+        }
+        catch (Exception ex)
+        {
+            IsRecording = false;
+            VoiceError = ex.Message;
+        }
+    }
 
     [RelayCommand]
     private async Task AttachAsync()
@@ -147,6 +223,8 @@ public sealed partial class ComposerViewModel : ObservableObject
         Refresh();
         await _settings.SaveAsync(_settings.Current);
     }
+
+    public void Dispose() => _settings.Changed -= _settingsChanged;
 
     public void Refresh()
     {

@@ -1,0 +1,210 @@
+# 架构说明
+
+## 1. 一句话
+
+**UI 只认识 `IAssistantRuntime` 和一组事件；Agent 只认识 Pi 的 `Agent`；`Desktop` 在中间把它们接起来。**
+
+```
+┌────────────────────────────────────────────────────────────────────┐
+│ AvaloniaAssistant.Desktop                                          │
+│ Program.cs：DI 组合根 + Arc/AtomUI 初始化                            │
+└───────────────┬───────────────────────────────┬────────────────────┘
+                │                               │
+┌───────────────▼──────────────┐  ┌─────────────▼──────────────────┐
+│ AvaloniaAssistant.UI         │  │ AvaloniaAssistant.Agent        │
+│ MainWindow / Views / VMs     │  │ PiAgentRuntime / ToolRegistry  │
+│ 依赖：Abstractions + Arc     │  │ 依赖：Abstractions + Pi.Agent  │
+└───────────────┬──────────────┘  └─────────────┬──────────────────┘
+                │                               │
+        ┌───────▼───────────────────────────────▼───────┐
+        │ AvaloniaAssistant.Abstractions                │
+        │ IAssistantRuntime / 事件 / Session / Settings │
+        │ 零第三方依赖                                   │
+        └───────▲───────────────────────────────▲───────┘
+                │                               │
+     ┌──────────┴──────────┐         ┌──────────┴──────────┐
+     │ Storage             │         │ Speech              │
+     │ settings / sessions │         │ NAudio + 转写 API   │
+     └─────────────────────┘         └─────────────────────┘
+```
+
+依赖方向是单向的：`UI` 与 `Agent` 互不引用。想换掉 pi.net，只需要再写一个
+`IAssistantRuntime` 实现；想换 UI 框架，`Agent` / `Storage` 一行不用改。
+
+## 2. 项目与目录
+
+| 项目 | 职责 | 关键目录 |
+| --- | --- | --- |
+| `AvaloniaAssistant.Abstractions` | 契约与 DTO，零依赖 | `IAssistantRuntime.cs`、`AgentContracts.cs`、`ChatSession.cs`、`AssistantSettings.cs` |
+| `AvaloniaAssistant.Agent` | pi.net 适配、系统提示、工具注册与执行 | `PiAgentRuntime.cs`、`PiStreamFactory.cs`、`Tools/` |
+| `AvaloniaAssistant.Storage` | JSON 设置/会话读写，原子写入 | `JsonSettingsProvider.cs`、`JsonSessionStore.cs`、`AppPaths.cs` |
+| `AvaloniaAssistant.Speech` | NAudio 录音 + 语音转写 | `NAudioVoiceInput.cs` |
+| `AvaloniaAssistant.UI` | 窗口、页面、ViewModel、样式、截图 | `Views/`、`ViewModels/`、`Styles/` |
+| `AvaloniaAssistant.Desktop` | 入口、DI、Arc 初始化、参数解析 | `Program.cs` |
+| `AvaloniaAssistant.Agent.Tests` | 循环、工具、HTTP、持久化测试 | 4 个测试文件，9 个用例 |
+
+## 3. 一次对话的时序
+
+```
+ChatView 输入
+   │  ComposerView.SendCommand
+   ▼
+ChatViewModel.SendPromptAsync
+   │  1. 追加 UserMessageViewModel + ChatEntry
+   │  2. 追加 AssistantMessageViewModel（占位）
+   │  3. 组装 AgentRunRequest（history / permission / workspace / gate）
+   ▼
+IAssistantRuntime.RunAsync  ──►  PiAgentRuntime
+   │                               ├─ 建 SystemMessage + 历史
+   │                               ├─ 注册 12 个 AgentTool
+   │                               ├─ StreamFn = OpenAi/Anthropic StreamSimple
+   │                               └─ Agent.Prompt(prompt)
+   │                                        │
+   │   ◄── AgentStreamEvent ────────────────┘
+   │        TextDelta / ThinkingDelta
+   │        ToolStarted / ToolFinished
+   │        RunCompleted / RunFailed
+   ▼
+ChatViewModel 更新 MessageViewModel
+   │  - 文本 55ms 批量刷新（避免每个 token 重排 Markdown）
+   │  - 工具卡片原位更新
+   │  - 自动滚动（用户上滚后停止粘底）
+   ▼
+落盘 ChatSession（JSON）+ 刷新侧边栏
+```
+
+## 4. 事件协议
+
+`AgentStreamEvent` 是 UI 与 Agent 之间唯一的通信面：
+
+| 事件 | 携带 | UI 行为 |
+| --- | --- | --- |
+| `RunStarted` | sessionId / model | 顶部状态改为“正在连接 …” |
+| `TextDelta` | 增量文本 | 追加到 Markdown，节流刷新 |
+| `ThinkingDelta` | 思考增量 | 折叠区“思考过程” |
+| `ToolStarted` | callId / name / label / args | 插入工具卡片，状态“运行中” |
+| `ToolFinished` | callId / result / isError / duration | 更新状态、耗时、可展开结果 |
+| `RunCompleted` | stopReason / error / token 用量 | 结束流式，写 token 脚注 |
+| `RunFailed` | message | 红色错误块 |
+
+`IAssistantRuntime.Abort(sessionId)` 是带外的中止通道：UI 调 `Stop` 时同时取消
+`CancellationToken` 并调用它。工具执行前的授权也走带外回调 `IToolApprovalGate`，
+它由 `ChatViewModel` 实现，把授权卡片插进当前对话并等待用户点“允许/拒绝”。
+
+## 5. 权限模型
+
+| 模式 | 读工作区 | 写工作区 | 越界路径 | 执行命令 / 结束进程 |
+| --- | --- | --- | --- | --- |
+| 只读 | ✅ | ❌ 直接阻止 | ❌ | ❌ |
+| 工作区 | ✅ | ✅ | ❌ 直接阻止 | ⚠️ 逐次授权 |
+| 完全访问 | ✅ | ✅ | ✅ | ✅ 直接执行 |
+
+实现分两层：
+
+1. **描述层**：`AgentToolInfo.IsMutating` / `RequiresApproval`。
+2. **执行层**：
+   - `BeforeToolCall` 检查 `PermissionMode`：只读模式拦下所有 mutating 工具；
+   - 需要授权的工具调用 `IToolApprovalGate.RequestAsync`，用户拒绝则返回 `Block=true`；
+   - 文件工具再用 `ToolPaths.Resolve` 做工作区边界检查，`FullAccess` 才放行越界。
+
+`run_command` 还有 60 秒超时、进程树 kill、20 万字符输出上限；
+`open_path` 拒绝直接启动 `.exe` / `.bat` / `.ps1` 等可执行文件，避免把“打开”变成“运行”。
+
+## 6. 持久化
+
+```
+%APPDATA%\AvaloniaAssistant\
+├── settings.json           # 模型、密钥、权限、工作区、工具开关
+├── sessions\
+│   ├── 9f2c….json          # 一个会话一个文件
+│   └── …
+└── Workspace\              # 默认工作区
+```
+
+- 写入走 `*.tmp` + `File.Move(overwrite)`，避免半截 JSON。
+- 会话 DTO 与 UI 解耦：`ChatSession` / `ChatEntry` / `ToolCallRecord`，不含任何 Avalonia 类型。
+- `settings.json` 里的 API Key 目前是明文；这是已知边界，见 `README` 的“已知边界”。
+
+## 7. UI 结构
+
+```
+MainWindow (1280×820)
+├── SidebarView (268px)
+│   ├── 品牌 / 收起
+│   ├── 新建任务
+│   ├── 导航：助理 / 技能 / 资料库 / 设置
+│   ├── 任务分组（今天 / 昨天 / 最近 7 天 / 更早）
+│   ├── 空间（工作区）
+│   └── 用户卡
+└── Border（白底圆角面板）
+    └── ContentControl + DataTemplate
+        ├── HomeView        欢迎、模式、快捷提示、建议卡、输入框
+        ├── ChatView        会话头、消息列表、授权卡、输入框
+        ├── ToolsView       12 个工具分组与开关
+        ├── LibraryView     工作区顶层文件
+        └── SettingsView    模型 / 权限 / 工作区 / 关于
+```
+
+`ComposerView` 是独立控件，首页和会话页共用；它只依赖 `ComposerViewModel`，
+菜单（模型 / 权限 / 工作区）在 code-behind 里动态生成 `MenuFlyout`。
+
+UI 的状态变更全部通过 ViewModel 命令；code-behind 只做三件事：
+输入框回车、动态菜单、消息列表自动滚动。
+
+## 8. 扩展点
+
+### 加一个 provider
+
+1. `AgentProviderKind` 加枚举；
+2. `ProviderPreset.All` 加一条（BaseUrl / 默认模型 / 协议）；
+3. 如果协议是新的，在 `PiStreamFactory` 里加分支。
+
+UI 的 provider 卡片和模型菜单会自动出现。
+
+### 加一个工具
+
+1. 在 `Tools/` 实现 `IAgentTool`（`Info` + `ExecuteAsync`）；
+2. 加进 `AgentToolRegistry.DefaultTools()`；
+3. 设置 `IsMutating` / `RequiresApproval`。
+
+UI 的技能页与系统提示里的工具清单都会自动更新。
+
+### 加一个页面
+
+1. 写 `XxxViewModel`；
+2. 写 `XxxView.axaml`，构造函数里 `AvaloniaXamlLoader.Load(this)`；
+3. 在 `App.axaml` 的 `Application.DataTemplates` 里加一条 `DataType → View`；
+4. 在 `MainWindowViewModel` 里给一个 `CurrentPage = new XxxViewModel(this)` 的命令。
+
+### 换掉 Agent 框架
+
+实现 `IAssistantRuntime`，在 `Program.cs` 里替换注册即可。UI 不需要改。
+
+## 9. 线程模型
+
+- `PiAgentRuntime.RunAsync` 在后台任务里跑 Pi 的循环，事件写进无界 `Channel`；
+- UI 的 `await foreach` 在 Avalonia 同步上下文里消费，所以 ViewModel 更新天然在 UI 线程；
+- `IToolApprovalGate` 可能从后台线程调用，实现里用 `Dispatcher.UIThread` 切回 UI；
+- 文本增量在 `AssistantMessageViewModel` 里用 55ms 的 `DispatcherTimer` 批量刷新，
+  避免每个 token 都重新解析 Markdown。
+
+## 10. 测试
+
+| 测试文件 | 验证什么 |
+| --- | --- |
+| `PiAgentRuntimeTests` | Faux 模型驱动的完整循环、工具调用、只读拦截、授权拒绝、缺 Key |
+| `OpenAiWireTests` | 本机 TCP 起一个 OpenAI 兼容 SSE 端点，走真实 HTTP/流式解析，断言工具声明在请求体里 |
+| `ToolExecutionTests` | `list_directory` / `read_file` 正常，越界写被工作区沙箱拦下 |
+| `StorageTests` | settings / session 的 JSON 往返与删除 |
+
+运行：
+
+```bash
+dotnet test tests/AvaloniaAssistant.Agent.Tests
+```
+
+UI 没有做自动化测试，但提供 `--screenshot` 离线渲染：
+
+```bash
+dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot docs/images/home.png --page home
+```

@@ -7,7 +7,7 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace AvaloniaAssistant.UI.ViewModels;
 
-public sealed partial class ChatViewModel : ObservableObject
+public sealed partial class ChatViewModel : ObservableObject, IDisposable
 {
     private readonly MainWindowViewModel _host;
     private readonly IAssistantRuntime _runtime;
@@ -26,17 +26,26 @@ public sealed partial class ChatViewModel : ObservableObject
             Mode = host.Settings.Mode,
         };
 
-        Composer = new ComposerViewModel(_runtime, _settings, host.Picker, host.OpenSettingsAsync);
+        Composer = new ComposerViewModel(_runtime, _settings, host.Picker, host.Voice, host.OpenSettingsAsync);
         Composer.SendRequested += async (_, text) => await SendPromptAsync(text);
         Composer.StopRequested += (_, _) => Stop();
 
         Messages.CollectionChanged += OnMessagesChanged;
-        _settings.Changed += (_, _) => OnPropertyChanged(nameof(HeaderSubtitle));
+        _settings.Changed += OnSettingsChanged;
 
         LoadEntries();
     }
 
     public ChatSession Session { get; }
+
+    public void Dispose()
+    {
+        _settings.Changed -= OnSettingsChanged;
+        Composer.Dispose();
+    }
+
+    private void OnSettingsChanged(object? sender, EventArgs e)
+        => OnPropertyChanged(nameof(HeaderSubtitle));
 
     public ObservableCollection<MessageViewModel> Messages { get; } = [];
 
@@ -57,7 +66,7 @@ public sealed partial class ChatViewModel : ObservableObject
 
     public bool HasMessages => Messages.Count > 0;
 
-    public event EventHandler? ScrollToEndRequested;
+    public event EventHandler<bool>? ScrollToEndRequested;
 
     [ObservableProperty]
     private bool isBusy;
@@ -148,9 +157,9 @@ public sealed partial class ChatViewModel : ObservableObject
                 }
             }
 
-            var historyEntries = addUserMessage
-                ? Session.Entries.Take(Session.Entries.Count - 1)
-                : Session.Entries;
+            // addUserMessage=false（重试）时，最后一条也是这次要重发的 user，
+            // 一并从历史里排除，否则模型会看到重复的问题。
+            var historyEntries = Session.Entries.Take(Session.Entries.Count - 1);
 
             assistantEntry = new ChatEntry
             {
@@ -162,7 +171,7 @@ public sealed partial class ChatViewModel : ObservableObject
             assistant = new AssistantMessageViewModel
             {
                 RetryRequested = () => _ = RetryAsync(),
-                ScrollRequested = RequestScroll,
+                ScrollRequested = () => RequestScroll(false),
             };
             Messages.Add(assistant);
 
@@ -213,7 +222,7 @@ public sealed partial class ChatViewModel : ObservableObject
                             Arguments = toolStarted.Arguments,
                         });
                         StatusText = $"正在执行「{toolStarted.Label}」…";
-                        RequestScroll();
+                        RequestScroll(false);
                         break;
                     }
 
@@ -231,7 +240,7 @@ public sealed partial class ChatViewModel : ObservableObject
                         }
 
                         StatusText = toolFinished.IsError ? "工具执行失败，继续处理…" : "工具执行完成，继续处理…";
-                        RequestScroll();
+                        RequestScroll(false);
                         break;
                     }
 
@@ -315,9 +324,16 @@ public sealed partial class ChatViewModel : ObservableObject
             IsBusy = false;
             Composer.IsBusy = false;
             StatusText = stopReason == AgentStopReason.Aborted ? "已停止" : "完成";
-            RequestScroll();
+            RequestScroll(false);
 
-            await _host.SaveSessionAsync(Session);
+            try
+            {
+                await _host.SaveSessionAsync(Session);
+            }
+            catch (Exception ex)
+            {
+                StatusText = "会话保存失败：" + ex.Message;
+            }
         }
     }
 
@@ -341,18 +357,14 @@ public sealed partial class ChatViewModel : ObservableObject
                         OutputTokens = entry.OutputTokens,
                         Error = entry.Error,
                         RetryRequested = () => _ = RetryAsync(),
-                        ScrollRequested = RequestScroll,
+                        ScrollRequested = () => RequestScroll(false),
                     };
                     assistant.SetPersisted(entry.Text, entry.Reasoning);
 
                     foreach (var record in entry.ToolCalls)
                     {
                         var tool = new ToolCallViewModel(record.Id, record.Name, record.Label, record.Arguments);
-                        if (!string.IsNullOrWhiteSpace(record.Result) || record.DurationMs is not null || record.IsError)
-                        {
-                            tool.Finish(record.Result, record.IsError, record.DurationMs);
-                        }
-
+                        tool.Finish(record.Result, record.IsError, record.DurationMs);
                         assistant.Tools.Add(tool);
                     }
 
@@ -390,12 +402,13 @@ public sealed partial class ChatViewModel : ObservableObject
         return history;
     }
 
-    private void RequestScroll() => ScrollToEndRequested?.Invoke(this, EventArgs.Empty);
+    private void RequestScroll(bool force) => ScrollToEndRequested?.Invoke(this, force);
 
     private void OnMessagesChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         OnPropertyChanged(nameof(HasMessages));
-        RequestScroll();
+        var addedUserMessage = e.NewItems?.OfType<UserMessageViewModel>().Any() == true;
+        RequestScroll(addedUserMessage);
     }
 
     private sealed class ChatApprovalGate(ChatViewModel owner) : IToolApprovalGate
@@ -414,7 +427,7 @@ public sealed partial class ChatViewModel : ObservableObject
                     request.Reason,
                     allowed => completion.TrySetResult(allowed));
                 owner.Messages.Add(card);
-                owner.RequestScroll();
+                owner.RequestScroll(true);
             });
 
             using var registration = cancellationToken.Register(() => completion.TrySetResult(false));

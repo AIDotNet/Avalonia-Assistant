@@ -15,12 +15,14 @@ public sealed partial class MainWindowViewModel : ObservableObject
         IAssistantRuntime runtime,
         ISettingsProvider settings,
         ISessionStore sessions,
-        IFilePicker picker)
+        IFilePicker picker,
+        IVoiceInput voice)
     {
         _sessions = sessions;
         Runtime = runtime;
         SettingsProvider = settings;
         Picker = picker;
+        Voice = voice;
         Home = new HomeViewModel(this);
 
         SettingsProvider.Changed += (_, _) =>
@@ -38,6 +40,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public ISettingsProvider SettingsProvider { get; }
 
     public IFilePicker Picker { get; }
+
+    public IVoiceInput Voice { get; }
 
     public AssistantSettings Settings => SettingsProvider.Current;
 
@@ -182,6 +186,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         settings.RecentWorkspaces.Insert(0, folder);
         Home.Refresh();
         _ = ReloadWorkspacesAsync();
+        _ = SettingsProvider.SaveAsync(settings);
     }
 
     public async Task ReloadSessionsAsync()
@@ -304,6 +309,14 @@ public sealed partial class MainWindowViewModel : ObservableObject
         });
 
         OnPropertyChanged(nameof(IsHomeSelected));
+    }
+
+    partial void OnCurrentPageChanging(object? oldValue, object? newValue)
+    {
+        if (oldValue is ChatViewModel chat)
+        {
+            chat.Dispose();
+        }
     }
 
     partial void OnCurrentPageChanged(object? value)

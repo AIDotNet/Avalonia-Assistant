@@ -23,6 +23,19 @@ public interface IToolApprovalGate
     Task<bool> RequestAsync(ToolApprovalRequest request, CancellationToken cancellationToken);
 }
 
+/// <summary>麦克风录音 + 语音转写。实现放在基础设施层，UI 只负责按钮状态。</summary>
+public interface IVoiceInput
+{
+    bool IsRecording { get; }
+
+    Task StartAsync(CancellationToken cancellationToken = default);
+
+    Task<string> StopAndTranscribeAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>放弃当前录音，不转写。</summary>
+    void Cancel();
+}
+
 public interface ISessionStore
 {
     Task<IReadOnlyList<ChatSession>> LoadAllAsync(CancellationToken cancellationToken = default);

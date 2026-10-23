@@ -241,6 +241,11 @@ internal sealed class SearchFilesTool : IAgentTool
 
 internal sealed class OpenPathTool : IAgentTool
 {
+    private static readonly HashSet<string> ExecutableExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".exe", ".bat", ".cmd", ".com", ".msi", ".ps1", ".vbs", ".js", ".jar", ".lnk", ".scr",
+    };
+
     public AgentToolInfo Info { get; } = new(
         "open_path",
         "打开文件或文件夹",
@@ -260,6 +265,12 @@ internal sealed class OpenPathTool : IAgentTool
         if (!File.Exists(full) && !Directory.Exists(full))
         {
             throw new FileNotFoundException($"路径不存在：{full}");
+        }
+
+        if (File.Exists(full) && ExecutableExtensions.Contains(Path.GetExtension(full)))
+        {
+            throw new InvalidOperationException(
+                "不允许用 open_path 直接启动可执行文件。需要运行时请用 run_command，并让用户确认。");
         }
 
         Shell.Open(full);

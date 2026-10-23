@@ -16,15 +16,15 @@
     </Border>
 
     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-      <StackPanel MaxWidth="780" Margin="28,24,28,28" Spacing="22" HorizontalAlignment="Center">
+      <StackPanel MaxWidth="760" Margin="28,24,28,28" Spacing="22" HorizontalAlignment="Center">
 
-        <StackPanel Spacing="10">
+        <StackPanel Spacing="12">
           <TextBlock Text="模型服务" FontSize="15" FontWeight="SemiBold" />
           <TextBlock Text="所有请求直接发往你填写的端点；密钥只保存在本机的 settings.json。"
                      Classes="caption"
                      TextWrapping="Wrap" />
 
-          <ItemsControl ItemsSource="{Binding Providers}" Margin="0,2,0,0">
+          <ItemsControl ItemsSource="{Binding Providers}" Margin="0,2,0,4">
             <ItemsControl.ItemsPanel>
               <ItemsPanelTemplate>
                 <UniformGrid Columns="2" />
@@ -48,49 +48,37 @@
             </ItemsControl.ItemTemplate>
           </ItemsControl>
 
-          <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,4,0,0">
-            <TextBlock Text="API Key" FontSize="12" VerticalAlignment="Center" Width="86" />
-            <TextBox x:Name="KeyBox"
-                     Grid.Column="1"
-                     Classes="field"
-                     Text="{Binding ApiKey, Mode=TwoWay}"
-                     PasswordChar="●"
-                     PlaceholderText="sk-..." />
-            <Button Grid.Column="2"
+          <Grid ColumnDefinitions="*,Auto">
+            <arc:Input Label="API Key"
+                       Placeholder="sk-..."
+                       Text="{Binding ApiKey, Mode=TwoWay}"
+                       PasswordChar="●" />
+            <Button Grid.Column="1"
                     Classes="icon"
                     Click="OnRevealKeyClick"
                     ToolTip.Tip="显示/隐藏密钥"
-                    Margin="6,0,0,0">
+                    Margin="6,22,0,0"
+                    VerticalAlignment="Center">
               <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Eye}" Size="15" />
             </Button>
           </Grid>
 
-          <Grid ColumnDefinitions="86,*" Margin="0,2,0,0">
-            <TextBlock Text="Base URL" FontSize="12" VerticalAlignment="Center" />
-            <TextBox Grid.Column="1"
-                     Classes="field"
-                     Text="{Binding BaseUrl, Mode=TwoWay}"
-                     PlaceholderText="https://api.deepseek.com/v1" />
-          </Grid>
+          <arc:Input Label="Base URL"
+                     Placeholder="https://api.deepseek.com/v1"
+                     Text="{Binding BaseUrl, Mode=TwoWay}" />
 
-          <Grid ColumnDefinitions="86,*" Margin="0,2,0,0">
-            <TextBlock Text="模型" FontSize="12" VerticalAlignment="Center" />
-            <TextBox Grid.Column="1"
-                     Classes="field"
-                     Text="{Binding Model, Mode=TwoWay}"
-                     PlaceholderText="deepseek-chat" />
-          </Grid>
+          <arc:Input Label="模型"
+                     Placeholder="deepseek-chat"
+                     Text="{Binding Model, Mode=TwoWay}" />
 
-          <Grid ColumnDefinitions="86,*,86,*" Margin="0,2,0,0">
-            <TextBlock Text="Temperature" FontSize="12" VerticalAlignment="Center" />
-            <TextBox Grid.Column="1"
-                     Classes="field"
-                     Text="{Binding Temperature, Mode=TwoWay}"
-                     Margin="0,0,16,0" />
-            <TextBlock Grid.Column="2" Text="Max tokens" FontSize="12" VerticalAlignment="Center" />
-            <TextBox Grid.Column="3"
-                     Classes="field"
-                     Text="{Binding MaxTokens, Mode=TwoWay}" />
+          <Grid ColumnDefinitions="*,*">
+            <arc:Input Label="Temperature"
+                       Text="{Binding Temperature, Mode=TwoWay}"
+                       Margin="0,0,8,0" />
+            <arc:Input Grid.Column="1"
+                       Label="Max tokens"
+                       Text="{Binding MaxTokens, Mode=TwoWay}"
+                       Margin="8,0,0,0" />
           </Grid>
         </StackPanel>
 
@@ -122,17 +110,16 @@
                      TextWrapping="Wrap"
                      LineHeight="18" />
 
-          <Grid ColumnDefinitions="86,*,Auto" Margin="0,4,0,0">
-            <TextBlock Text="工作区" FontSize="12" VerticalAlignment="Center" />
-            <TextBox Grid.Column="1"
-                     Classes="field"
-                     Text="{Binding WorkspacePath}"
-                     IsReadOnly="True" />
-            <Button Grid.Column="2"
+          <Grid ColumnDefinitions="*,Auto">
+            <arc:Input Label="工作区"
+                       Text="{Binding WorkspacePath}"
+                       IsReadOnly="True" />
+            <Button Grid.Column="1"
                     Classes="ghost-action"
                     Height="36"
                     Padding="12,0"
-                    Margin="6,0,0,0"
+                    Margin="8,22,0,0"
+                    VerticalAlignment="Center"
                     Command="{Binding BrowseWorkspaceCommand}"
                     Content="选择…" />
           </Grid>
@@ -142,7 +129,7 @@
 
         <StackPanel Spacing="8">
           <TextBlock Text="关于" FontSize="15" FontWeight="SemiBold" />
-          <Grid ColumnDefinitions="86,*" RowDefinitions="Auto,Auto,Auto" >
+          <Grid ColumnDefinitions="86,*" RowDefinitions="Auto,Auto,Auto">
             <TextBlock Text="版本" FontSize="12" Margin="0,4" />
             <TextBlock Grid.Column="1" Text="Avalonia Assistant 1.0.0" FontSize="12" Margin="0,4" />
             <TextBlock Grid.Row="1" Text="技术栈" FontSize="12" Margin="0,4" />
@@ -159,9 +146,9 @@
     </ScrollViewer>
 
     <Border Grid.Row="2" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0" Padding="28,12">
-      <Grid ColumnDefinitions="*,Auto,Auto">
+      <Grid ColumnDefinitions="*,Auto">
         <TextBlock Text="{Binding SavedText}" Classes="caption" VerticalAlignment="Center" />
-        <Button Grid.Column="2"
+        <Button Grid.Column="1"
                 Classes="approve"
                 Height="34"
                 Padding="18,0"

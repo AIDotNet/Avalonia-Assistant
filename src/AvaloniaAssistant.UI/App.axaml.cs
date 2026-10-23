@@ -63,20 +63,27 @@ public partial class AssistantApp : Application
                     break;
             }
 
+            if (!string.IsNullOrWhiteSpace(AppLaunchOptions.RunPrompt))
+            {
+                await viewModel.StartNewChatAsync(AppLaunchOptions.RunPrompt);
+            }
+
             if (string.IsNullOrWhiteSpace(AppLaunchOptions.ScreenshotPath))
             {
                 return;
             }
 
-            await Task.Delay(1600);
+            await Task.Delay(string.IsNullOrWhiteSpace(AppLaunchOptions.RunPrompt) ? 1600 : 4500);
             Capture(window, AppLaunchOptions.ScreenshotPath);
             desktop.Shutdown();
         }
         catch (Exception ex)
         {
+            Console.Error.WriteLine(ex);
+            viewModel.CurrentPage = viewModel.Home;
+
             if (!string.IsNullOrWhiteSpace(AppLaunchOptions.ScreenshotPath))
             {
-                Console.Error.WriteLine(ex);
                 desktop.Shutdown(-1);
             }
         }
@@ -97,6 +104,6 @@ public partial class AssistantApp : Application
             Directory.CreateDirectory(directory);
         }
 
-        bitmap.Save(path);
+        bitmap.Save(path, PngBitmapEncoderOptions.Default);
     }
 }

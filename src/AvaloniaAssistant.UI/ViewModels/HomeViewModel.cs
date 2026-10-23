@@ -22,7 +22,7 @@ public sealed partial class HomeViewModel : ObservableObject
     public HomeViewModel(MainWindowViewModel host)
     {
         _host = host;
-        Composer = new ComposerViewModel(host.Runtime, host.SettingsProvider, host.Picker, host.OpenSettingsAsync);
+        Composer = new ComposerViewModel(host.Runtime, host.SettingsProvider, host.Picker, host.Voice, host.OpenSettingsAsync);
         Composer.SendRequested += async (_, text) => await host.StartNewChatAsync(text);
 
         Cards =

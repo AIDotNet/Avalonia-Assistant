@@ -109,4 +109,7 @@ public static class AppLaunchOptions
     public static string? ScreenshotPath { get; set; }
 
     public static string Page { get; set; } = "home";
+
+    /// <summary>开发用：启动后自动发送一条消息（配合 --screenshot 做端到端验证）。</summary>
+    public static string? RunPrompt { get; set; }
 }
