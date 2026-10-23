@@ -24,7 +24,7 @@
   </Style>
 
   <Style Selector="Button.task">
-    <Setter Property="Padding" Value="9,8" />
+    <Setter Property="Padding" Value="9,6" />
     <Setter Property="HorizontalAlignment" Value="Stretch" />
     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
     <Setter Property="Background" Value="Transparent" />

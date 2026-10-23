@@ -115,14 +115,18 @@
                           <Button Classes="task"
                                   Classes.active="{Binding IsActive}"
                                   Command="{Binding OpenCommand}">
-                            <StackPanel Spacing="2">
+                            <Grid ColumnDefinitions="*,Auto">
                               <TextBlock Text="{Binding Title}"
                                          FontSize="12.5"
+                                         VerticalAlignment="Center"
                                          TextTrimming="CharacterEllipsis" />
-                              <TextBlock Text="{Binding TimeText}"
-                                         FontSize="10.5"
+                              <TextBlock Grid.Column="1"
+                                         Text="{Binding TimeText}"
+                                         FontSize="10"
+                                         Margin="8,0,0,0"
+                                         VerticalAlignment="Center"
                                          Foreground="{StaticResource TextMutedBrush}" />
-                            </StackPanel>
+                            </Grid>
                           </Button>
                           <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                             <Button Classes="icon delete"
