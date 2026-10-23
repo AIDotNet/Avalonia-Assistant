@@ -5,6 +5,13 @@
              xmlns:views="using:AvaloniaAssistant.UI.Views"
              x:Class="AvaloniaAssistant.UI.Views.ChatView">
 
+  <UserControl.Styles>
+    <!-- 消息列表的滚动条常驻显示：自动隐藏时只剩一条 2~3px 的细线，鼠标根本抓不住 -->
+    <Style Selector="ScrollViewer.message-list /template/ ScrollBar">
+      <Setter Property="AllowAutoHide" Value="False" />
+    </Style>
+  </UserControl.Styles>
+
   <UserControl.DataTemplates>
     <DataTemplate DataType="{x:Type vm:UserMessageViewModel}">
       <Grid Margin="0,10,0,18" HorizontalAlignment="Right">
@@ -255,6 +262,7 @@
 
     <ScrollViewer x:Name="MessagesScroll"
                   Grid.Row="1"
+                  Classes="message-list"
                   VerticalScrollBarVisibility="Auto"
                   HorizontalScrollBarVisibility="Disabled">
       <ItemsControl ItemsSource="{Binding Messages}"
