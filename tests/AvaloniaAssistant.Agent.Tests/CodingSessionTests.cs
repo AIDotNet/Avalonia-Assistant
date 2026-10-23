@@ -83,20 +83,16 @@ public sealed class CodingSessionTests
     }
 
     /// <summary>
-    /// MCP 工具从注册到真实调用、再到结果回传的整条链路。
+    /// MCP 工具从注册到真实调用、再到结果回传的整条链路，包含带参数字段的那条分支。
     /// </summary>
     /// <remarks>
-    /// 这里刻意用**无参数**调用：Pi.CodingAgent 1.4.1 的 <c>McpServerConnection.ToArguments</c>
-    /// （Extensions/Mcp/Runtime.cs）把 Agent 传下来的 <see cref="System.Text.Json.Nodes.JsonNode"/>
-    /// 直接挂到新的 JsonObject 上，没有 <c>DeepClone()</c>；而 <c>Validation.ValidateToolArguments</c>
-    /// 返回的子节点已带父节点，于是任何带参数的 MCP 调用都会抛
-    /// <c>The node already has a parent.</c>
-    /// <para>
-    /// 该缺陷已在 pi.net 源码修复（同一行改成 <c>node.DeepClone()</c>），并加了回归测试
-    /// <c>CallToolAcceptsArgumentValuesThatAlreadyHaveAParent</c>（回滚修复会红）。
-    /// 用修复后的源码临时切 ProjectReference 跑过本用例的带参数版本，返回 <c>echo: hello</c> 正常。
-    /// 升级到含该修复的 NuGet 版本后，把这里的参数加回来即可。
-    /// </para>
+    /// 参数必须带值：Pi.CodingAgent 1.4.1 的 <c>McpServerConnection.ToArguments</c> 把 Agent
+    /// 传下来的 <see cref="System.Text.Json.Nodes.JsonNode"/> 直接挂到新 JsonObject 上，
+    /// 而 <c>Validation.ValidateToolArguments</c> 返回的子节点已带父节点，于是抛
+    /// <c>The node already has a parent.</c>，所有带参数的 MCP 工具都调不动。
+    /// 该缺陷在 pi.net 修复（<c>node.DeepClone()</c>）并随 1.4.2 发布，
+    /// 上游回归用例是 <c>CallToolAcceptsArgumentValuesThatAlreadyHaveAParent</c>。
+    /// 本用例保持带参数，避免以后升级时又退回「只测无参」而漏掉这条路径。
     /// </remarks>
     [Fact]
     public async Task CallsMcpToolEndToEndAndGetsItsResult()
@@ -114,7 +110,7 @@ public sealed class CodingSessionTests
         var stream = Pi.Ai.Providers.Faux.CreateStreamFn(
         [
             Pi.Ai.Providers.Faux.Response.ToolUse(
-                new Pi.Ai.Types.ToolCallContent("call-1", "mcp__demo__echo", new Dictionary<string, object?>())),
+                new Pi.Ai.Types.ToolCallContent("call-1", "mcp__demo__echo", new Dictionary<string, object?> { ["text"] = "hello" })),
             Pi.Ai.Providers.Faux.Response.Text("工具已返回。"),
         ]);
 
@@ -144,7 +140,7 @@ public sealed class CodingSessionTests
         var single = Assert.Single(results);
         var text = string.Concat(single.Content.OfType<Pi.Ai.Types.TextContent>().Select(block => block.Text));
         Assert.False(single.IsError, text);
-        Assert.Contains("echo:", text);
+        Assert.Contains("echo: hello", text);
     }
 
     [Fact]
@@ -213,7 +209,7 @@ public sealed class CodingSessionTests
             send({ jsonrpc: '2.0', id: message.id, result: { tools: [{
               name: 'echo',
               description: '回显传入的文本',
-              inputSchema: { type: 'object', properties: { text: { type: 'string' } } }
+              inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] }
             }]}});
           } else if (message.method === 'tools/call') {
             send({ jsonrpc: '2.0', id: message.id, result: {

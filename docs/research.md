@@ -4,7 +4,7 @@
 
 | 项目 | 本地路径 | 本次使用方式 | 版本 |
 | --- | --- | --- | --- |
-| pi.net | `D:\AI\参考项目\pi.net` | NuGet 包 `Pi.Agent`（传递引入 `Pi.Ai`、`Pi.Telemetry`） | 1.4.1 |
+| pi.net | `D:\AI\参考项目\pi.net` | NuGet 包 `Pi.CodingAgent`（传递引入 `Pi.Agent`、`Pi.Ai`、`Pi.Mcp`） | 1.4.2 |
 | TKCode.Arc | `D:\AI\参考项目\TKCode.Arc` | NuGet 包 `TKCode.Arc`、`TKCode.Arc.Fonts` | 0.3.0-preview.1 |
 
 > 包和本地源码在少数地方不完全一致，下面单独标注。实现以**包实际暴露的 API**为准，本地源码用来理解行为和边界。
@@ -97,7 +97,8 @@ new AgentTool(
 
 ### 1.4 包与源码的差异
 
-- 包 `Pi.Agent` 1.4.1 与本地 `Directory.Build.props` 的 `<Version>1.4.1</Version>` 一致，API 对得上。
+- 包 `Pi.CodingAgent` 1.4.2 与本地源码 API 对得上；本地源码的 `<Version>` 仍是 1.4.1，
+  发版时靠 `-p:Version=` 覆盖，下次发包记得别漏（否则新包会被当成 1.4.1 撞车）。
 - 本地源码的 `TreatWarningsAsErrors=true` 只影响它自己的仓库；以包方式引用不会把这条规则带进来。
 
 ## 2. TKCode.Arc：UI 框架

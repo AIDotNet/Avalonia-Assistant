@@ -7,6 +7,6 @@
     <InvariantGlobalization>false</InvariantGlobalization>
     <AvaloniaVersion>12.1.4</AvaloniaVersion>
     <ArcVersion>0.3.0-preview.1</ArcVersion>
-    <PiVersion>1.4.1</PiVersion>
+    <PiVersion>1.4.2</PiVersion>
   </PropertyGroup>
 </Project>
