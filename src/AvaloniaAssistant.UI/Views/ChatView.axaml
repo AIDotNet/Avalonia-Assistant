@@ -15,15 +15,33 @@
   <UserControl.DataTemplates>
     <DataTemplate DataType="{x:Type vm:UserMessageViewModel}">
       <Grid Margin="0,10,0,18" HorizontalAlignment="Right">
-        <Border Background="{StaticResource UserBubbleBrush}"
-                CornerRadius="16,16,4,16"
-                Padding="14,10"
-                MaxWidth="620">
-          <SelectableTextBlock Text="{Binding Text}"
-                               TextWrapping="Wrap"
-                               FontSize="13.5"
-                               LineHeight="21" />
-        </Border>
+        <StackPanel HorizontalAlignment="Right" Spacing="4">
+          <Border Background="{StaticResource UserBubbleBrush}"
+                  CornerRadius="16,16,4,16"
+                  Padding="14,10"
+                  MaxWidth="620">
+            <SelectableTextBlock Text="{Binding Text}"
+                                 TextWrapping="Wrap"
+                                 FontSize="13.5"
+                                 LineHeight="21" />
+          </Border>
+
+          <!-- 引用了哪些资料，气泡下面留一行小字，事后回看能对上 -->
+          <StackPanel Orientation="Horizontal"
+                      Spacing="5"
+                      HorizontalAlignment="Right"
+                      Margin="0,0,4,0"
+                      IsVisible="{Binding HasAttachments}">
+            <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Paperclip}"
+                          Size="11"
+                          Foreground="{StaticResource TextMutedBrush}" />
+            <TextBlock Text="{Binding AttachmentLabel}"
+                       Classes="caption"
+                       FontSize="10.5"
+                       MaxWidth="420"
+                       TextTrimming="CharacterEllipsis" />
+          </StackPanel>
+        </StackPanel>
       </Grid>
     </DataTemplate>
 

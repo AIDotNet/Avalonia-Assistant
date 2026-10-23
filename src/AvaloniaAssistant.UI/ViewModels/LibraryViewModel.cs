@@ -1,6 +1,6 @@
 using System.Collections.ObjectModel;
 using Avalonia.Media;
-using Avalonia.Media.Immutable;
+using AvaloniaAssistant.Storage;
 using AvaloniaAssistant.UI.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -15,71 +15,89 @@ public enum LibrarySort
     Recent,
 }
 
-public sealed partial class FileItemViewModel
-{
-    public required string Name { get; init; }
-
-    public required string FullPath { get; init; }
-
-    public required bool IsDirectory { get; init; }
-
-    public required bool IsHidden { get; init; }
-
-    public required DateTime ModifiedAt { get; init; }
-
-    /// <summary>右上角的小标签：文件是扩展名（MD / CS），文件夹是「文件夹」。</summary>
-    public required string TypeLabel { get; init; }
-
-    /// <summary>大小列：文件是体积，文件夹是子项数量。</summary>
-    public required string SizeText { get; init; }
-
-    public required long Length { get; init; }
-
-    public required IBrush TileBackground { get; init; }
-
-    public required IBrush IconBrush { get; init; }
-
-    public Geometry Icon => IsDirectory ? ArcIcons.Folder : ArcIcons.FileText;
-
-    /// <summary>近两天说「今天 / 昨天」，更早的只留月日和时分——目录列表里没人关心年份。</summary>
-    public string ModifiedText
-    {
-        get
-        {
-            var today = DateTime.Now.Date;
-            if (ModifiedAt.Date == today)
-            {
-                return "今天 " + ModifiedAt.ToString("HH:mm");
-            }
-
-            if (ModifiedAt.Date == today.AddDays(-1))
-            {
-                return "昨天 " + ModifiedAt.ToString("HH:mm");
-            }
-
-            return ModifiedAt.ToString("MM-dd HH:mm");
-        }
-    }
-
-    [RelayCommand]
-    private void Open() => Ui.OpenExternal(FullPath);
-}
-
 public sealed partial class LibraryViewModel : ObservableObject
 {
     private const int MaxEntries = 200;
 
-    private static readonly (string Label, IBrush Background, IBrush Foreground) FolderStyle =
-        ("文件夹", Tint("#FBF1DE"), Tint("#9A6516"));
-
     private readonly MainWindowViewModel _host;
-    private List<FileItemViewModel> _entries = [];
+    private readonly LibraryStore _store;
 
-    public LibraryViewModel(MainWindowViewModel host)
+    private List<FileItemViewModel> _entries = [];
+    private List<LibraryDocument> _documents = [];
+
+    public LibraryViewModel(MainWindowViewModel host, LibraryStore store)
     {
         _host = host;
+        _store = store;
         _ = RefreshAsync();
     }
+
+    // ── 两个视图：资料库（收进来的）和工作区（本来就有的） ─────────────────
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsWorkspaceView))]
+    private bool isLibraryView = true;
+
+    public bool IsWorkspaceView => !IsLibraryView;
+
+    public string LibraryTabText => _documents.Count > 0 ? $"资料库 {_documents.Count}" : "资料库";
+
+    public string WorkspaceTabText
+    {
+        get
+        {
+            var count = Folders.Count + Files.Count;
+            return count > 0 ? $"工作区 {count}" : "工作区";
+        }
+    }
+
+    [RelayCommand]
+    private void ShowLibrary() => IsLibraryView = true;
+
+    [RelayCommand]
+    private void ShowWorkspace() => IsLibraryView = false;
+
+    // ── 资料库 ────────────────────────────────────────────────────────
+
+    public ObservableCollection<LibraryItemViewModel> VisibleDocuments { get; } = [];
+
+    public bool HasVisibleDocuments => VisibleDocuments.Count > 0;
+
+    [ObservableProperty]
+    private bool hasDocuments;
+
+    [ObservableProperty]
+    private bool showLibraryEmpty;
+
+    [ObservableProperty]
+    private bool showLibraryNoMatch;
+
+    [ObservableProperty]
+    private string librarySummary = string.Empty;
+
+    public bool HasLibrarySummary => !string.IsNullOrEmpty(LibrarySummary);
+
+    [ObservableProperty]
+    private bool isImporting;
+
+    [ObservableProperty]
+    private bool isDragging;
+
+    [ObservableProperty]
+    private string libraryNotice = string.Empty;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(LibraryNoticeBrush))]
+    private bool isLibraryNoticeError;
+
+    public bool HasLibraryNotice => !string.IsNullOrEmpty(LibraryNotice);
+
+    /// <summary>导入成功走绿、失败走红，一条提示两副面孔。</summary>
+    public IBrush LibraryNoticeBrush => IsLibraryNoticeError
+        ? new SolidColorBrush(Color.Parse("#B3261E"))
+        : new SolidColorBrush(Color.Parse("#2E7D32"));
+
+    // ── 工作区 ────────────────────────────────────────────────────────
 
     public ObservableCollection<FileItemViewModel> Folders { get; } = [];
 
@@ -166,7 +184,7 @@ public sealed partial class LibraryViewModel : ObservableObject
     [ObservableProperty]
     private bool hasFiles;
 
-    /// <summary>有东西可列。为 false 时整块列表让位给空态。</summary>
+    /// <summary>工作区视图里有东西可列。为 false 时整块列表让位给空态。</summary>
     [ObservableProperty]
     private bool showContent;
 
@@ -183,11 +201,15 @@ public sealed partial class LibraryViewModel : ObservableObject
     private bool showNoMatch;
 
     [ObservableProperty]
+    private Geometry emptyIcon = ArcIcons.FolderOpen;
+
+    public bool ShowEmpty => ShowEmptyState || ShowNoMatch;
+
+    [ObservableProperty]
     private string noticeText = string.Empty;
 
     public bool HasNotice => !string.IsNullOrEmpty(NoticeText);
 
-    /// <summary>工作区变了要连带刷新标题栏，光刷列表不够。</summary>
     private void RaiseWorkspaceChanged()
     {
         OnPropertyChanged(nameof(WorkspacePath));
@@ -204,12 +226,171 @@ public sealed partial class LibraryViewModel : ObservableObject
         NoticeText = string.Empty;
         OnPropertyChanged(nameof(HasNotice));
 
+        await ReloadDocumentsAsync();
+        await RefreshWorkspaceAsync();
+    }
+
+    // ── 资料库：导入 / 删除 / 打开 ──────────────────────────────────────
+
+    [RelayCommand]
+    private async Task ImportFilesAsync()
+    {
+        if (!HasWorkspace)
+        {
+            ShowLibraryNotice("先选一个工作区，资料要存在它的 .library 目录里。", isError: true);
+            return;
+        }
+
+        var file = await _host.Picker.PickFileAsync("选择要收录进资料库的文件");
+        if (string.IsNullOrWhiteSpace(file))
+        {
+            return;
+        }
+
+        await ImportPathsAsync([file]);
+    }
+
+    /// <summary>拖拽和「收录」按钮都走这里。UI 只给一批路径，去重和索引由 store 负责。</summary>
+    public async Task ImportPathsAsync(IReadOnlyList<string> paths)
+    {
+        if (paths.Count == 0)
+        {
+            return;
+        }
+
+        if (!HasWorkspace)
+        {
+            ShowLibraryNotice("先选一个工作区，资料要存在它的 .library 目录里。", isError: true);
+            return;
+        }
+
+        IsImporting = true;
+        try
+        {
+            var result = await _store.ImportAsync(WorkspacePath, paths);
+
+            var parts = new List<string>();
+            if (result.Imported.Count > 0)
+            {
+                parts.Add($"收录 {result.Imported.Count} 份");
+            }
+
+            if (result.Skipped.Count > 0)
+            {
+                parts.Add($"同名跳过 {result.Skipped.Count} 份");
+            }
+
+            if (result.Errors.Count > 0)
+            {
+                parts.Add(result.Errors[0]);
+            }
+
+            ShowLibraryNotice(
+                parts.Count > 0 ? string.Join(" · ", parts) : "没有可收录的文件",
+                isError: result.Errors.Count > 0 && result.Imported.Count == 0);
+
+            await ReloadDocumentsAsync();
+        }
+        finally
+        {
+            IsImporting = false;
+        }
+    }
+
+    [RelayCommand]
+    private void CollectFile(FileItemViewModel? item)
+    {
+        if (item is null || item.IsDirectory)
+        {
+            return;
+        }
+
+        _ = ImportPathsAsync([item.FullPath]);
+    }
+
+    private void OpenDocument(LibraryItemViewModel item)
+    {
+        var path = Path.Combine(LibraryStore.FilesFor(WorkspacePath), item.Document.FileName);
+        Ui.OpenExternal(path);
+    }
+
+    private void RemoveDocument(LibraryItemViewModel item) => _ = RemoveDocumentAsync(item);
+
+    private async Task RemoveDocumentAsync(LibraryItemViewModel item)
+    {
+        if (!await _store.RemoveAsync(WorkspacePath, item.Document.Id))
+        {
+            return;
+        }
+
+        ShowLibraryNotice($"已从资料库移除「{item.Name}」，原文件没动", isError: false);
+        await ReloadDocumentsAsync();
+    }
+
+    [RelayCommand]
+    private void OpenLibraryFolder()
+    {
+        if (!HasWorkspace)
+        {
+            return;
+        }
+
+        Directory.CreateDirectory(LibraryStore.FilesFor(WorkspacePath));
+        Ui.OpenExternal(LibraryStore.RootFor(WorkspacePath));
+    }
+
+    private void ShowLibraryNotice(string text, bool isError)
+    {
+        LibraryNotice = text;
+        IsLibraryNoticeError = isError;
+        OnPropertyChanged(nameof(HasLibraryNotice));
+    }
+
+    private async Task ReloadDocumentsAsync()
+    {
+        _documents = (await _store.LoadAsync(WorkspacePath)).ToList();
+        ApplyDocumentFilter();
+    }
+
+    private void ApplyDocumentFilter()
+    {
+        var query = SearchText.Trim();
+        var visible = _documents
+            .Where(document => LibraryStore.Matches(document, query))
+            .OrderByDescending(document => document.AddedAt)
+            .ToList();
+
+        VisibleDocuments.Clear();
+        foreach (var document in visible)
+        {
+            VisibleDocuments.Add(new LibraryItemViewModel(document, OpenDocument, RemoveDocument));
+        }
+
+        HasDocuments = _documents.Count > 0;
+        ShowLibraryEmpty = _documents.Count == 0;
+        ShowLibraryNoMatch = _documents.Count > 0 && visible.Count == 0;
+        OnPropertyChanged(nameof(HasVisibleDocuments));
+
+        var total = _documents.Sum(document => document.Size);
+        var indexed = _documents.Count(document => document.HasText);
+        LibrarySummary = _documents.Count == 0
+            ? string.Empty
+            : $"{_documents.Count} 份 · 共 {FormatSize(total)} · {indexed} 份可引用正文";
+
+        OnPropertyChanged(nameof(HasLibrarySummary));
+        OnPropertyChanged(nameof(LibraryTabText));
+    }
+
+    // ── 工作区：枚举 / 过滤 ────────────────────────────────────────────
+
+    private async Task RefreshWorkspaceAsync()
+    {
         _entries = [];
         var workspace = WorkspacePath;
 
         if (!HasWorkspace)
         {
-            ApplyFilter();
+            ApplyWorkspaceFilter();
             return;
         }
 
@@ -222,7 +403,7 @@ public sealed partial class LibraryViewModel : ObservableObject
             OnPropertyChanged(nameof(HasNotice));
         }
 
-        ApplyFilter();
+        ApplyWorkspaceFilter();
     }
 
     [RelayCommand]
@@ -253,21 +434,25 @@ public sealed partial class LibraryViewModel : ObservableObject
     [RelayCommand]
     private void Back() => _host.OpenHome();
 
-    partial void OnSearchTextChanged(string value) => ApplyFilter();
+    partial void OnSearchTextChanged(string value)
+    {
+        ApplyDocumentFilter();
+        ApplyWorkspaceFilter();
+    }
 
-    partial void OnShowHiddenChanged(bool value) => ApplyFilter();
+    partial void OnShowHiddenChanged(bool value) => ApplyWorkspaceFilter();
 
     partial void OnSortChanged(LibrarySort value)
     {
         OnPropertyChanged(nameof(IsNameSort));
         OnPropertyChanged(nameof(IsRecentSort));
-        ApplyFilter();
+        ApplyWorkspaceFilter();
     }
 
     /// <summary>
     /// 过滤和排序都在内存里做：目录顶多 200 条，重新扫盘的代价比重新排一遍大得多。
     /// </summary>
-    private void ApplyFilter()
+    private void ApplyWorkspaceFilter()
     {
         var query = SearchText.Trim();
 
@@ -318,23 +503,28 @@ public sealed partial class LibraryViewModel : ObservableObject
         ShowEmptyState = !HasWorkspace || (_entries.Count == 0 && query.Length == 0);
         if (!HasWorkspace)
         {
+            EmptyIcon = ArcIcons.FolderOpen;
             EmptyTitle = "还没有工作区";
             EmptyDescription = "选一个文件夹当工作区，这里会列出它的内容，点一下就用系统程序打开。";
         }
+        else if (ShowNoMatch)
+        {
+            EmptyIcon = ArcIcons.Search;
+            EmptyTitle = "没有匹配的文件";
+            EmptyDescription = $"没有名字里带「{query}」的项目。换个词，或者显示隐藏项。";
+        }
         else if (_entries.Count == 0)
         {
+            EmptyIcon = ArcIcons.FolderOpen;
             EmptyTitle = "这个文件夹是空的";
             EmptyDescription = "让助手在这里写点东西，或者换一个已经有内容的工作区。";
         }
-        else if (ShowNoMatch)
-        {
-            EmptyTitle = "没有匹配的文件";
-            EmptyDescription = $"没有名字里带「{query}」的项目，换个词或者把隐藏项也显示出来。";
-        }
 
+        OnPropertyChanged(nameof(ShowEmpty));
         OnPropertyChanged(nameof(FolderCountText));
         OnPropertyChanged(nameof(FileSummaryText));
         OnPropertyChanged(nameof(HiddenLabel));
+        OnPropertyChanged(nameof(WorkspaceTabText));
     }
 
     private static (List<FileItemViewModel> Items, string? Error) LoadEntries(string workspace)
@@ -355,37 +545,25 @@ public sealed partial class LibraryViewModel : ObservableObject
                 if (entry is DirectoryInfo directory)
                 {
                     var (count, capped) = CountChildren(directory);
-                    var size = capped ? "200+ 项" : $"{count} 项";
-                    items.Add(new FileItemViewModel
-                    {
-                        Name = directory.Name,
-                        FullPath = directory.FullName,
-                        IsDirectory = true,
-                        IsHidden = hidden,
-                        ModifiedAt = directory.LastWriteTime,
-                        TypeLabel = FolderStyle.Label,
-                        SizeText = size,
-                        Length = 0,
-                        TileBackground = FolderStyle.Background,
-                        IconBrush = FolderStyle.Foreground,
-                    });
+                    items.Add(new FileItemViewModel(
+                        directory.Name,
+                        directory.FullName,
+                        isDirectory: true,
+                        hidden,
+                        directory.LastWriteTime,
+                        0,
+                        capped ? "200+ 项" : $"{count} 项"));
                 }
                 else if (entry is FileInfo file)
                 {
-                    var style = StyleFor(file.Extension);
-                    items.Add(new FileItemViewModel
-                    {
-                        Name = file.Name,
-                        FullPath = file.FullName,
-                        IsDirectory = false,
-                        IsHidden = hidden,
-                        ModifiedAt = file.LastWriteTime,
-                        TypeLabel = style.Label,
-                        SizeText = FormatSize(file.Length),
-                        Length = file.Length,
-                        TileBackground = style.Background,
-                        IconBrush = style.Foreground,
-                    });
+                    items.Add(new FileItemViewModel(
+                        file.Name,
+                        file.FullName,
+                        isDirectory: false,
+                        hidden,
+                        file.LastWriteTime,
+                        file.Length,
+                        FormatSize(file.Length)));
                 }
             }
         }
@@ -436,40 +614,6 @@ public sealed partial class LibraryViewModel : ObservableObject
             return false;
         }
     }
-
-    /// <summary>
-    /// 文件类型配色。底色都很浅，压在白底列表里像一张标签纸，不抢文件名的位置。
-    /// </summary>
-    private static (string Label, IBrush Background, IBrush Foreground) StyleFor(string extension)
-    {
-        var ext = extension.TrimStart('.').ToLowerInvariant();
-        return ext switch
-        {
-            "cs" or "csproj" or "sln" or "slnx" or "props" or "targets" or "axaml" or "xaml"
-                or "json" or "yml" or "yaml" or "toml" or "ps1" or "sh" or "bat" or "cmd"
-                => (Label(ext), Tint("#EDF0FA"), Tint("#3D57A5")),
-            "md" or "txt" or "rst" or "log"
-                => (Label(ext), Tint("#EAF4EC"), Tint("#2E7D32")),
-            "png" or "jpg" or "jpeg" or "gif" or "webp" or "svg" or "ico" or "bmp"
-                => (Label(ext), Tint("#F4EEFB"), Tint("#7350B5")),
-            "pdf" or "doc" or "docx" or "xls" or "xlsx" or "ppt" or "pptx" or "csv"
-                => (Label(ext), Tint("#FCEEE2"), Tint("#A9581A")),
-            "mp3" or "wav" or "mp4" or "mov" or "mkv" or "flac"
-                => (Label(ext), Tint("#FDEBEE"), Tint("#B03A48")),
-            "zip" or "7z" or "rar" or "gz" or "tar"
-                => (Label(ext), Tint("#F1F1EE"), Tint("#6F6F69")),
-            "" => ("FILE", Tint("#F2F2EF"), Tint("#6F6F69")),
-            _ => (Label(ext), Tint("#F2F2EF"), Tint("#6F6F69")),
-        };
-
-        static string Label(string ext)
-            => ext.Length is > 0 and <= 4
-                ? ext.ToUpperInvariant()
-                : ext[..Math.Min(4, ext.Length)].ToUpperInvariant();
-    }
-
-    /// <summary>颜色要在线程池线程上建（枚举目录时），所以用不可变画刷，别拿 AvaloniaObject 跨线程。</summary>
-    private static IBrush Tint(string hex) => new ImmutableSolidColorBrush(Color.Parse(hex));
 
     private static string FormatSize(long bytes)
     {

@@ -62,13 +62,50 @@ public partial class ComposerView : UserControl
 
     private void OnInputKeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.Key != Key.Enter || e.KeyModifiers.HasFlag(KeyModifiers.Shift))
+        var viewModel = ViewModel;
+        if (viewModel is null)
         {
             return;
         }
 
-        var viewModel = ViewModel;
-        if (viewModel is null)
+        // @ 浮层开着的时候，上下键和 Enter 归浮层：先选资料，再把光标交回输入框，
+        // 别让用户按 Enter 想选一条却把半截问题发出去了。
+        if (viewModel.ShowMention)
+        {
+            if (viewModel.HasMentionItems)
+            {
+                switch (e.Key)
+                {
+                    case Key.Down:
+                        viewModel.MoveMention(1);
+                        e.Handled = true;
+                        return;
+
+                    case Key.Up:
+                        viewModel.MoveMention(-1);
+                        e.Handled = true;
+                        return;
+
+                    case Key.Enter when !e.KeyModifiers.HasFlag(KeyModifiers.Shift):
+                        viewModel.AcceptCurrentMention();
+                        e.Handled = true;
+                        return;
+
+                    case Key.Escape:
+                        viewModel.CloseMentionCommand.Execute(null);
+                        e.Handled = true;
+                        return;
+                }
+            }
+            else if (e.Key == Key.Escape)
+            {
+                viewModel.CloseMentionCommand.Execute(null);
+                e.Handled = true;
+                return;
+            }
+        }
+
+        if (e.Key != Key.Enter || e.KeyModifiers.HasFlag(KeyModifiers.Shift))
         {
             return;
         }

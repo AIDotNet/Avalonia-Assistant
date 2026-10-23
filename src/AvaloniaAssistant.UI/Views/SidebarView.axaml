@@ -222,13 +222,13 @@
           </StackPanel>
 
           <Grid ColumnDefinitions="*,Auto" Margin="8,0,4,4">
-            <TextBlock Text="空间" Classes="section-title" />
+            <TextBlock Text="{Binding WorkspaceCountText}" Classes="section-title" />
             <Button Grid.Column="1"
                     Classes="icon"
                     Width="22"
                     Height="22"
                     Command="{Binding AddWorkspaceCommand}"
-                    ToolTip.Tip="添加工作区">
+                    ToolTip.Tip="新建空间">
               <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Plus}" Size="13" />
             </Button>
           </Grid>
@@ -239,7 +239,7 @@
                 <!-- 空间之间留一点空隙，免得两组对话连成一整片 -->
                 <StackPanel Margin="0,2,0,4">
                   <Border Classes="ws-chip" Classes.active="{Binding IsActive}" CornerRadius="9">
-                    <Grid Classes="workspace-row" ColumnDefinitions="*,Auto">
+                    <Grid Classes="workspace-row" ColumnDefinitions="*,Auto,Auto">
                       <Button Classes="nav ws-head"
                               Classes.active="{Binding IsActive}"
                               Command="{Binding ToggleCommand}">
@@ -273,6 +273,15 @@
                         </Grid>
                       </Button>
                       <Button Grid.Column="1"
+                              Classes="icon ws-add"
+                              Width="22"
+                              Height="22"
+                              Margin="0,0,2,0"
+                              Command="{Binding NewSessionCommand}"
+                              ToolTip.Tip="新建会话">
+                        <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Plus}" Size="12" />
+                      </Button>
+                      <Button Grid.Column="2"
                               Classes="icon ws-more"
                               Width="22"
                               Height="22"
@@ -298,21 +307,12 @@
             </ItemsControl.ItemTemplate>
           </ItemsControl>
 
-          <TextBlock Text="没有工作区，任务按普通对话处理。"
+          <TextBlock Text="还没有空间。点「空间」右边的 + 选一个文件夹，新建的任务就挂在这个空间下。"
                      Classes="caption"
                      FontSize="10.5"
-                     Margin="8,2,0,2"
+                     Margin="8,2,8,2"
                      TextWrapping="Wrap"
                      IsVisible="{Binding !HasWorkspaces}" />
-
-          <Button Classes="nav" Command="{Binding AddWorkspaceCommand}">
-            <StackPanel Orientation="Horizontal" Spacing="9">
-              <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Plus}"
-                            Size="15"
-                            Foreground="{Binding $parent[Button].Foreground}" />
-              <TextBlock Text="添加工作区" VerticalAlignment="Center" Foreground="{StaticResource TextMutedBrush}" />
-            </StackPanel>
-          </Button>
         </StackPanel>
       </ScrollViewer>
 

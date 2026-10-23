@@ -142,4 +142,19 @@ public static class AppLaunchOptions
 
     /// <summary>开发用：启动后直接弹「完全访问」风险确认层，确认即切档，配合 --screenshot 看版式。</summary>
     public static bool ConfirmFullAccessDialog { get; set; }
+
+    /// <summary>开发用：资料库页预置搜索词，配合 --screenshot 检查过滤结果与空态。</summary>
+    public static string? LibrarySearch { get; set; }
+
+    /// <summary>开发用：资料库页默认把隐藏项放出来，避免截图里看不到 .git 之类的一层。</summary>
+    public static bool LibraryShowHidden { get; set; }
+
+    /// <summary>开发用：启动时把这些文件真实导入资料库，用于端到端验证与截图。</summary>
+    public static List<string> LibraryImports { get; } = [];
+
+    /// <summary>开发用：预置一条资料引用，检查引用标签的版式。</summary>
+    public static string? ComposerMention { get; set; }
+
+    /// <summary>开发用：资料库页直接落到「工作区」这个视图，省一次点击。</summary>
+    public static bool LibraryWorkspaceTab { get; set; }
 }

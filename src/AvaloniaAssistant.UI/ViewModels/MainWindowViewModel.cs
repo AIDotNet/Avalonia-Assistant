@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using AvaloniaAssistant.Abstractions;
+using AvaloniaAssistant.Storage;
 using AvaloniaAssistant.UI.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -18,13 +19,15 @@ public sealed partial class MainWindowViewModel : ObservableObject
         ISettingsProvider settings,
         ISessionStore sessions,
         IFilePicker picker,
-        IVoiceInput voice)
+        IVoiceInput voice,
+        LibraryStore library)
     {
         _sessions = sessions;
         Runtime = runtime;
         SettingsProvider = settings;
         Picker = picker;
         Voice = voice;
+        Library = library;
         Home = new HomeViewModel(this);
 
         // SaveAsync 是在线程池上抛事件的，界面更新必须回 UI 线程，否则属性变更会跨线程打到绑定上。
@@ -46,6 +49,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     public IVoiceInput Voice { get; }
 
+    /// <summary>工作区资料库。composer 的 @ 引用和资料库页共用这一份，不各读各的索引。</summary>
+    public LibraryStore Library { get; }
+
     public AssistantSettings Settings => SettingsProvider.Current;
 
     public HomeViewModel Home { get; }
@@ -63,6 +69,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public string VersionText => "v1.0.0";
 
     public string SessionCountText => $"任务 ({SessionGroups.Sum(group => group.Items.Count)})";
+
+    /// <summary>「空间」标题右侧跟着条数，和「任务」保持一致；一个都没有时不挂个 0。</summary>
+    public string WorkspaceCountText => HasWorkspaces ? $"空间 ({Workspaces.Count})" : "空间";
 
     public bool HasNoSessions => SessionGroups.Count == 0;
 
@@ -116,8 +125,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     public void OpenMcp() => CurrentPage = new McpViewModel(this);
 
+    /// <summary>资料库页只在用户点进来时才读索引，不必常驻一个 VM。</summary>
     [RelayCommand]
-    public void OpenLibrary() => CurrentPage = new LibraryViewModel(this);
+    public void OpenLibrary() => CurrentPage = new LibraryViewModel(this, Library);
 
     [RelayCommand]
     public async Task OpenSettingsAsync()
@@ -129,15 +139,21 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private void ToggleSidebar() => IsSidebarVisible = !IsSidebarVisible;
 
-    public async Task StartNewChatAsync(string? prompt)
+    public Task StartNewChatAsync(string? prompt)
+        => OpenNewChatAsync(string.IsNullOrWhiteSpace(prompt) ? null : PromptRequest.Plain(prompt));
+
+    /// <summary>带着资料引用开新任务：首页里 @ 了资料也能直接发，不用先进对话再引用一遍。</summary>
+    public Task StartNewChatAsync(PromptRequest request) => OpenNewChatAsync(request);
+
+    private async Task OpenNewChatAsync(PromptRequest? request)
     {
         var chat = new ChatViewModel(this, null);
         CurrentPage = chat;
         await SetActiveSessionAsync(null);
 
-        if (!string.IsNullOrWhiteSpace(prompt))
+        if (request is not null)
         {
-            await chat.SendPromptAsync(prompt);
+            await chat.SendPromptAsync(request);
         }
     }
 
@@ -227,6 +243,30 @@ public sealed partial class MainWindowViewModel : ObservableObject
         item.IsExpanded = expand;
 
         _ = SelectWorkspaceAsync(item.Path);
+    }
+
+    /// <summary>
+    /// 空间行上的「+」：在这个空间里直接开一张新对话，不再让用户挑目录。
+    /// 空间如果收着就展开，否则新对话建在看不见的地方。
+    /// </summary>
+    public async Task NewSessionInWorkspaceAsync(string path)
+    {
+        var settings = Settings;
+        settings.WorkspacePath = path;
+
+        // 和切换空间一样，只改当前工作区，不把这条记录挪到列表最前面
+        if (!settings.RecentWorkspaces.Contains(path, StringComparer.OrdinalIgnoreCase))
+        {
+            settings.RecentWorkspaces.Add(path);
+        }
+
+        SetCollapsed(settings, path, false);
+
+        Home.Refresh();
+        await ReloadWorkspacesAsync();
+        await SettingsProvider.SaveAsync(settings);
+
+        await OpenNewChatAsync(null);
     }
 
     /// <summary>把已有记录换成另一个目录；换的正好是当前工作区时，当前也跟着切过去。</summary>
@@ -415,6 +455,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             var item = new WorkspaceItemViewModel(
                 path,
                 ToggleWorkspace,
+                NewSessionInWorkspaceAsync,
                 OpenWorkspaceFolder,
                 RenameWorkspaceAsync,
                 RepickWorkspaceAsync,
@@ -455,6 +496,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(HasNoSessions));
         OnPropertyChanged(nameof(ShowTaskSection));
         OnPropertyChanged(nameof(HasWorkspaces));
+        OnPropertyChanged(nameof(WorkspaceCountText));
     }
 
     private SessionItemViewModel CreateSessionItem(ChatSession session, string? activeId, string workspaceName)

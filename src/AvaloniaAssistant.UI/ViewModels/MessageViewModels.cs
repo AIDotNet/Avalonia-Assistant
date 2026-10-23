@@ -18,12 +18,24 @@ public abstract class MessageViewModel : ObservableObject
 
 public sealed partial class UserMessageViewModel : MessageViewModel
 {
-    public UserMessageViewModel(string text)
+    public UserMessageViewModel(string text, IReadOnlyList<ChatAttachment>? attachments = null)
     {
         Text = text;
+        Attachments = attachments ?? [];
     }
 
     public string Text { get; }
+
+    /// <summary>这一轮 @ 进来的资料。气泡里只显示名字，正文不进界面。</summary>
+    public IReadOnlyList<ChatAttachment> Attachments { get; }
+
+    public bool HasAttachments => Attachments.Count > 0;
+
+    public string AttachmentText => string.Join("、", Attachments.Select(item => item.Name));
+
+    public string AttachmentLabel => Attachments.Count == 1
+        ? $"引用了 {AttachmentText}"
+        : $"引用了 {Attachments.Count} 份：{AttachmentText}";
 }
 
 public sealed partial class ToolCallViewModel : ObservableObject

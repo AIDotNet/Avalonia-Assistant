@@ -38,6 +38,9 @@ public sealed class ChatEntry
 
     public List<ToolCallRecord> ToolCalls { get; set; } = [];
 
+    /// <summary>这一轮用户从资料库引用进来的文档。内容留快照，重试或第二天接着聊都是同一份上下文。</summary>
+    public List<ChatAttachment> Attachments { get; set; } = [];
+
     public string? Error { get; set; }
 
     public string? Model { get; set; }
@@ -47,9 +50,28 @@ public sealed class ChatEntry
     public long OutputTokens { get; set; }
 }
 
-public sealed class ToolCallRecord
+/// <summary>
+/// 一轮提问里引用的一份资料。只带模型真正需要的东西，不含磁盘路径——
+/// 会话存档换个工作区也还能用，不会指向一个已经不存在的位置。
+/// </summary>
+public sealed class ChatAttachment
 {
     public string Id { get; set; } = string.Empty;
+
+    public string Name { get; set; } = string.Empty;
+
+    public string Kind { get; set; } = "FILE";
+
+    public long Size { get; set; }
+
+    /// <summary>正文快照，限长在导入时已经裁过；二进制文件为 null。</summary>
+    public string? Text { get; set; }
+
+    public bool HasText => !string.IsNullOrEmpty(Text);
+}
+
+public sealed class ToolCallRecord
+{    public string Id { get; set; } = string.Empty;
 
     public string Name { get; set; } = string.Empty;
 

@@ -6,6 +6,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Media.Imaging;
 using Avalonia.VisualTree;
 using AvaloniaAssistant.Abstractions;
+using AvaloniaAssistant.Storage;
 using AvaloniaAssistant.UI.Services;
 using AvaloniaAssistant.UI.ViewModels;
 using AvaloniaAssistant.UI.Views;
@@ -49,6 +50,12 @@ public partial class AssistantApp : Application
         {
             await viewModel.InitializeAsync();
 
+            // 截图验收用：把文件真的导进资料库，走的是界面里同一条代码路径
+            if (AppLaunchOptions.LibraryImports.Count > 0)
+            {
+                await viewModel.Library.ImportAsync(viewModel.Settings.WorkspacePath, AppLaunchOptions.LibraryImports);
+            }
+
             switch (AppLaunchOptions.Page)
             {
                 case "chat":
@@ -72,6 +79,24 @@ public partial class AssistantApp : Application
                     break;
                 case "library":
                     viewModel.OpenLibrary();
+                    if (viewModel.CurrentPage is LibraryViewModel library)
+                    {
+                        if (!string.IsNullOrWhiteSpace(AppLaunchOptions.LibrarySearch))
+                        {
+                            library.SearchText = AppLaunchOptions.LibrarySearch;
+                        }
+
+                        if (AppLaunchOptions.LibraryShowHidden)
+                        {
+                            library.ShowHidden = true;
+                        }
+
+                        if (AppLaunchOptions.LibraryWorkspaceTab)
+                        {
+                            library.IsLibraryView = false;
+                        }
+                    }
+
                     break;
             }
 
@@ -84,6 +109,11 @@ public partial class AssistantApp : Application
             {
                 viewModel.Home.Composer.Text = AppLaunchOptions.ComposerText;
                 viewModel.Home.Composer.RequestFocus();
+            }
+
+            if (!string.IsNullOrWhiteSpace(AppLaunchOptions.ComposerMention))
+            {
+                await viewModel.Home.Composer.ReferenceByNameAsync(AppLaunchOptions.ComposerMention);
             }
 
             if (AppLaunchOptions.PressEnter)

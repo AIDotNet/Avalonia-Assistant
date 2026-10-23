@@ -12,6 +12,8 @@ Windows 桌面 AI 助理。Agent 循环用 [pi.net](https://github.com/AIDotNet/
 - **真的会动手**：自建 8 个日常办公 / 编码工具 + CodingAgent 内置的 read / grep / find / ls / edit。
 - **技能与 MCP**：工作区 `.pi/skills` 的 `SKILL.md` 按需加载，技能页可从文件夹或 zip 导入；
   `.pi/mcp.json` 的 MCP 服务端启动时连接。
+- **资料库能 @ 引用**：把文件拖进资料库页（或点工作区文件行尾的「收录」），副本落在工作区
+  `.library/`，正文抽出来进索引；输入框打 `@` 挑一份带进这一轮提问，原文件不动也不会被改。
 - **长会话能自己压缩**：CodingAgent 的上下文压缩与自动重试，不必手动清空。
 - **三档权限**：只读 / 工作区 / 完全访问；执行命令会在对话里弹授权卡。
 - **工具过程可见**：每次调用都有卡片，参数、结果、耗时、成功/失败可展开。
@@ -285,9 +287,16 @@ dotnet run --project src/AvaloniaAssistant.Desktop -- --run "用三句话介绍�
 ├── settings.json
 ├── sessions\<session-id>.json
 └── Workspace\                  # 默认工作区
+
+<工作区>\.library\
+├── index.json                  # 资料索引：名称、大小、摘要、正文
+└── files\<id>_<原名>            # 导入时复制的副本
 ```
 
 删除 `sessions\` 下的文件即可清空对应会话。设置页有「打开数据目录」。
+
+资料库跟着工作区走：换一个工作区就是另一批资料。`.library` 只存副本，原文件不受影响；
+如果工作区是 git 仓库，建议把 `.library/` 加进 `.gitignore`。
 
 ## 已知边界
 
@@ -297,6 +306,8 @@ dotnet run --project src/AvaloniaAssistant.Desktop -- --run "用三句话介绍�
 - **会话存档仍是本项目自己的 JSON**：CodingAgent 的会话跑在内存里，压缩结果不跨进程保存；
   重启后由 `sessions/*.json` 的历史重建上下文，压缩收益会重新累计。
 - **上下文窗口按 128k 估算**：模型真实窗口不在本地目录里，压缩触发点据此计算，特殊模型需要手动调。
+- **资料库只索引 UTF-8 文本**：GBK 编码的中文 txt 会被当成二进制，只能按文件名引用，搜不到正文。
+- **资料库不做向量检索**：搜索是名字 / 摘要 / 正文的子串匹配，资料上千份时该换 SQLite FTS。
 - **没有定时任务 / 专家市场**：导航里暂未提供入口，避免假按钮；扩展点见架构文档。
 - **Windows 优先**：代码里对 macOS/Linux 的路径和 shell 做了分支，但只在 Windows 上验证过。
 

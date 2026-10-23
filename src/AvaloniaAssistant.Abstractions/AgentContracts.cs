@@ -73,9 +73,17 @@ public sealed record HistoryTurn(string Role, string Text)
     public static HistoryTurn Assistant(string text) => new("assistant", text);
 }
 
+/// <summary>
+/// 用户按下发送时交给对话线的东西：输入框里的原文，加上这一轮从资料库 @ 过来的文档。
+/// 原文照原样显示在气泡里，附件内容只喂给模型。
+/// </summary>
+public sealed record PromptRequest(string Text, IReadOnlyList<ChatAttachment> Attachments)
+{
+    public static PromptRequest Plain(string text) => new(text, []);
+}
+
 /// <summary>一次 agent 运行的输入。运行时无状态：历史由调用方携带。</summary>
-public sealed record AgentRunRequest(
-    string SessionId,
+public sealed record AgentRunRequest(    string SessionId,
     string Prompt,
     IReadOnlyList<HistoryTurn> History,
     string Mode,

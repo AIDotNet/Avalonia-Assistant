@@ -3,7 +3,7 @@
              xmlns:arc="https://github.com/AtomUICommunity/TKCode.Arc"
              x:Class="AvaloniaAssistant.UI.Views.LibraryView">
   <UserControl.Styles>
-    <!-- 排序用的分段控件：两块并排，选中的那块浮在浅底上 -->
+    <!-- 视图切换：两块并排，选中的那块浮在浅底上 -->
     <Style Selector="Button.segment">
       <Setter Property="Height" Value="26" />
       <Setter Property="Padding" Value="11,0" />
@@ -29,8 +29,9 @@
     </Style>
 
     <Style Selector="Button.pill.active">
-      <Setter Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+      <Setter Property="Background" Value="#E6E6E0" />
       <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+      <Setter Property="FontWeight" Value="Medium" />
     </Style>
 
     <!-- 文件夹卡片：白底细边，悬停时整块提亮 -->
@@ -46,8 +47,8 @@
       <Setter Property="Background" Value="{StaticResource SurfaceMutedBrush}" />
     </Style>
 
-    <!-- 文件列表：一整块白面板，行与行之间只靠悬停分界，不画分割线 -->
-    <Style Selector="Border.file-panel">
+    <!-- 列表面板：一整块白底，行与行之间靠悬停分界，不画分割线 -->
+    <Style Selector="Border.list-panel">
       <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
       <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
       <Setter Property="BorderThickness" Value="1" />
@@ -55,7 +56,8 @@
       <Setter Property="Padding" Value="5" />
     </Style>
 
-    <Style Selector="Button.file-row">
+    <!-- 列表行：左边整行可点，右边是独立的小按钮，互不抢点击 -->
+    <Style Selector="Button.row-open">
       <Setter Property="Height" Value="42" />
       <Setter Property="Padding" Value="8,0" />
       <Setter Property="CornerRadius" Value="9" />
@@ -65,12 +67,24 @@
       <Setter Property="HorizontalContentAlignment" Value="Stretch" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
-    <Style Selector="Button.file-row:pointerover">
+    <Style Selector="Button.row-open:pointerover">
       <Setter Property="Background" Value="{StaticResource SurfaceMutedBrush}" />
     </Style>
+    <Style Selector="Button.row-open.tall">
+      <Setter Property="Height" Value="56" />
+    </Style>
 
-    <!-- 打开箭头平时不出现：十几行挂十几个箭头只是噪音，鼠标进来才提示这里能点 -->
-    <Style Selector="arc|ArcGlyph.open-arrow">
+    <!-- 行尾的小动作：平时不出现，鼠标进这一行才淡入 -->
+    <Style Selector="Button.row-action">
+      <Setter Property="Width" Value="28" />
+      <Setter Property="Height" Value="28" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="CornerRadius" Value="7" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
       <Setter Property="Opacity" Value="0" />
       <Setter Property="Transitions">
         <Transitions>
@@ -78,10 +92,11 @@
         </Transitions>
       </Setter>
     </Style>
-    <Style Selector="Button.file-row:pointerover arc|ArcGlyph.open-arrow">
-      <Setter Property="Opacity" Value="1" />
+    <Style Selector="Button.row-action:pointerover">
+      <Setter Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+      <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
     </Style>
-    <Style Selector="Button.card-button:pointerover arc|ArcGlyph.open-arrow">
+    <Style Selector="Grid.row:hover Button.row-action">
       <Setter Property="Opacity" Value="1" />
     </Style>
   </UserControl.Styles>
@@ -106,7 +121,7 @@
           <Button Classes="icon"
                   Command="{Binding OpenWorkspaceCommand}"
                   IsEnabled="{Binding HasWorkspace}"
-                  ToolTip.Tip="在资源管理器中打开">
+                  ToolTip.Tip="在资源管理器中打开工作区">
             <arc:ArcGlyph Data="{x:Static arc:ArcIcons.ArrowUpRight}" Size="15" />
           </Button>
           <Button Classes="icon" Command="{Binding RefreshCommand}" ToolTip.Tip="刷新">
@@ -118,21 +133,69 @@
 
     <Grid Grid.Row="1"
           RowDefinitions="Auto,*"
-          Margin="52,0,52,0">
+          Margin="52,0"
+          DragDrop.AllowDrop="True"
+          DragDrop.DragOver="OnDragOver"
+          DragDrop.DragLeave="OnDragLeave"
+          DragDrop.Drop="OnDrop">
 
-      <!-- 工具栏：搜索留在顶部，往下翻文件时不用滚回来找 -->
-      <Grid Row="0" Margin="0,18,0,0" IsVisible="{Binding HasWorkspace}">
+      <!-- 工具栏：视图切换 + 搜索。搜索两边共用，输一次就能在两个视图里找 -->
+      <Grid Grid.Row="0" Margin="0,18,0,0" IsVisible="{Binding HasWorkspace}">
         <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="Auto" />
           <ColumnDefinition Width="*" />
           <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
-        <arc:SearchField Width="248"
+
+        <Border Background="{StaticResource SurfaceMutedBrush}" CornerRadius="15" Padding="2">
+          <StackPanel Orientation="Horizontal" Spacing="2">
+            <Button Classes="segment"
+                    Classes.active="{Binding IsLibraryView}"
+                    Command="{Binding ShowLibraryCommand}"
+                    Content="{Binding LibraryTabText}" />
+            <Button Classes="segment"
+                    Classes.active="{Binding IsWorkspaceView}"
+                    Command="{Binding ShowWorkspaceCommand}"
+                    Content="{Binding WorkspaceTabText}" />
+          </StackPanel>
+        </Border>
+
+        <arc:SearchField Grid.Column="1"
+                         Width="228"
                          Size="Small"
+                         Margin="10,0,0,0"
                          HorizontalAlignment="Left"
-                         Placeholder="搜索文件或文件夹"
+                         Placeholder="搜索名称或正文"
                          Text="{Binding SearchText, Mode=TwoWay}" />
-        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-          <Border Background="{StaticResource SurfaceMutedBrush}" CornerRadius="15" Padding="2">
+
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+          <!-- 资料库视图：打开 .library 目录 + 导入 -->
+          <Button Classes="pill"
+                  IsVisible="{Binding IsLibraryView}"
+                  Command="{Binding OpenLibraryFolderCommand}"
+                  ToolTip.Tip="打开 .library 目录">
+            <StackPanel Orientation="Horizontal" Spacing="5">
+              <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Folder}" Size="12" />
+              <TextBlock Text="目录" FontSize="11.5" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+          <Button Classes="chip"
+                  Height="30"
+                  Padding="12,0"
+                  IsVisible="{Binding IsLibraryView}"
+                  Command="{Binding ImportFilesCommand}"
+                  ToolTip.Tip="选一个文件收进资料库">
+            <StackPanel Orientation="Horizontal" Spacing="5">
+              <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Plus}" Size="12" />
+              <TextBlock Text="导入文件" FontSize="11.5" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+
+          <!-- 工作区视图：排序 + 隐藏项 -->
+          <Border IsVisible="{Binding IsWorkspaceView}"
+                  Background="{StaticResource SurfaceMutedBrush}"
+                  CornerRadius="15"
+                  Padding="2">
             <StackPanel Orientation="Horizontal" Spacing="2">
               <Button Classes="segment"
                       Classes.active="{Binding IsNameSort}"
@@ -147,6 +210,7 @@
             </StackPanel>
           </Border>
           <Button Classes="pill"
+                  IsVisible="{Binding IsWorkspaceView}"
                   Classes.active="{Binding ShowHidden}"
                   Command="{Binding ToggleHiddenCommand}"
                   ToolTip.Tip="以 . 开头的目录和带隐藏属性的项目">
@@ -159,199 +223,426 @@
       </Grid>
 
       <Grid Grid.Row="1">
-        <ScrollViewer IsVisible="{Binding ShowContent}" VerticalScrollBarVisibility="Auto">
-          <StackPanel Spacing="20" Margin="0,14,0,28">
+        <!-- ═══ 资料库视图 ═══ -->
+        <Grid IsVisible="{Binding IsLibraryView}" RowDefinitions="Auto,*">
+          <Grid Grid.Row="0"
+                ColumnDefinitions="*,Auto"
+                Margin="0,14,0,10"
+                IsVisible="{Binding HasWorkspace}">
+            <TextBlock Text="{Binding LibrarySummary}"
+                       Classes="caption"
+                       FontSize="10.5"
+                       IsVisible="{Binding HasLibrarySummary}"
+                       VerticalAlignment="Center" />
+            <Button Grid.Column="1"
+                    Classes="ghost-action"
+                    Content="清空搜索"
+                    IsVisible="{Binding ShowLibraryNoMatch}"
+                    Command="{Binding ClearSearchCommand}" />
+          </Grid>
 
-            <Border IsVisible="{Binding HasNotice}"
-                    Background="{StaticResource DangerSubtleBrush}"
-                    CornerRadius="9"
-                    Padding="12,8">
-              <TextBlock Text="{Binding NoticeText}"
-                         FontSize="11.5"
-                         Foreground="{StaticResource DangerBrush}"
-                         TextWrapping="Wrap" />
-            </Border>
+          <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel Spacing="10" Margin="0,0,0,28">
 
-            <!-- 文件夹：横向卡片，先给体积感，再往下才是文件清单 -->
-            <StackPanel IsVisible="{Binding HasFolders}" Spacing="9">
-              <Grid ColumnDefinitions="*,Auto">
-                <TextBlock Text="文件夹"
-                           FontSize="12"
-                           FontWeight="Medium"
-                           Foreground="{StaticResource TextSecondaryBrush}"
-                           VerticalAlignment="Center" />
-                <TextBlock Grid.Column="1"
-                           Text="{Binding FolderCountText}"
-                           Classes="caption"
-                           FontSize="10.5"
-                           VerticalAlignment="Center" />
-              </Grid>
+              <Border IsVisible="{Binding HasLibraryNotice}"
+                      Background="{StaticResource SurfaceMutedBrush}"
+                      BorderBrush="{Binding LibraryNoticeBrush}"
+                      BorderThickness="1"
+                      CornerRadius="9"
+                      Padding="12,8">
+                <Grid ColumnDefinitions="Auto,*">
+                  <arc:ArcGlyph Data="{x:Static arc:ArcIcons.CircleAlert}"
+                                Size="12"
+                                Foreground="{Binding LibraryNoticeBrush}"
+                                VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="1"
+                             Margin="7,0,0,0"
+                             Text="{Binding LibraryNotice}"
+                             FontSize="11.5"
+                             Foreground="{StaticResource TextSecondaryBrush}"
+                             TextWrapping="Wrap" />
+                </Grid>
+              </Border>
 
-              <ItemsControl ItemsSource="{Binding Folders}" Margin="0,0,-10,-10">
-                <ItemsControl.ItemsPanel>
-                  <ItemsPanelTemplate>
-                    <UniformGrid Columns="3" />
-                  </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate>
-                    <Button Classes="card-button"
-                            Margin="0,0,10,10"
-                            Command="{Binding OpenCommand}"
-                            ToolTip.Tip="{Binding FullPath}">
-                      <Border Classes="folder-tile">
-                        <Grid ColumnDefinitions="Auto,*,Auto,Auto" VerticalAlignment="Center">
-                          <Border Width="32"
-                                  Height="32"
-                                  CornerRadius="9"
-                                  Background="{Binding TileBackground}">
-                            <arc:ArcGlyph Data="{Binding Icon}"
-                                          Size="15"
-                                          Foreground="{Binding IconBrush}"
-                                          HorizontalAlignment="Center"
-                                          VerticalAlignment="Center" />
-                          </Border>
-                          <TextBlock Grid.Column="1"
-                                     Margin="11,0,10,0"
-                                     Text="{Binding Name}"
-                                     FontSize="13"
-                                     FontWeight="Medium"
-                                     TextTrimming="CharacterEllipsis"
-                                     VerticalAlignment="Center" />
-                          <TextBlock Grid.Column="2"
-                                     Text="{Binding SizeText}"
-                                     Classes="caption"
-                                     FontSize="10.5"
-                                     VerticalAlignment="Center" />
-                          <arc:ArcGlyph Grid.Column="3"
-                                        Classes="open-arrow"
-                                        Margin="9,0,0,0"
-                                        Data="{x:Static arc:ArcIcons.ArrowUpRight}"
-                                        Size="13"
-                                        Foreground="{StaticResource TextMutedBrush}"
-                                        VerticalAlignment="Center" />
-                        </Grid>
-                      </Border>
-                    </Button>
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
-              </ItemsControl>
-            </StackPanel>
-
-            <!-- 文件：单列，大小和时间各自对齐成列，扫一眼就能比 -->
-            <StackPanel IsVisible="{Binding HasFiles}" Spacing="9">
-              <Grid ColumnDefinitions="*,Auto">
-                <TextBlock Text="文件"
-                           FontSize="12"
-                           FontWeight="Medium"
-                           Foreground="{StaticResource TextSecondaryBrush}"
-                           VerticalAlignment="Center" />
-                <TextBlock Grid.Column="1"
-                           Text="{Binding FileSummaryText}"
-                           Classes="caption"
-                           FontSize="10.5"
-                           VerticalAlignment="Center" />
-              </Grid>
-
-              <Border Classes="file-panel">
-                <ItemsControl ItemsSource="{Binding Files}">
+              <Border Classes="list-panel" IsVisible="{Binding HasVisibleDocuments}">
+                <ItemsControl ItemsSource="{Binding VisibleDocuments}">
                   <ItemsControl.ItemTemplate>
                     <DataTemplate>
-                      <Button Classes="file-row"
-                              Command="{Binding OpenCommand}"
-                              ToolTip.Tip="{Binding FullPath}">
-                        <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto" VerticalAlignment="Center">
-                          <Border Width="28"
-                                  Height="28"
-                                  CornerRadius="8"
-                                  Background="{Binding TileBackground}">
-                            <arc:ArcGlyph Data="{Binding Icon}"
-                                          Size="14"
-                                          Foreground="{Binding IconBrush}"
-                                          HorizontalAlignment="Center"
-                                          VerticalAlignment="Center" />
-                          </Border>
+                      <Grid Classes="row" ColumnDefinitions="*,Auto" VerticalAlignment="Center">
+                        <Button Classes="row-open tall"
+                                Command="{Binding OpenCommand}"
+                                ToolTip.Tip="打开库里的副本">
+                          <Grid ColumnDefinitions="Auto,*,Auto">
+                            <Border Width="28"
+                                    Height="28"
+                                    CornerRadius="8"
+                                    Background="{Binding TileBackground}">
+                              <arc:ArcGlyph Data="{Binding Icon}"
+                                            Size="14"
+                                            Foreground="{Binding IconBrush}"
+                                            HorizontalAlignment="Center"
+                                            VerticalAlignment="Center" />
+                            </Border>
 
-                          <TextBlock Grid.Column="1"
-                                     Margin="10,0,10,0"
-                                     Text="{Binding Name}"
-                                     FontSize="12.5"
-                                     TextTrimming="CharacterEllipsis"
-                                     VerticalAlignment="Center" />
+                            <StackPanel Grid.Column="1" Margin="10,0,10,0" Spacing="2" VerticalAlignment="Center">
+                              <TextBlock Text="{Binding Name}"
+                                         FontSize="12.5"
+                                         TextTrimming="CharacterEllipsis" />
+                              <TextBlock Text="{Binding Summary}"
+                                         Classes="caption"
+                                         FontSize="10.5"
+                                         MaxLines="1"
+                                         TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
 
-                          <Border Grid.Column="2"
-                                  Width="42"
-                                  Padding="0,2"
-                                  CornerRadius="5"
-                                  Background="{Binding TileBackground}"
-                                  VerticalAlignment="Center">
-                            <TextBlock Text="{Binding TypeLabel}"
-                                       FontSize="9"
-                                       FontWeight="Medium"
-                                       Foreground="{Binding IconBrush}"
-                                       HorizontalAlignment="Center" />
-                          </Border>
+                            <StackPanel Grid.Column="2" Spacing="2" VerticalAlignment="Center">
+                              <TextBlock Text="{Binding IndexText}"
+                                         Classes="caption"
+                                         FontSize="10"
+                                         TextAlignment="Right" />
+                              <TextBlock Text="{Binding AddedText}"
+                                         Classes="caption"
+                                         FontSize="10"
+                                         TextAlignment="Right" />
+                            </StackPanel>
+                          </Grid>
+                        </Button>
 
-                          <TextBlock Grid.Column="3"
-                                     Width="62"
-                                     Margin="10,0,0,0"
-                                     Text="{Binding SizeText}"
-                                     TextAlignment="Right"
-                                     FontSize="10.5"
-                                     Foreground="{StaticResource TextMutedBrush}"
-                                     VerticalAlignment="Center" />
-
-                          <TextBlock Grid.Column="4"
-                                     Width="84"
-                                     Margin="8,0,0,0"
-                                     Text="{Binding ModifiedText}"
-                                     TextAlignment="Right"
-                                     FontSize="10.5"
-                                     Foreground="{StaticResource TextMutedBrush}"
-                                     VerticalAlignment="Center" />
-
-                          <arc:ArcGlyph Grid.Column="5"
-                                        Classes="open-arrow"
-                                        Margin="8,0,0,0"
-                                        Data="{x:Static arc:ArcIcons.ArrowUpRight}"
-                                        Size="12"
-                                        Foreground="{StaticResource TextMutedBrush}"
-                                        VerticalAlignment="Center" />
-                        </Grid>
-                      </Button>
+                        <Button Grid.Column="1"
+                                Classes="row-action"
+                                Margin="6,0,0,0"
+                                Command="{Binding RemoveCommand}"
+                                ToolTip.Tip="从资料库移除（原文件不动）">
+                          <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Trash2}" Size="13" />
+                        </Button>
+                      </Grid>
                     </DataTemplate>
                   </ItemsControl.ItemTemplate>
                 </ItemsControl>
               </Border>
+
+              <!-- 一份都没收：整块当拖拽落区 -->
+              <Border IsVisible="{Binding ShowLibraryEmpty}"
+                      Margin="0,14,0,0"
+                      Background="{StaticResource SurfaceMutedBrush}"
+                      BorderBrush="{StaticResource BorderStrongBrush}"
+                      BorderThickness="1"
+                      CornerRadius="16"
+                      Padding="26,30"
+                      MinHeight="176">
+                <Panel>
+                  <StackPanel HorizontalAlignment="Center"
+                              VerticalAlignment="Center"
+                              Spacing="9"
+                              MaxWidth="430"
+                              IsVisible="{Binding HasWorkspace}">
+                    <Border Width="46"
+                            Height="46"
+                            CornerRadius="14"
+                            Background="{StaticResource SurfaceBrush}"
+                            BorderBrush="{StaticResource BorderBrush}"
+                            BorderThickness="1"
+                            HorizontalAlignment="Center">
+                      <arc:ArcGlyph Data="{x:Static arc:ArcIcons.FolderOpen}"
+                                    Size="21"
+                                    Foreground="{StaticResource TextMutedBrush}"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center" />
+                    </Border>
+                    <TextBlock Text="把文件拖到这里"
+                               FontSize="13.5"
+                               FontWeight="Medium"
+                               HorizontalAlignment="Center" />
+                    <TextBlock Text="复制一份到 .library，原文件不动。"
+                               Classes="caption"
+                               TextWrapping="Wrap"
+                               TextAlignment="Center"
+                               LineHeight="19" />
+                    <TextBlock Text="之后在输入框打 @ 就能引用，不用再把正文粘一遍。"
+                               Classes="caption"
+                               TextWrapping="Wrap"
+                               TextAlignment="Center"
+                               LineHeight="19" />
+                    <Button Classes="chip"
+                            Content="选择文件"
+                            HorizontalAlignment="Center"
+                            Margin="0,2,0,0"
+                            Command="{Binding ImportFilesCommand}" />
+                  </StackPanel>
+
+                  <!-- 没有工作区就没有 .library 可放，先让他选目录 -->
+                  <StackPanel HorizontalAlignment="Center"
+                              VerticalAlignment="Center"
+                              Spacing="9"
+                              MaxWidth="430"
+                              IsVisible="{Binding !HasWorkspace}">
+                    <Border Width="46"
+                            Height="46"
+                            CornerRadius="14"
+                            Background="{StaticResource SurfaceBrush}"
+                            BorderBrush="{StaticResource BorderBrush}"
+                            BorderThickness="1"
+                            HorizontalAlignment="Center">
+                      <arc:ArcGlyph Data="{x:Static arc:ArcIcons.FolderOpen}"
+                                    Size="21"
+                                    Foreground="{StaticResource TextMutedBrush}"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center" />
+                    </Border>
+                    <TextBlock Text="还没有工作区"
+                               FontSize="13.5"
+                               FontWeight="Medium"
+                               HorizontalAlignment="Center" />
+                    <TextBlock Text="资料存在工作区的 .library 目录里，先选一个文件夹。"
+                               Classes="caption"
+                               TextWrapping="Wrap"
+                               TextAlignment="Center"
+                               LineHeight="19" />
+                    <Button Classes="chip"
+                            Content="选择工作区"
+                            HorizontalAlignment="Center"
+                            Margin="0,2,0,0"
+                            Command="{Binding PickWorkspaceCommand}" />
+                  </StackPanel>
+                </Panel>
+              </Border>
+
+              <Border IsVisible="{Binding ShowLibraryNoMatch}"
+                      Background="{StaticResource SurfaceMutedBrush}"
+                      CornerRadius="12"
+                      Padding="16,14">
+                <TextBlock Text="资料库里没有匹配的内容，换个词试试。"
+                           Classes="caption"
+                           HorizontalAlignment="Center" />
+              </Border>
             </StackPanel>
+          </ScrollViewer>
+        </Grid>
+
+        <!-- ═══ 工作区视图 ═══ -->
+        <Grid IsVisible="{Binding IsWorkspaceView}">
+          <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel Spacing="20" Margin="0,14,0,28">
+
+              <Border IsVisible="{Binding HasNotice}"
+                      Background="{StaticResource DangerSubtleBrush}"
+                      CornerRadius="9"
+                      Padding="12,8">
+                <TextBlock Text="{Binding NoticeText}"
+                           FontSize="11.5"
+                           Foreground="{StaticResource DangerBrush}"
+                           TextWrapping="Wrap" />
+              </Border>
+
+              <StackPanel IsVisible="{Binding HasFolders}" Spacing="9">
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Text="文件夹"
+                             FontSize="12"
+                             FontWeight="Medium"
+                             Foreground="{StaticResource TextSecondaryBrush}"
+                             VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="1"
+                             Text="{Binding FolderCountText}"
+                             Classes="caption"
+                             FontSize="10.5"
+                             VerticalAlignment="Center" />
+                </Grid>
+
+                <ItemsControl ItemsSource="{Binding Folders}" Margin="0,0,-10,-10">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <UniformGrid Columns="3" />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <Button Classes="card-button"
+                              Margin="0,0,10,10"
+                              Command="{Binding OpenCommand}"
+                              ToolTip.Tip="{Binding FullPath}">
+                        <Border Classes="folder-tile">
+                          <Grid ColumnDefinitions="Auto,*,Auto" VerticalAlignment="Center">
+                            <Border Width="32"
+                                    Height="32"
+                                    CornerRadius="9"
+                                    Background="{Binding TileBackground}">
+                              <arc:ArcGlyph Data="{Binding Icon}"
+                                            Size="15"
+                                            Foreground="{Binding IconBrush}"
+                                            HorizontalAlignment="Center"
+                                            VerticalAlignment="Center" />
+                            </Border>
+                            <TextBlock Grid.Column="1"
+                                       Margin="11,0,10,0"
+                                       Text="{Binding Name}"
+                                       FontSize="13"
+                                       FontWeight="Medium"
+                                       TextTrimming="CharacterEllipsis"
+                                       VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="2"
+                                       Text="{Binding SizeText}"
+                                       Classes="caption"
+                                       FontSize="10.5"
+                                       VerticalAlignment="Center" />
+                          </Grid>
+                        </Border>
+                      </Button>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+
+              <StackPanel IsVisible="{Binding HasFiles}" Spacing="9">
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Text="文件"
+                             FontSize="12"
+                             FontWeight="Medium"
+                             Foreground="{StaticResource TextSecondaryBrush}"
+                             VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="1"
+                             Text="{Binding FileSummaryText}"
+                             Classes="caption"
+                             FontSize="10.5"
+                             VerticalAlignment="Center" />
+                </Grid>
+
+                <Border Classes="list-panel">
+                  <ItemsControl ItemsSource="{Binding Files}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate>
+                        <Grid Classes="row" ColumnDefinitions="*,Auto" VerticalAlignment="Center">
+                          <Button Classes="row-open"
+                                  Command="{Binding OpenCommand}"
+                                  ToolTip.Tip="{Binding FullPath}">
+                            <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" VerticalAlignment="Center">
+                              <Border Width="28"
+                                      Height="28"
+                                      CornerRadius="8"
+                                      Background="{Binding TileBackground}">
+                                <arc:ArcGlyph Data="{Binding Icon}"
+                                              Size="14"
+                                              Foreground="{Binding IconBrush}"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" />
+                              </Border>
+
+                              <TextBlock Grid.Column="1"
+                                         Margin="10,0,10,0"
+                                         Text="{Binding Name}"
+                                         FontSize="12.5"
+                                         TextTrimming="CharacterEllipsis"
+                                         VerticalAlignment="Center" />
+
+                              <Border Grid.Column="2"
+                                      Width="42"
+                                      Padding="0,2"
+                                      CornerRadius="5"
+                                      Background="{Binding TileBackground}"
+                                      VerticalAlignment="Center">
+                                <TextBlock Text="{Binding TypeLabel}"
+                                           FontSize="9"
+                                           FontWeight="Medium"
+                                           Foreground="{Binding IconBrush}"
+                                           HorizontalAlignment="Center" />
+                              </Border>
+
+                              <TextBlock Grid.Column="3"
+                                         Width="62"
+                                         Margin="10,0,0,0"
+                                         Text="{Binding SizeText}"
+                                         TextAlignment="Right"
+                                         FontSize="10.5"
+                                         Foreground="{StaticResource TextMutedBrush}"
+                                         VerticalAlignment="Center" />
+
+                              <TextBlock Grid.Column="4"
+                                         Width="84"
+                                         Margin="8,0,0,0"
+                                         Text="{Binding ModifiedText}"
+                                         TextAlignment="Right"
+                                         FontSize="10.5"
+                                         Foreground="{StaticResource TextMutedBrush}"
+                                         VerticalAlignment="Center" />
+                            </Grid>
+                          </Button>
+
+                          <Button Grid.Column="1"
+                                  Classes="row-action"
+                                  Margin="6,0,0,0"
+                                  Command="{Binding $parent[ItemsControl].DataContext.CollectFileCommand}"
+                                  CommandParameter="{Binding}"
+                                  ToolTip.Tip="收进资料库">
+                            <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Plus}" Size="13" />
+                          </Button>
+                        </Grid>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </Border>
+              </StackPanel>
+
+              <StackPanel IsVisible="{Binding ShowEmpty}" HorizontalAlignment="Center" Spacing="10" MaxWidth="380">
+                <Border Width="46"
+                        Height="46"
+                        CornerRadius="14"
+                        Background="{StaticResource SurfaceHoverBrush}"
+                        HorizontalAlignment="Center">
+                  <arc:ArcGlyph Data="{Binding EmptyIcon}"
+                                Size="21"
+                                Foreground="{StaticResource TextMutedBrush}"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center" />
+                </Border>
+                <TextBlock Text="{Binding EmptyTitle}"
+                           FontSize="13.5"
+                           FontWeight="Medium"
+                           HorizontalAlignment="Center"
+                           Margin="0,2,0,0" />
+                <TextBlock Text="{Binding EmptyDescription}"
+                           Classes="caption"
+                           TextWrapping="Wrap"
+                           TextAlignment="Center"
+                           LineHeight="19" />
+                <Button Classes="chip"
+                        Content="选择工作区"
+                        Command="{Binding PickWorkspaceCommand}"
+                        IsVisible="{Binding ShowEmptyState}"
+                        HorizontalAlignment="Center"
+                        Margin="0,4,0,0" />
+                <Button Classes="chip"
+                        Content="清空搜索"
+                        Command="{Binding ClearSearchCommand}"
+                        IsVisible="{Binding ShowNoMatch}"
+                        HorizontalAlignment="Center"
+                        Margin="0,4,0,0" />
+              </StackPanel>
+            </StackPanel>
+          </ScrollViewer>
+        </Grid>
+
+        <!-- 拖拽悬停：整块压一层提示，松手就导入 -->
+        <Border IsVisible="{Binding IsDragging}"
+                Background="#F2F2FAF7"
+                BorderBrush="{StaticResource TextPrimaryBrush}"
+                BorderThickness="1"
+                CornerRadius="16"
+                Margin="0,12,0,4">
+          <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10">
+            <Border Width="46"
+                    Height="46"
+                    CornerRadius="14"
+                    Background="{StaticResource SurfaceBrush}"
+                    HorizontalAlignment="Center">
+              <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Plus}"
+                            Size="22"
+                            Foreground="{StaticResource TextPrimaryBrush}"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center" />
+            </Border>
+            <TextBlock Text="松手，收进资料库" FontSize="13.5" FontWeight="Medium" HorizontalAlignment="Center" />
+            <TextBlock Text="会复制一份到 .library，原文件不动" Classes="caption" HorizontalAlignment="Center" />
           </StackPanel>
-        </ScrollViewer>
-
-        <!-- 没有工作区 / 目录是空的 -->
-        <arc:EmptyState IsVisible="{Binding ShowEmptyState}"
-                        Icon="{x:Static arc:ArcIcons.FolderOpen}"
-                        Title="{Binding EmptyTitle}"
-                        Description="{Binding EmptyDescription}"
-                        HorizontalAlignment="Center"
-                        VerticalAlignment="Center"
-                        MaxWidth="380">
-          <arc:EmptyState.Action>
-            <Button Classes="chip" Content="选择工作区" Command="{Binding PickWorkspaceCommand}" />
-          </arc:EmptyState.Action>
-        </arc:EmptyState>
-
-        <!-- 搜不到东西：和「空的」分开，这里是能退回去的 -->
-        <arc:EmptyState IsVisible="{Binding ShowNoMatch}"
-                        Icon="{x:Static arc:ArcIcons.Search}"
-                        Title="{Binding EmptyTitle}"
-                        Description="{Binding EmptyDescription}"
-                        HorizontalAlignment="Center"
-                        VerticalAlignment="Center"
-                        MaxWidth="380">
-          <arc:EmptyState.Action>
-            <Button Classes="chip" Content="清空搜索" Command="{Binding ClearSearchCommand}" />
-          </arc:EmptyState.Action>
-        </arc:EmptyState>
+        </Border>
       </Grid>
     </Grid>
   </Grid>

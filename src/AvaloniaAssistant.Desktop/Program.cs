@@ -28,6 +28,7 @@ internal static class Program
         services.AddSingleton<ISessionStore>(_ => new JsonSessionStore());
         services.AddSingleton<IFilePicker, StorageFilePicker>();
         services.AddSingleton<IVoiceInput, NAudioVoiceInput>();
+        services.AddSingleton<LibraryStore>();
         services.AddSingleton<IPiStreamFactory, PiStreamFactory>();
         services.AddSingleton<AgentToolRegistry>();
         services.AddSingleton<IAssistantRuntime, PiAgentRuntime>();
@@ -76,6 +77,21 @@ internal static class Program
                     break;
                 case "--mcp-import":
                     AppLaunchOptions.OpenMcpImport = true;
+                    break;
+                case "--library-search" when index + 1 < args.Length:
+                    AppLaunchOptions.LibrarySearch = args[++index];
+                    break;
+                case "--library-hidden":
+                    AppLaunchOptions.LibraryShowHidden = true;
+                    break;
+                case "--library-import" when index + 1 < args.Length:
+                    AppLaunchOptions.LibraryImports.Add(args[++index]);
+                    break;
+                case "--composer-mention" when index + 1 < args.Length:
+                    AppLaunchOptions.ComposerMention = args[++index];
+                    break;
+                case "--library-workspace":
+                    AppLaunchOptions.LibraryWorkspaceTab = true;
                     break;
                 case "--data-dir" when index + 1 < args.Length:
                     AppPaths.UseRoot(args[++index]);

@@ -80,6 +80,7 @@ public sealed partial class SessionItemViewModel : ObservableObject
 public sealed partial class WorkspaceItemViewModel : ObservableObject
 {
     private readonly Action<WorkspaceItemViewModel> _toggle;
+    private readonly Func<string, Task> _newSession;
     private readonly Action<string> _open;
     private readonly Func<string, string, Task<string?>> _rename;
     private readonly Func<string, Task> _repick;
@@ -88,6 +89,7 @@ public sealed partial class WorkspaceItemViewModel : ObservableObject
     public WorkspaceItemViewModel(
         string path,
         Action<WorkspaceItemViewModel> toggle,
+        Func<string, Task> newSession,
         Action<string> open,
         Func<string, string, Task<string?>> rename,
         Func<string, Task> repick,
@@ -100,6 +102,7 @@ public sealed partial class WorkspaceItemViewModel : ObservableObject
                 ? name
                 : path;
         _toggle = toggle;
+        _newSession = newSession;
         _open = open;
         _rename = rename;
         _repick = repick;
@@ -129,6 +132,10 @@ public sealed partial class WorkspaceItemViewModel : ObservableObject
     /// <summary>点标题：展开/收起空间下的对话，同时把它设为当前工作区。</summary>
     [RelayCommand]
     private void Toggle() => _toggle(this);
+
+    /// <summary>行内「+」：不弹目录选择，直接在这个空间里开一张新对话。</summary>
+    [RelayCommand]
+    private Task NewSessionAsync() => _newSession(Path);
 
     /// <summary>对话列表填完之后刷新一下标题上的条数。</summary>
     public void RefreshSessions()

@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
+using System.Text;
 using AvaloniaAssistant.Abstractions;
 using AvaloniaAssistant.UI.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -26,8 +27,8 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
             Mode = host.Settings.Mode,
         };
 
-        Composer = new ComposerViewModel(_runtime, _settings, host.Picker, host.Voice, host.OpenSettingsAsync);
-        Composer.SendRequested += async (_, text) => await SendPromptAsync(text);
+        Composer = new ComposerViewModel(_runtime, _settings, host.Picker, host.Voice, host.OpenSettingsAsync, host.Library);
+        Composer.SendRequested += async (_, request) => await SendPromptAsync(request);
         Composer.StopRequested += (_, _) => Stop();
         Composer.PermissionChanged += OnPermissionChanged;
 
@@ -110,13 +111,16 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
     }
 
     public async Task SendPromptAsync(string text)
+        => await SendPromptAsync(PromptRequest.Plain(text));
+
+    public async Task SendPromptAsync(PromptRequest request)
     {
-        if (IsBusy || string.IsNullOrWhiteSpace(text))
+        if (IsBusy || string.IsNullOrWhiteSpace(request.Text))
         {
             return;
         }
 
-        await RunPromptAsync(text.Trim(), addUserMessage: true);
+        await RunPromptAsync(request with { Text = request.Text.Trim() }, addUserMessage: true);
     }
 
     /// <summary>
@@ -151,7 +155,8 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
             return;
         }
 
-        var prompt = ((UserMessageViewModel)Messages[userIndex]).Text;
+        var userMessage = (UserMessageViewModel)Messages[userIndex];
+        var prompt = new PromptRequest(userMessage.Text, userMessage.Attachments);
 
         // 用户消息和 Session.Entries 里的 User 条目严格一一对应（提示条只进消息流不进存档），
         // 所以按「第几轮提问」定位要截断的存档位置，比按消息下标找更稳。
@@ -189,7 +194,7 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
         await RunPromptAsync(prompt, addUserMessage: false);
     }
 
-    private async Task RunPromptAsync(string prompt, bool addUserMessage)
+    private async Task RunPromptAsync(PromptRequest input, bool addUserMessage)
     {
         IsBusy = true;
         Composer.IsBusy = true;
@@ -206,14 +211,15 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
                 Session.Entries.Add(new ChatEntry
                 {
                     Kind = ChatEntryKind.User,
-                    Text = prompt,
+                    Text = input.Text,
+                    Attachments = [.. input.Attachments],
                 });
 
-                Messages.Add(new UserMessageViewModel(prompt));
+                Messages.Add(new UserMessageViewModel(input.Text, input.Attachments));
 
                 if (Session.Entries.Count(entry => entry.Kind == ChatEntryKind.User) == 1)
                 {
-                    Session.Title = SessionText.BuildTitle(prompt);
+                    Session.Title = SessionText.BuildTitle(input.Text);
                     OnPropertyChanged(nameof(Title));
                 }
             }
@@ -239,7 +245,7 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
 
             var request = new AgentRunRequest(
                 Session.Id,
-                prompt,
+                BuildModelPrompt(input.Text, input.Attachments),
                 BuildHistory(historyEntries),
                 Session.Mode,
                 _settings.Current.Permission,
@@ -406,7 +412,7 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
             switch (entry.Kind)
             {
                 case ChatEntryKind.User:
-                    Messages.Add(new UserMessageViewModel(entry.Text) { CreatedAt = entry.CreatedAt });
+                    Messages.Add(new UserMessageViewModel(entry.Text, entry.Attachments) { CreatedAt = entry.CreatedAt });
                     break;
 
                 case ChatEntryKind.Assistant:
@@ -453,7 +459,7 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
 
             if (entry.Kind == ChatEntryKind.User)
             {
-                history.Add(HistoryTurn.User(entry.Text));
+                history.Add(HistoryTurn.User(BuildModelPrompt(entry.Text, entry.Attachments)));
             }
             else if (entry.Kind == ChatEntryKind.Assistant)
             {
@@ -463,6 +469,13 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
 
         return history;
     }
+
+    /// <summary>
+    /// 把引用的资料拼进发给模型的文本。气泡里只显示用户原话——
+    /// 几千字的文档塞进用户消息，界面就没法看了。
+    /// </summary>
+    private static string BuildModelPrompt(string text, IReadOnlyList<ChatAttachment> attachments)
+        => PromptComposer.Compose(text, attachments);
 
     private void RequestScroll(bool force) => ScrollToEndRequested?.Invoke(this, force);
 

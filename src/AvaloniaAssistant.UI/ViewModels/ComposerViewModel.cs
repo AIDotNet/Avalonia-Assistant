@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
+using System.Text.RegularExpressions;
 using Avalonia.Media;
 using AvaloniaAssistant.Abstractions;
+using AvaloniaAssistant.Storage;
 using AvaloniaAssistant.UI.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -9,6 +11,9 @@ namespace AvaloniaAssistant.UI.ViewModels;
 
 public sealed partial class ComposerViewModel : ObservableObject, IDisposable
 {
+    /// <summary>行首或空格后的 @，一路到行尾；用户在末尾打 @ 才会触发，不会误伤邮箱地址。</summary>
+    private static readonly Regex MentionPattern = new(@"(?:^|\s)@([^\s@]*)$", RegexOptions.Compiled);
+
     private readonly IAssistantRuntime _runtime;
     private readonly ISettingsProvider _settings;
     private readonly IFilePicker _picker;
@@ -16,24 +21,38 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
     private readonly IVoiceInput _voice;
     private readonly EventHandler _settingsChanged;
 
+    private readonly LibraryStore _library;
+    private IReadOnlyList<LibraryDocument> _documents = [];
+    private string? _documentsWorkspace;
+
+    /// <summary>自己在改 Text（补全 @、清空）时不要再弹一次浮层。</summary>
+    private bool _suppressMention;
+
+    /// <summary>资料库候选的加载序号：并发输入时只认最后一次。</summary>
+    private int _mentionVersion;
+
+    private bool _documentsLoaded;
+
     public ComposerViewModel(
         IAssistantRuntime runtime,
         ISettingsProvider settings,
         IFilePicker picker,
         IVoiceInput voice,
-        Func<Task> openSettings)
+        Func<Task> openSettings,
+        LibraryStore library)
     {
         _runtime = runtime;
         _settings = settings;
         _picker = picker;
         _voice = voice;
         _openSettings = openSettings;
+        _library = library;
         _settingsChanged = (_, _) => Refresh();
         RefreshModels();
         _settings.Changed += _settingsChanged;
     }
 
-    public event EventHandler<string>? SendRequested;
+    public event EventHandler<PromptRequest>? SendRequested;
 
     public event EventHandler? FocusRequested;
 
@@ -43,6 +62,28 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
     public event EventHandler<PermissionMode>? PermissionChanged;
 
     public ObservableCollection<ModelOption> Models { get; } = [];
+
+    /// <summary>这一轮 @ 进来的资料，发送时变成 <see cref="PromptRequest.Attachments"/>。</summary>
+    public ObservableCollection<LibraryItemViewModel> References { get; } = [];
+
+    /// <summary>@ 浮层里的候选，最多 6 条。</summary>
+    public ObservableCollection<LibraryItemViewModel> MentionItems { get; } = [];
+
+    public bool HasReferences => References.Count > 0;
+
+    public bool HasMentionItems => MentionItems.Count > 0;
+
+    [ObservableProperty]
+    private bool showMention;
+
+    [ObservableProperty]
+    private int mentionIndex;
+
+    [ObservableProperty]
+    private string mentionQuery = string.Empty;
+
+    [ObservableProperty]
+    private string mentionEmptyText = string.Empty;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SendCommand))]
@@ -143,11 +184,236 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
             return;
         }
 
+        var attachments = References
+            .Select(reference => new ChatAttachment
+            {
+                Id = reference.Document.Id,
+                Name = reference.Document.Name,
+                Kind = reference.Document.Kind,
+                Size = reference.Document.Size,
+                Text = reference.Document.Text,
+            })
+            .ToList();
+
         Text = string.Empty;
-        SendRequested?.Invoke(this, value);
+        References.Clear();
+        OnPropertyChanged(nameof(HasReferences));
+        CloseMention();
+
+        SendRequested?.Invoke(this, new PromptRequest(value, attachments));
     }
 
     private bool CanSend() => !IsBusy && !IsRecording && !string.IsNullOrWhiteSpace(Text);
+
+    partial void OnTextChanged(string? value)
+    {
+        if (_suppressMention)
+        {
+            return;
+        }
+
+        UpdateMention(value);
+    }
+
+    /// <summary>只在「正在打一个 @ 词」时开浮层：行尾是 <c>@abc</c> 才认，邮箱和代码里的 @ 不会误触。</summary>
+    private void UpdateMention(string? text)
+    {
+        var match = MentionPattern.Match(text ?? string.Empty);
+        if (!match.Success)
+        {
+            CloseMention();
+            return;
+        }
+
+        MentionQuery = match.Groups[1].Value;
+        _ = RefreshMentionAsync();
+    }
+
+    private async Task RefreshMentionAsync()
+    {
+        var version = ++_mentionVersion;
+
+        await EnsureDocumentsAsync();
+
+        // 等待读索引的这段时间用户又敲了字，这一次结果已经过期
+        if (version != _mentionVersion)
+        {
+            return;
+        }
+
+        var query = MentionQuery;
+        var items = _documents
+            .Where(document => LibraryStore.Matches(document, query))
+            .OrderByDescending(document => document.AddedAt)
+            .Take(6)
+            .ToList();
+
+        MentionItems.Clear();
+        foreach (var document in items)
+        {
+            MentionItems.Add(new LibraryItemViewModel(document));
+        }
+
+        MentionIndex = items.Count > 0 ? 0 : -1;
+        ApplyMentionSelection();
+        MentionEmptyText = _documents.Count == 0
+            ? "资料库还是空的。去「资料库」把文件拖进去，之后在这里 @ 就能引用。"
+            : $"资料库里没有带「{query}」的内容。";
+        ShowMention = true;
+        OnPropertyChanged(nameof(HasMentionItems));
+    }
+
+    private async Task EnsureDocumentsAsync()
+    {
+        var workspace = _settings.Current.WorkspacePath ?? string.Empty;
+        if (_documentsLoaded && string.Equals(_documentsWorkspace, workspace, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        _documents = await _library.LoadAsync(workspace);
+        _documentsWorkspace = workspace;
+        _documentsLoaded = true;
+    }
+
+    /// <summary>
+    /// 按名字引用一份资料，不改输入框文字。给自动化验收用，
+    /// 将来资料库页做「引用到对话」也走这里。
+    /// </summary>
+    public async Task<bool> ReferenceByNameAsync(string name)
+    {
+        await EnsureDocumentsAsync();
+
+        var document = _documents.FirstOrDefault(item =>
+            item.Name.Contains(name, StringComparison.OrdinalIgnoreCase));
+
+        if (document is null)
+        {
+            return false;
+        }
+
+        if (References.All(reference => reference.Document.Id != document.Id))
+        {
+            References.Add(new LibraryItemViewModel(document));
+            OnPropertyChanged(nameof(HasReferences));
+        }
+
+        return true;
+    }
+
+    [RelayCommand]
+    private void AcceptMention(LibraryItemViewModel? item)
+    {
+        if (item is null)
+        {
+            return;
+        }
+
+        var document = item.Document;
+        var text = Text ?? string.Empty;
+        var match = MentionPattern.Match(text);
+        var replacement = "@" + document.Name + " ";
+
+        if (match.Success)
+        {
+            // 保留 @ 前面那个空格，只替换掉「@query」
+            var start = match.Index + match.Value.Length - match.Groups[1].Length - 1;
+            text = text[..start] + replacement;
+        }
+        else
+        {
+            text += replacement;
+        }
+
+        _suppressMention = true;
+        Text = text;
+        _suppressMention = false;
+
+        if (References.All(reference => reference.Document.Id != document.Id))
+        {
+            References.Add(item);
+            OnPropertyChanged(nameof(HasReferences));
+        }
+
+        CloseMention();
+    }
+
+    [RelayCommand]
+    private void RemoveReference(LibraryItemViewModel? item)
+    {
+        if (item is null || !References.Remove(item))
+        {
+            return;
+        }
+
+        OnPropertyChanged(nameof(HasReferences));
+    }
+
+    /// <summary>工具条上的「@」：在光标末尾补一个 @ 并直接把浮层打开，不用先打字再想词。</summary>
+    [RelayCommand]
+    private void OpenMention()
+    {
+        var text = Text ?? string.Empty;
+        if (text.Length > 0 && !char.IsWhiteSpace(text[^1]))
+        {
+            text += " ";
+        }
+
+        _suppressMention = true;
+        Text = text + "@";
+        _suppressMention = false;
+
+        UpdateMention(Text);
+        RequestFocus();
+    }
+
+    [RelayCommand]
+    private void CloseMention()    {
+        _mentionVersion++;
+        ShowMention = false;
+        MentionIndex = -1;
+        MentionItems.Clear();
+        OnPropertyChanged(nameof(HasMentionItems));
+    }
+
+    partial void OnMentionIndexChanged(int value) => ApplyMentionSelection();
+
+    /// <summary>
+    /// 选中态落到具体候选上。不能只靠 OnMentionIndexChanged——
+    /// 从「没有选中」变成 0 是变化，但重开浮层时初值本来就是 0，不会再触发一次。
+    /// </summary>
+    private void ApplyMentionSelection()
+    {
+        for (var index = 0; index < MentionItems.Count; index++)
+        {
+            MentionItems[index].IsSelected = index == MentionIndex;
+        }
+    }
+
+    /// <summary>键盘上下移动候选，到边界绕回去，别让手停下来。</summary>
+    public void MoveMention(int delta)
+    {
+        if (!ShowMention || MentionItems.Count == 0)
+        {
+            return;
+        }
+
+        var next = (MentionIndex + delta) % MentionItems.Count;
+        if (next < 0)
+        {
+            next += MentionItems.Count;
+        }
+
+        MentionIndex = next;
+    }
+
+    public void AcceptCurrentMention()
+    {
+        if (ShowMention && MentionIndex >= 0 && MentionIndex < MentionItems.Count)
+        {
+            AcceptMention(MentionItems[MentionIndex]);
+        }
+    }
 
     [RelayCommand]
     private void Stop() => StopRequested?.Invoke(this, EventArgs.Empty);
@@ -282,6 +548,8 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
 
     public void Refresh()
     {
+        // 工作区或设置变了，下次 @ 要重新读索引，别拿上一个工作区的资料
+        _documentsLoaded = false;
         RefreshModels();
         OnPropertyChanged(nameof(ModelLabel));
         OnPropertyChanged(nameof(PermissionLabel));
