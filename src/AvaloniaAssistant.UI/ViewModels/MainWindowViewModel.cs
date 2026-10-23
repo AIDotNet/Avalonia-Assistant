@@ -69,6 +69,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     public bool IsToolsSelected => CurrentPage is ToolsViewModel;
 
+    public bool IsMcpSelected => CurrentPage is McpViewModel;
+
     public bool IsLibrarySelected => CurrentPage is LibraryViewModel;
 
     public bool IsSettingsSelected => CurrentPage is SettingsViewModel;
@@ -101,6 +103,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     [RelayCommand]
     public void OpenTools() => CurrentPage = new ToolsViewModel(this);
+
+    [RelayCommand]
+    public void OpenMcp() => CurrentPage = new McpViewModel(this);
 
     [RelayCommand]
     public void OpenLibrary() => CurrentPage = new LibraryViewModel(this);
@@ -323,6 +328,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(IsHomeSelected));
         OnPropertyChanged(nameof(IsToolsSelected));
+        OnPropertyChanged(nameof(IsMcpSelected));
         OnPropertyChanged(nameof(IsLibrarySelected));
         OnPropertyChanged(nameof(IsSettingsSelected));
     }

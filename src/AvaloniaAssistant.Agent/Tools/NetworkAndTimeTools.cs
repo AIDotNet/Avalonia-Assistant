@@ -87,33 +87,6 @@ internal sealed partial class FetchUrlTool : IAgentTool
     private static partial Regex BlankLineRegex();
 }
 
-internal sealed class OpenUrlTool : IAgentTool
-{
-    public AgentToolInfo Info { get; } = new(
-        "open_url",
-        "在浏览器打开",
-        "用系统默认浏览器打开一个网页。",
-        "网络",
-        RequiresApproval: false,
-        Parameters:
-        [
-            new ToolParameterInfo("url", "string", "http 或 https 地址", true),
-        ]);
-
-    public Task<string> ExecuteAsync(ToolInvocation invocation, CancellationToken cancellationToken)
-    {
-        var url = JsonArgs.RequiredString(invocation.Json, "url");
-        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
-            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
-        {
-            throw new InvalidOperationException("只支持 http/https 地址。");
-        }
-
-        Shell.Open(uri.ToString());
-        return Task.FromResult($"已在浏览器打开：{uri}");
-    }
-}
-
 internal sealed class CurrentTimeTool : IAgentTool
 {
     public AgentToolInfo Info { get; } = new(

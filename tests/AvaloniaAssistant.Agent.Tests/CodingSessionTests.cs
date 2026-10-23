@@ -43,7 +43,7 @@ public sealed class CodingSessionTests
 
         var callable = session.GetCallableToolNames();
 
-        Assert.Contains("system_info", callable);
+        Assert.Contains("write_file", callable);
         Assert.Contains("read", callable);
         Assert.Contains("grep", callable);
         Assert.Contains("edit", callable);
@@ -80,6 +80,71 @@ public sealed class CodingSessionTests
 
         Assert.Equal(Path.Combine(workspace.Path, ".pi", "skills"), capabilities.SkillsRoot);
         Assert.Equal(Path.Combine(workspace.Path, ".pi", "mcp.json"), capabilities.McpConfigPath);
+    }
+
+    /// <summary>
+    /// MCP 工具从注册到真实调用、再到结果回传的整条链路。
+    /// </summary>
+    /// <remarks>
+    /// 这里刻意用**无参数**调用：Pi.CodingAgent 1.4.1 的 <c>McpServerConnection.ToArguments</c>
+    /// （Extensions/Mcp/Runtime.cs）把 Agent 传下来的 <see cref="System.Text.Json.Nodes.JsonNode"/>
+    /// 直接挂到新的 JsonObject 上，没有 <c>DeepClone()</c>；而 <c>Validation.ValidateToolArguments</c>
+    /// 返回的子节点已带父节点，于是任何带参数的 MCP 调用都会抛
+    /// <c>The node already has a parent.</c>
+    /// <para>
+    /// 该缺陷已在 pi.net 源码修复（同一行改成 <c>node.DeepClone()</c>），并加了回归测试
+    /// <c>CallToolAcceptsArgumentValuesThatAlreadyHaveAParent</c>（回滚修复会红）。
+    /// 用修复后的源码临时切 ProjectReference 跑过本用例的带参数版本，返回 <c>echo: hello</c> 正常。
+    /// 升级到含该修复的 NuGet 版本后，把这里的参数加回来即可。
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task CallsMcpToolEndToEndAndGetsItsResult()
+    {
+        if (!NodeAvailable())
+        {
+            return;
+        }
+
+        using var workspace = new TempWorkspace();
+        var script = Path.Combine(workspace.Path, "mcp-demo.js");
+        File.WriteAllText(script, DemoToolServer);
+        workspace.WriteMcpConfig("demo", script);
+
+        var stream = Pi.Ai.Providers.Faux.CreateStreamFn(
+        [
+            Pi.Ai.Providers.Faux.Response.ToolUse(
+                new Pi.Ai.Types.ToolCallContent("call-1", "mcp__demo__echo", new Dictionary<string, object?>())),
+            Pi.Ai.Providers.Faux.Response.Text("工具已返回。"),
+        ]);
+
+        var session = await CodingSessionFactory.CreateAsync(
+            new TestSettings().Current, workspace.Path, [], stream, CancellationToken.None);
+
+        var deadline = DateTime.UtcNow.AddSeconds(15);
+        while (DateTime.UtcNow < deadline
+               && !session.GetCallableToolNames().Contains("mcp__demo__echo", StringComparer.Ordinal))
+        {
+            await Task.Delay(150);
+        }
+
+        var results = new List<Pi.Agent.Types.AgentToolResult>();
+        using var subscription = session.Agent.Subscribe((@event, _) =>
+        {
+            if (@event is Pi.Agent.Types.AgentEvent.ToolExecutionEnd { Result: Pi.Agent.Types.AgentToolResult result })
+            {
+                results.Add(result);
+            }
+
+            return Task.CompletedTask;
+        });
+
+        await session.PromptAsync("用 demo 服务端的 echo 说 hello");
+
+        var single = Assert.Single(results);
+        var text = string.Concat(single.Content.OfType<Pi.Ai.Types.TextContent>().Select(block => block.Text));
+        Assert.False(single.IsError, text);
+        Assert.Contains("echo:", text);
     }
 
     [Fact]
@@ -148,7 +213,7 @@ public sealed class CodingSessionTests
             send({ jsonrpc: '2.0', id: message.id, result: { tools: [{
               name: 'echo',
               description: '回显传入的文本',
-              inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] }
+              inputSchema: { type: 'object', properties: { text: { type: 'string' } } }
             }]}});
           } else if (message.method === 'tools/call') {
             send({ jsonrpc: '2.0', id: message.id, result: {

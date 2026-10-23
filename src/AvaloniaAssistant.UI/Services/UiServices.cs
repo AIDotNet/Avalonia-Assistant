@@ -11,7 +11,8 @@ public interface IFilePicker
 {
     Task<string?> PickFolderAsync(string title);
 
-    Task<string?> PickFileAsync(string title);
+    /// <summary><paramref name="pattern"/> 传 <c>*.zip</c> 这样的通配符时只显示匹配的文件。</summary>
+    Task<string?> PickFileAsync(string title, string? pattern = null);
 }
 
 public sealed class StorageFilePicker : IFilePicker
@@ -33,7 +34,7 @@ public sealed class StorageFilePicker : IFilePicker
         return folders.FirstOrDefault()?.TryGetLocalPath();
     }
 
-    public async Task<string?> PickFileAsync(string title)
+    public async Task<string?> PickFileAsync(string title, string? pattern = null)
     {
         var topLevel = GetTopLevel();
         if (topLevel is null)
@@ -45,6 +46,9 @@ public sealed class StorageFilePicker : IFilePicker
         {
             Title = title,
             AllowMultiple = false,
+            FileTypeFilter = string.IsNullOrWhiteSpace(pattern)
+                ? null
+                : [new FilePickerFileType("匹配的文件") { Patterns = [pattern] }],
         });
 
         return files.FirstOrDefault()?.TryGetLocalPath();

@@ -72,6 +72,15 @@
             </StackPanel>
           </Button>
 
+          <Button Classes="nav" Classes.active="{Binding IsMcpSelected}" Command="{Binding OpenMcpCommand}">
+            <StackPanel Orientation="Horizontal" Spacing="9">
+              <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Server}"
+                            Size="16"
+                            Foreground="{Binding $parent[Button].Foreground}" />
+              <TextBlock Text="MCP" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+
           <Button Classes="nav" Classes.active="{Binding IsLibrarySelected}" Command="{Binding OpenLibraryCommand}">
             <StackPanel Orientation="Horizontal" Spacing="9">
               <arc:ArcGlyph Data="{x:Static arc:ArcIcons.FolderOpen}"

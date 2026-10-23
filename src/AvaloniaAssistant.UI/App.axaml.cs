@@ -60,6 +60,9 @@ public partial class AssistantApp : Application
                 case "tools":
                     viewModel.OpenTools();
                     break;
+                case "mcp":
+                    viewModel.OpenMcp();
+                    break;
                 case "library":
                     viewModel.OpenLibrary();
                     break;

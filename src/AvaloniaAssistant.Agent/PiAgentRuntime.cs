@@ -183,6 +183,14 @@ public sealed class PiAgentRuntime : IAssistantRuntime
         }
     }
 
+    public void InvalidateSessions()
+    {
+        lock (_sessions)
+        {
+            _sessions.Clear();
+        }
+    }
+
     private async Task<SessionHolder> GetOrCreateSessionAsync(
         AgentRunRequest request,
         AssistantSettings settings,

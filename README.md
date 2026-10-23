@@ -9,15 +9,17 @@ Windows 桌面 AI 助理。Agent 循环用 [pi.net](https://github.com/AIDotNet/
 ## 现在能做什么
 
 - **流式对话**：DeepSeek / OpenAI / Anthropic / 任意 OpenAI 兼容端点（Ollama、LM Studio、vLLM、One-API）。
-- **真的会动手**：自建 12 个系统工具 + CodingAgent 内置的 read / grep / find / ls / edit。
-- **技能与 MCP**：工作区 `.pi/skills` 的 `SKILL.md` 按需加载；`.pi/mcp.json` 的 MCP 服务端启动时连接。
+- **真的会动手**：自建 8 个日常办公 / 编码工具 + CodingAgent 内置的 read / grep / find / ls / edit。
+- **技能与 MCP**：工作区 `.pi/skills` 的 `SKILL.md` 按需加载，技能页可从文件夹或 zip 导入；
+  `.pi/mcp.json` 的 MCP 服务端启动时连接。
 - **长会话能自己压缩**：CodingAgent 的上下文压缩与自动重试，不必手动清空。
-- **三档权限**：只读 / 工作区 / 完全访问；执行命令、结束进程会在对话里弹授权卡。
+- **三档权限**：只读 / 工作区 / 完全访问；执行命令会在对话里弹授权卡。
 - **工具过程可见**：每次调用都有卡片，参数、结果、耗时、成功/失败可展开。
 - **会话留在本机**：一个会话一个 JSON 文件，侧边栏按今天 / 昨天 / 最近 7 天分组。
 - **Markdown**：标题、列表、表格、行内代码、代码块高亮。
 - **语音输入**：NAudio 录音 + `/audio/transcriptions` 转写（端点需支持）。
-- **技能页**：卡片式浏览，按分类筛选、关键词搜索，开关持久化。
+- **技能页**：卡片式浏览，按分类筛选、关键词搜索，开关与导入都持久化。
+- **MCP 页**：列出 `mcp.json` 里的服务端，填名称 / 命令 / 参数就能加一个 stdio 服务端。
 
 | 会话 | 设置 |
 | --- | --- |
@@ -117,15 +119,15 @@ Avalonia-Assistant/
 │   │   ├── ToolAccess.cs                 # 内置 / MCP 工具的安全属性判定
 │   │   ├── PiStreamFactory.cs            # 测试可替换的 OpenAI / Anthropic 流式入口
 │   │   ├── AgentToolRegistry.cs          # 自建工具清单 → ToolDefinition
-│   │   └── Tools/                        # 12 个自建工具
-│   ├── AvaloniaAssistant.Storage/        # settings.json / sessions/*.json
+│   │   └── Tools/                        # 8 个自建工具
+│   ├── AvaloniaAssistant.Storage/        # settings.json / sessions/*.json / 技能导入
 │   ├── AvaloniaAssistant.Speech/         # NAudio 录音 + 转写
 │   ├── AvaloniaAssistant.UI/             # 窗口、页面、VM、样式
-│   │   ├── Views/                        # MainWindow / Sidebar / Home / Chat / Tools / Library / Settings
+│   │   ├── Views/                        # MainWindow / Sidebar / Home / Chat / Tools / Mcp / Library / Settings
 │   │   ├── ViewModels/                   # 命令、会话状态、消息 VM
 │   │   └── Styles/                       # Tokens.axaml / AppStyles.axaml
 │   └── AvaloniaAssistant.Desktop/        # 入口、DI、Arc 初始化
-├── tests/AvaloniaAssistant.Agent.Tests/  # 15 个测试
+├── tests/AvaloniaAssistant.Agent.Tests/  # 24 个测试
 └── docs/
     ├── research.md               # 两个参考项目的结构与集成方式
     ├── migration.md              # 旧功能逐项盘点与取舍
@@ -179,18 +181,20 @@ UI ──► Abstractions ◄── Agent ──► Pi.CodingAgent ──► Pi.
 - 项目级 `.pi` 属于「需要信任」的配置（技能、MCP、`AGENTS.md` 都会进上下文）。
   桌面助理默认信任你选的工作区，`settings.json` 里把 `TrustWorkspace` 设为 `false` 可以关掉，
   关掉后只读全局 `~/.pi/agent`。
-- 技能页会列出扫到的技能与 MCP 服务端（只报配置，不代表已连上）；加完文件点「重新扫描」，
+- 技能页列出扫到的技能，MCP 页列出服务端（只报配置，不代表已连上）；加完文件点「重新扫描」，
   新配置在下一个会话生效。
+- 技能页的「导入文件夹」选一个直接含 `SKILL.md` 的目录；「导入 zip」选一个 `.zip` 技能包。
+  包里可以带一层外层目录，也可以把 `SKILL.md` 放在压缩包根上（用包名当技能名）；
+  一个包只装一个技能，重名会拒绝，装完自动让会话重建。校验与解压在 `Storage/CapabilityInstaller`。
 
 ## 内置工具
 
-自建工具（`AvaloniaAssistant.Agent/Tools`）：
+自建工具（`AvaloniaAssistant.Agent/Tools`）。只留日常办公和写代码用得上的 8 个：
+系统信息、进程管理、在浏览器打开这类低频动作用 `run_command` 或系统自带工具做，
+少一个工具就少一次选错。
 
 | 工具 | 说明 | 权限 |
 | --- | --- | --- |
-| `system_info` | OS、CPU、内存、磁盘 | 只读 |
-| `list_processes` | 按内存列出进程 | 只读 |
-| `stop_process` | 按 PID 结束进程树 | 需确认 |
 | `list_directory` | 浏览目录 | 只读 |
 | `read_file` | 读文本文件（默认 20k 字符） | 只读 |
 | `write_file` | 写工作区文件 | 工作区可写 / 只读拦截 |
@@ -198,7 +202,6 @@ UI ──► Abstractions ◄── Agent ──► Pi.CodingAgent ──► Pi.
 | `open_path` | 用系统程序打开文件/文件夹 | 只读 |
 | `run_command` | 执行 shell 命令（60s 超时） | 需确认 |
 | `fetch_url` | 抓网页正文 | 只读 |
-| `open_url` | 浏览器打开链接 | 只读 |
 | `current_time` | 当前时间与时区 | 只读 |
 
 CodingAgent 提供的内置工具（`tools` allowlist 里固定启用）：
@@ -230,6 +233,7 @@ dotnet test tests/AvaloniaAssistant.Agent.Tests
 - MCP 端到端：测试里起一个 Node stdio 服务端，断言 `mcp__demo__echo` 进入可调用工具集；
 - 本机 TCP 模拟 OpenAI SSE 端点，验证真实 HTTP 流式与工具声明；
 - 文件工具的目录 / 读取 / 越界写入；
+- 技能导入：文件夹与 zip（外层目录、根级 `SKILL.md`、缺清单、多技能、重名）各走一遍；
 - settings / session 的 JSON 往返。
 
 ## 截图模式

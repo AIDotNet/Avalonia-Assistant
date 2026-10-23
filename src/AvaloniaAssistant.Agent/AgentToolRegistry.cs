@@ -162,11 +162,12 @@ public sealed class AgentToolRegistry
         return new ToolSchema(schema);
     }
 
+    /// <summary>
+    /// 日常办公和写代码真正用得上的一组；系统信息、进程管理、开浏览器这些低频动作不进来，
+    /// 需要时用 <c>run_command</c> 或系统自带工具做，少一个工具就少一次选错。
+    /// </summary>
     private static IEnumerable<IAgentTool> DefaultTools() =>
     [
-        new SystemInfoTool(),
-        new ProcessListTool(),
-        new ProcessStopTool(),
         new ListDirectoryTool(),
         new ReadFileTool(),
         new WriteFileTool(),
@@ -174,7 +175,6 @@ public sealed class AgentToolRegistry
         new OpenPathTool(),
         new RunCommandTool(),
         new FetchUrlTool(),
-        new OpenUrlTool(),
         new CurrentTimeTool(),
     ];
 }

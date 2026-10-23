@@ -14,6 +14,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\AvaloniaAssistant.Abstractions\AvaloniaAssistant.Abstractions.csproj" />
+    <ProjectReference Include="..\AvaloniaAssistant.Storage\AvaloniaAssistant.Storage.csproj" />
   </ItemGroup>
   <ItemGroup>
     <AvaloniaResource Include="Assets\app.ico" />

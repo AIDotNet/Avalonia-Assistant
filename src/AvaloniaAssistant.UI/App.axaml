@@ -29,6 +29,9 @@
     <DataTemplate DataType="{x:Type vm:ToolsViewModel}">
       <views:ToolsView />
     </DataTemplate>
+    <DataTemplate DataType="{x:Type vm:McpViewModel}">
+      <views:McpView />
+    </DataTemplate>
     <DataTemplate DataType="{x:Type vm:LibraryViewModel}">
       <views:LibraryView />
     </DataTemplate>

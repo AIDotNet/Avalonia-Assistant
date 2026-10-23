@@ -1,0 +1,205 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:arc="https://github.com/AtomUICommunity/TKCode.Arc"
+             x:Class="AvaloniaAssistant.UI.Views.McpView">
+  <Grid RowDefinitions="Auto,*">
+    <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="18,10,20,10">
+      <Grid ColumnDefinitions="Auto,*,Auto">
+        <Button Classes="icon" Command="{Binding BackCommand}" ToolTip.Tip="返回">
+          <arc:ArcGlyph Data="{x:Static arc:ArcIcons.ChevronLeft}" Size="16" />
+        </Button>
+        <StackPanel Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Center" Spacing="1">
+          <TextBlock Text="MCP" FontSize="14" FontWeight="Medium" />
+          <TextBlock Text="{Binding CountText}" Classes="caption" FontSize="10.5" />
+        </StackPanel>
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6">
+          <Button Classes="pill"
+                  Command="{Binding RefreshCommand}"
+                  ToolTip.Tip="重新读取 mcp.json">
+            <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+              <arc:ArcGlyph Data="{x:Static arc:ArcIcons.RefreshCw}" Size="12" />
+              <TextBlock Text="重新扫描" FontSize="11" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+          <Button Classes="pill"
+                  Command="{Binding ShowFormCommand}"
+                  ToolTip.Tip="填名称和启动命令，写入 mcp.json">
+            <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+              <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Sparkles}" Size="12" />
+              <TextBlock Text="添加服务端" FontSize="11" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+      <StackPanel Margin="96,16,96,24" Spacing="12">
+        <TextBlock Text="MCP 服务端给模型接外部工具。配置写在 mcp.json，新加的条目在下一个会话启动时连接；工具名是 mcp__&lt;服务端&gt;__&lt;工具&gt;。"
+                   Classes="caption"
+                   TextWrapping="Wrap"
+                   LineHeight="19" />
+
+        <Border IsVisible="{Binding HasNotice}"
+                Background="{StaticResource SurfaceMutedBrush}"
+                CornerRadius="8"
+                Padding="12,8">
+          <TextBlock Text="{Binding Notice}"
+                     FontSize="11.5"
+                     TextWrapping="Wrap"
+                     LineHeight="17" />
+        </Border>
+
+        <Border Classes="tool-tile" IsVisible="{Binding IsFormOpen}" Padding="14,12">
+          <StackPanel Spacing="10">
+            <TextBlock Text="添加 MCP 服务端（stdio）"
+                       FontSize="12.5"
+                       FontWeight="Medium" />
+            <Grid ColumnDefinitions="56,*"
+                  RowDefinitions="Auto,Auto,Auto"
+                  RowSpacing="8"
+                  ColumnSpacing="10">
+              <TextBlock Text="名称"
+                         Classes="caption"
+                         FontSize="11"
+                         VerticalAlignment="Center" />
+              <arc:Input Grid.Column="1"
+                         Size="Small"
+                         Placeholder="filesystem"
+                         Text="{Binding Name, Mode=TwoWay}" />
+
+              <TextBlock Grid.Row="1"
+                         Text="命令"
+                         Classes="caption"
+                         FontSize="11"
+                         VerticalAlignment="Center" />
+              <arc:Input Grid.Row="1"
+                         Grid.Column="1"
+                         Size="Small"
+                         Placeholder="npx"
+                         Text="{Binding Command, Mode=TwoWay}" />
+
+              <TextBlock Grid.Row="2"
+                         Text="参数"
+                         Classes="caption"
+                         FontSize="11"
+                         VerticalAlignment="Center" />
+              <arc:Input Grid.Row="2"
+                         Grid.Column="1"
+                         Size="Small"
+                         Placeholder="-y @modelcontextprotocol/server-filesystem D:/work"
+                         Text="{Binding Args, Mode=TwoWay}" />
+            </Grid>
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Text="参数按空格拆成数组；exposure 自动写 direct，否则模型直接调不到。"
+                         Classes="caption"
+                         FontSize="10.5"
+                         VerticalAlignment="Center" />
+              <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                <Button Classes="pill"
+                        Content="取消"
+                        Command="{Binding CancelFormCommand}" />
+                <Button Classes="pill"
+                        Content="保存"
+                        Command="{Binding SaveCommand}" />
+              </StackPanel>
+            </Grid>
+          </StackPanel>
+        </Border>
+
+        <ItemsControl ItemsSource="{Binding Servers}" Margin="0,0,-12,0">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <UniformGrid Columns="3" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <Border Classes="tool-tile" Margin="0,0,12,12" ToolTip.Tip="{Binding Target}">
+                <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="Auto,*,Auto">
+                  <Border Width="34"
+                          Height="34"
+                          CornerRadius="10"
+                          Background="#EFF1F4">
+                    <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Server}"
+                                  Size="17"
+                                  Foreground="#5B6472"
+                                  HorizontalAlignment="Center"
+                                  VerticalAlignment="Center" />
+                  </Border>
+
+                  <Grid Grid.Column="1" Margin="10,0,0,0" ColumnDefinitions="*,Auto">
+                    <TextBlock Text="{Binding Name}"
+                               FontSize="13"
+                               FontWeight="Medium"
+                               VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis" />
+                    <Border Grid.Column="1"
+                            Background="{StaticResource SurfaceMutedBrush}"
+                            CornerRadius="5"
+                            Padding="5,1"
+                            VerticalAlignment="Center">
+                      <Panel>
+                        <TextBlock Text="项目级"
+                                   IsVisible="{Binding IsProjectScope}"
+                                   FontSize="9"
+                                   Foreground="{StaticResource TextMutedBrush}" />
+                        <TextBlock Text="用户级"
+                                   IsVisible="{Binding !IsProjectScope}"
+                                   FontSize="9"
+                                   Foreground="{StaticResource TextMutedBrush}" />
+                      </Panel>
+                    </Border>
+                  </Grid>
+
+                  <Button Grid.Column="2"
+                          Classes="icon"
+                          Margin="6,0,0,0"
+                          VerticalAlignment="Center"
+                          Command="{Binding $parent[ItemsControl].DataContext.RemoveCommand}"
+                          CommandParameter="{Binding}"
+                          ToolTip.Tip="从 mcp.json 移除">
+                    <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Trash2}"
+                                  Size="13"
+                                  Foreground="{StaticResource TextMutedBrush}" />
+                  </Button>
+
+                  <TextBlock Grid.Row="1"
+                             Grid.ColumnSpan="3"
+                             Margin="0,9,0,0"
+                             Text="{Binding Target}"
+                             FontFamily="{StaticResource MonoFontFamily}"
+                             FontSize="10.5"
+                             Foreground="{StaticResource TextMutedBrush}"
+                             TextTrimming="CharacterEllipsis" />
+                </Grid>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <Border IsVisible="{Binding !HasServers}" Classes="tool-tile" Padding="14,12">
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Server}"
+                          Size="16"
+                          Foreground="{StaticResource TextMutedBrush}"
+                          VerticalAlignment="Top"
+                          Margin="0,1,0,0" />
+            <StackPanel Spacing="3">
+              <TextBlock Text="还没有 MCP 服务端" FontSize="12.5" FontWeight="Medium" />
+              <TextBlock Text="{Binding EmptyHint}"
+                         Classes="caption"
+                         FontSize="11"
+                         TextWrapping="Wrap"
+                         LineHeight="16" />
+              <TextBlock Text="{Binding ConfigPathText}"
+                         FontFamily="{StaticResource MonoFontFamily}"
+                         FontSize="10.5"
+                         Foreground="{StaticResource TextMutedBrush}" />
+            </StackPanel>
+          </StackPanel>
+        </Border>
+      </StackPanel>
+    </ScrollViewer>
+  </Grid>
+</UserControl>

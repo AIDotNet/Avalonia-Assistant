@@ -18,6 +18,12 @@ public interface IAssistantRuntime
 
     /// <summary>中止指定会话正在进行的运行。没有运行时为空操作。</summary>
     void Abort(string sessionId);
+
+    /// <summary>
+    /// 丢弃缓存中的会话，下次运行重新装配。装了新技能 / 改了 MCP 配置后调用，
+    /// 否则要等应用重启才生效。
+    /// </summary>
+    void InvalidateSessions();
 }
 
 /// <summary>逐次工具授权的回调。UI 在对话里弹出允许/拒绝卡片并等待用户选择。</summary>

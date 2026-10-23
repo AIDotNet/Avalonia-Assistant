@@ -30,15 +30,15 @@ internal static class DemoData
                     Model = "deepseek-chat",
                     InputTokens = 1284,
                     OutputTokens = 213,
-                    Reasoning = "先读取系统信息，确认 CPU、内存和磁盘；再把结果写成文件，最后用一段话说明写到了哪里。",
+                    Reasoning = "先跑一条命令查系统信息，确认 CPU、内存和磁盘；再把结果写成文件，最后用一段话说明写到了哪里。",
                     ToolCalls =
                     [
                         new ToolCallRecord
                         {
                             Id = "demo-call-1",
-                            Name = "system_info",
-                            Label = "查看系统信息",
-                            Arguments = "{}",
+                            Name = "run_command",
+                            Label = "执行命令",
+                            Arguments = "{\n  \"command\": \"systeminfo\"\n}",
                             Result = "操作系统：Windows 11 专业版 24H2\n处理器：16 个逻辑核心\n物理内存：32 GB（可用 4.1 GB）\n磁盘：C: 剩余 128 GB / 512 GB",
                             DurationMs = 84,
                         },

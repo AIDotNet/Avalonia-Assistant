@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using Avalonia.Media;
 using AvaloniaAssistant.Abstractions;
+using AvaloniaAssistant.Storage;
 using AvaloniaAssistant.UI.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -77,7 +78,7 @@ public sealed partial class ToolsViewModel : ObservableObject
     private readonly MainWindowViewModel _host;
     private readonly List<ToolItemViewModel> _all = [];
     private string _skillsRoot = string.Empty;
-    private string _mcpConfigPath = string.Empty;
+    private string _skillsRootRaw = string.Empty;
 
     public ToolsViewModel(MainWindowViewModel host)
     {
@@ -107,27 +108,16 @@ public sealed partial class ToolsViewModel : ObservableObject
 
     public ObservableCollection<AgentSkillInfo> Skills { get; } = [];
 
-    public ObservableCollection<McpServerInfo> McpServers { get; } = [];
-
     public bool HasSkills => Skills.Count > 0;
-
-    public bool HasMcpServers => McpServers.Count > 0;
 
     public string SkillsEmptyHint => string.IsNullOrEmpty(_skillsRoot)
         ? "技能目录不可用。"
-        : "把 <名称>/SKILL.md 放进技能目录，下一个会话就会加载。";
-
-    public string McpEmptyHint => string.IsNullOrEmpty(_mcpConfigPath)
-        ? "MCP 配置不可用。"
-        : "在配置文件里加 mcpServers，下一个会话启动时连接。";
+        : "还没有技能。可以从文件夹或 zip 导入，也会读技能目录里的 <名称>/SKILL.md。";
 
     /// <summary>技能目录，用户目录已缩成 ~。</summary>
     public string SkillsRootText => _skillsRoot;
 
-    /// <summary>MCP 配置文件，用户目录已缩成 ~。</summary>
-    public string McpConfigText => _mcpConfigPath;
-
-    public string CapabilityText => $"{Skills.Count} 个技能 · {McpServers.Count} 个 MCP 服务端";
+    public string CapabilityText => $"{Skills.Count} 个技能";
 
     public string SubtitleText => $"{_all.Count} 个内置工具 · {_all.Count(tool => tool.IsEnabled)} 个已启用";
 
@@ -140,6 +130,20 @@ public sealed partial class ToolsViewModel : ObservableObject
     [ObservableProperty]
     private bool hasNothing;
 
+    [ObservableProperty]
+    private string? notice;
+
+    public bool HasNotice => !string.IsNullOrWhiteSpace(Notice);
+
+    public bool NoticeIsError { get; private set; }
+
+    /// <summary>提示条配色：装成功是绿的，失败是红的。</summary>
+    public IBrush NoticeBackground => Brush.Parse(NoticeIsError ? "#FBEAE8" : "#EAF4EA");
+
+    public IBrush NoticeForeground => Brush.Parse(NoticeIsError ? "#B3261E" : "#2E7D32");
+
+    partial void OnNoticeChanged(string? value) => OnPropertyChanged(nameof(HasNotice));
+
     partial void OnSearchTextChanged(string value) => Refresh();
 
     partial void OnSelectedCategoryChanged(string? value) => Refresh();
@@ -150,12 +154,76 @@ public sealed partial class ToolsViewModel : ObservableObject
     [RelayCommand]
     private void Back() => _host.OpenHome();
 
+    /// <summary>选一个含 SKILL.md 的文件夹，复制进技能目录。</summary>
+    [RelayCommand]
+    private async Task InstallSkillAsync()
+    {
+        var folder = await _host.Picker.PickFolderAsync("选择技能文件夹（里面要有 SKILL.md）");
+        if (!string.IsNullOrWhiteSpace(folder))
+        {
+            Install(() => CapabilityInstaller.InstallSkill(folder, _skillsRootRaw));
+        }
+    }
+
+    /// <summary>选一个 zip 技能包，解开后复制进技能目录。</summary>
+    [RelayCommand]
+    private async Task InstallSkillZipAsync()
+    {
+        var file = await _host.Picker.PickFileAsync("选择技能包（zip 里要有 SKILL.md）", "*.zip");
+        if (!string.IsNullOrWhiteSpace(file))
+        {
+            Install(() => CapabilityInstaller.InstallSkillZip(file, _skillsRootRaw));
+        }
+    }
+
+    private void Install(Func<string> install)
+    {
+        if (string.IsNullOrWhiteSpace(_skillsRootRaw))
+        {
+            ShowNotice("技能目录不可用，先选一个工作区。", isError: true);
+            return;
+        }
+
+        try
+        {
+            var target = install();
+            _host.Runtime.InvalidateSessions();
+            RefreshCapabilities();
+            ShowNotice($"已装到 {Ui.ShortenPath(target)}，下一个会话生效。", isError: false);
+        }
+        catch (Exception ex)
+        {
+            ShowNotice(ex.Message, isError: true);
+        }
+    }
+
+    [RelayCommand]
+    private void OpenSkillsFolder()
+    {
+        if (string.IsNullOrWhiteSpace(_skillsRootRaw))
+        {
+            return;
+        }
+
+        Directory.CreateDirectory(_skillsRootRaw);
+        Ui.OpenExternal(_skillsRootRaw);
+    }
+
+    private void ShowNotice(string message, bool isError)
+    {
+        NoticeIsError = isError;
+        Notice = message;
+        OnPropertyChanged(nameof(NoticeIsError));
+        OnPropertyChanged(nameof(NoticeBackground));
+        OnPropertyChanged(nameof(NoticeForeground));
+    }
+
     [RelayCommand]
     private void RefreshCapabilities()
     {
         var capabilities = _host.Runtime.Capabilities;
+        _skillsRootRaw = capabilities.SkillsRoot;
         _skillsRoot = Ui.ShortenPath(capabilities.SkillsRoot);
-        _mcpConfigPath = Ui.ShortenPath(capabilities.McpConfigPath);
 
         Skills.Clear();
         foreach (var skill in capabilities.Skills)
@@ -163,18 +231,9 @@ public sealed partial class ToolsViewModel : ObservableObject
             Skills.Add(skill);
         }
 
-        McpServers.Clear();
-        foreach (var server in capabilities.McpServers)
-        {
-            McpServers.Add(server);
-        }
-
         OnPropertyChanged(nameof(HasSkills));
-        OnPropertyChanged(nameof(HasMcpServers));
         OnPropertyChanged(nameof(SkillsEmptyHint));
-        OnPropertyChanged(nameof(McpEmptyHint));
         OnPropertyChanged(nameof(SkillsRootText));
-        OnPropertyChanged(nameof(McpConfigText));
         OnPropertyChanged(nameof(CapabilityText));
     }
 
@@ -225,8 +284,6 @@ internal static class ToolPalette
 
     private static readonly Entry[] Entries =
     [
-        new(["系统"], () => ArcIcons.Monitor, "#3B6EF6", "#EAF0FF"),
-        new(["进程"], () => ArcIcons.Activity, "#E2703A", "#FDEFE6"),
         new(["文件"], () => ArcIcons.Folder, "#1F9254", "#E8F6EE"),
         new(["命令"], () => ArcIcons.Terminal, "#7B4DE0", "#F1EBFE"),
         new(["网络"], () => ArcIcons.Globe, "#0E8A96", "#E4F5F7"),

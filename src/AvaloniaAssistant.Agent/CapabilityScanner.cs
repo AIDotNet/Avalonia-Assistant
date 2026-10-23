@@ -170,17 +170,19 @@ internal static class CapabilityScanner
 
         if (entry.TryGetProperty("command", out var command) && command.ValueKind == JsonValueKind.String)
         {
-            var text = command.GetString() ?? "stdio";
+            var parts = new List<string> { command.GetString() ?? "stdio" };
             if (entry.TryGetProperty("args", out var args) && args.ValueKind == JsonValueKind.Array)
             {
-                var first = args.EnumerateArray().FirstOrDefault();
-                if (first.ValueKind == JsonValueKind.String)
+                foreach (var arg in args.EnumerateArray())
                 {
-                    text += " " + first.GetString();
+                    if (arg.ValueKind == JsonValueKind.String && arg.GetString() is { Length: > 0 } text)
+                    {
+                        parts.Add(text);
+                    }
                 }
             }
 
-            return text;
+            return string.Join(' ', parts);
         }
 
         return "stdio";

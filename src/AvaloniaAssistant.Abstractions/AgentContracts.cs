@@ -62,7 +62,7 @@ public sealed record AgentToolInfo(
     bool RequiresApproval,
     IReadOnlyList<ToolParameterInfo> Parameters)
 {
-    /// <summary>会改变本机状态（写文件、执行命令、结束进程）。只读模式下统一拦截。</summary>
+    /// <summary>会改变本机状态（写文件、执行命令、改系统设置）。只读模式下统一拦截。</summary>
     public bool IsMutating { get; init; }
 }
 

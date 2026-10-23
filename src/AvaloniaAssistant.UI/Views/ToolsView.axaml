@@ -22,10 +22,21 @@
 
     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
       <StackPanel Margin="96,16,96,24" Spacing="12">
-        <TextBlock Text="技能来自 SKILL.md，工具是本机能力。关掉的工具不会进入模型上下文；执行命令、结束进程仍需逐次确认。"
+        <TextBlock Text="技能来自 SKILL.md，工具是本机能力。关掉的工具不会进入模型上下文；执行命令仍需逐次确认。"
                    Classes="caption"
                    TextWrapping="Wrap"
                    LineHeight="19" />
+
+        <Border IsVisible="{Binding HasNotice}"
+                Background="{Binding NoticeBackground}"
+                CornerRadius="8"
+                Padding="12,8">
+          <TextBlock Text="{Binding Notice}"
+                     Foreground="{Binding NoticeForeground}"
+                     FontSize="11.5"
+                     TextWrapping="Wrap"
+                     LineHeight="17" />
+        </Border>
 
         <!-- 技能 -->
         <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,6,0,0">
@@ -36,16 +47,40 @@
                      FontSize="10.5"
                      Margin="10,0,0,0"
                      VerticalAlignment="Center" />
-          <Button Grid.Column="2"
-                  Classes="pill"
-                  IsVisible="{Binding HasSkills}"
-                  Command="{Binding RefreshCapabilitiesCommand}"
-                  ToolTip.Tip="重新扫描技能与 MCP 配置">
-            <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
-              <arc:ArcGlyph Data="{x:Static arc:ArcIcons.RefreshCw}" Size="12" />
-              <TextBlock Text="重新扫描" FontSize="11" VerticalAlignment="Center" />
-            </StackPanel>
-          </Button>
+          <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6">
+            <Button Classes="pill"
+                    Command="{Binding OpenSkillsFolderCommand}"
+                    ToolTip.Tip="在资源管理器里打开技能目录">
+              <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Folder}" Size="12" />
+                <TextBlock Text="打开目录" FontSize="11" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+            <Button Classes="pill"
+                    Command="{Binding RefreshCapabilitiesCommand}"
+                    ToolTip.Tip="重新扫描技能目录">
+              <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                <arc:ArcGlyph Data="{x:Static arc:ArcIcons.RefreshCw}" Size="12" />
+                <TextBlock Text="重新扫描" FontSize="11" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+            <Button Classes="pill"
+                    Command="{Binding InstallSkillCommand}"
+                    ToolTip.Tip="选一个含 SKILL.md 的文件夹装进来">
+              <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Plus}" Size="12" />
+                <TextBlock Text="导入文件夹" FontSize="11" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+            <Button Classes="pill"
+                    Command="{Binding InstallSkillZipCommand}"
+                    ToolTip.Tip="选一个含 SKILL.md 的 zip 技能包装进来">
+              <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Plus}" Size="12" />
+                <TextBlock Text="导入 zip" FontSize="11" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+          </StackPanel>
         </Grid>
 
         <ItemsControl ItemsSource="{Binding Skills}" Margin="0,0,-12,0">
@@ -239,79 +274,6 @@
                     Command="{Binding ClearSearchCommand}" />
           </arc:EmptyState.Action>
         </arc:EmptyState>
-
-        <!-- MCP -->
-        <Grid ColumnDefinitions="Auto,*" Margin="0,10,0,0" IsVisible="{Binding HasMcpServers}">
-          <TextBlock Text="MCP 服务端" FontSize="13" FontWeight="Medium" VerticalAlignment="Center" />
-          <TextBlock Grid.Column="1"
-                     Text="{Binding McpCountText}"
-                     Classes="caption"
-                     FontSize="10.5"
-                     Margin="10,0,0,0"
-                     VerticalAlignment="Center" />
-        </Grid>
-
-        <ItemsControl ItemsSource="{Binding McpServers}" Margin="0,0,-12,0">
-          <ItemsControl.ItemsPanel>
-            <ItemsPanelTemplate>
-              <UniformGrid Columns="3" />
-            </ItemsPanelTemplate>
-          </ItemsControl.ItemsPanel>
-          <ItemsControl.ItemTemplate>
-            <DataTemplate>
-              <Border Classes="tool-tile" Margin="0,0,12,12" ToolTip.Tip="{Binding Target}">
-                <Grid ColumnDefinitions="Auto,*">
-                  <Border Width="34"
-                          Height="34"
-                          CornerRadius="10"
-                          Background="#EFF1F4">
-                    <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Server}"
-                                  Size="17"
-                                  Foreground="#5B6472"
-                                  HorizontalAlignment="Center"
-                                  VerticalAlignment="Center" />
-                  </Border>
-                  <StackPanel Grid.Column="1" Margin="10,0,0,0" Spacing="3" VerticalAlignment="Center">
-                    <TextBlock Text="{Binding Name}"
-                               FontSize="13"
-                               FontWeight="Medium"
-                               TextTrimming="CharacterEllipsis" />
-                    <TextBlock Text="{Binding Target}"
-                               FontFamily="{StaticResource MonoFontFamily}"
-                               FontSize="10.5"
-                               Foreground="{StaticResource TextMutedBrush}"
-                               TextTrimming="CharacterEllipsis" />
-                  </StackPanel>
-                </Grid>
-              </Border>
-            </DataTemplate>
-          </ItemsControl.ItemTemplate>
-        </ItemsControl>
-
-        <Border IsVisible="{Binding !HasMcpServers}" Classes="tool-tile" Padding="14,12">
-          <Grid ColumnDefinitions="Auto,*,Auto">
-            <Border Width="32"
-                    Height="32"
-                    CornerRadius="9"
-                    Background="#EFF1F4"
-                    VerticalAlignment="Top">
-              <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Server}"
-                            Size="15"
-                            Foreground="#5B6472"
-                            HorizontalAlignment="Center"
-                            VerticalAlignment="Center" />
-            </Border>
-            <StackPanel Grid.Column="1" Margin="10,0,12,0" Spacing="2" VerticalAlignment="Center">
-              <TextBlock Text="还没有 MCP 服务端" FontSize="12.5" FontWeight="Medium" />
-              <TextBlock Text="{Binding McpEmptyHint}" Classes="caption" FontSize="11" />
-              <TextBlock Text="{Binding McpConfigText}"
-                         FontFamily="{StaticResource MonoFontFamily}"
-                         FontSize="10"
-                         Foreground="{StaticResource TextMutedBrush}"
-                         TextTrimming="CharacterEllipsis" />
-            </StackPanel>
-          </Grid>
-        </Border>
       </StackPanel>
     </ScrollViewer>
   </Grid>

@@ -41,7 +41,7 @@
 | `AvaloniaAssistant.Speech` | NAudio 录音 + 语音转写 | `NAudioVoiceInput.cs` |
 | `AvaloniaAssistant.UI` | 窗口、页面、ViewModel、样式、截图 | `Views/`、`ViewModels/`、`Styles/` |
 | `AvaloniaAssistant.Desktop` | 入口、DI、Arc 初始化、参数解析 | `Program.cs` |
-| `AvaloniaAssistant.Agent.Tests` | 循环、工具、HTTP、持久化测试 | 4 个测试文件，9 个用例 |
+| `AvaloniaAssistant.Agent.Tests` | 循环、工具、HTTP、持久化、技能导入测试 | 6 个测试文件，24 个用例 |
 
 ## 3. 一次对话的时序
 
@@ -56,7 +56,7 @@ ChatViewModel.SendPromptAsync
    ▼
 IAssistantRuntime.RunAsync  ──►  PiAgentRuntime
    │                               ├─ 建 SystemMessage + 历史
-   │                               ├─ 注册 12 个 AgentTool
+   │                               ├─ 注册 8 个 AgentTool
    │                               ├─ StreamFn = OpenAi/Anthropic StreamSimple
    │                               └─ Agent.Prompt(prompt)
    │                                        │
@@ -93,7 +93,7 @@ ChatViewModel 更新 MessageViewModel
 
 ## 5. 权限模型
 
-| 模式 | 读工作区 | 写工作区 | 越界路径 | 执行命令 / 结束进程 |
+| 模式 | 读工作区 | 写工作区 | 越界路径 | 执行命令 |
 | --- | --- | --- | --- | --- |
 | 只读 | ✅ | ❌ 直接阻止 | ❌ | ❌ |
 | 工作区 | ✅ | ✅ | ❌ 直接阻止 | ⚠️ 逐次授权 |
@@ -140,7 +140,8 @@ MainWindow (1280×820)
     └── ContentControl + DataTemplate
         ├── HomeView        欢迎、模式、快捷提示、建议卡、输入框
         ├── ChatView        会话头、消息列表、授权卡、输入框
-        ├── ToolsView       12 个工具分组与开关
+        ├── ToolsView       8 个工具分组、开关与技能导入
+        ├── McpView         MCP 服务端列表与添加表单
         ├── LibraryView     工作区顶层文件
         └── SettingsView    模型 / 权限 / 工作区 / 关于
 ```
@@ -195,6 +196,7 @@ UI 的技能页与系统提示里的工具清单都会自动更新。
 | `PiAgentRuntimeTests` | Faux 模型驱动的完整循环、工具调用、只读拦截、授权拒绝、缺 Key |
 | `OpenAiWireTests` | 本机 TCP 起一个 OpenAI 兼容 SSE 端点，走真实 HTTP/流式解析，断言工具声明在请求体里 |
 | `ToolExecutionTests` | `list_directory` / `read_file` 正常，越界写被工作区沙箱拦下 |
+| `CapabilityInstallerTests` | 技能文件夹 / zip 导入、缺清单、多技能、重名与非法扩展名 |
 | `StorageTests` | settings / session 的 JSON 往返与删除 |
 
 运行：
