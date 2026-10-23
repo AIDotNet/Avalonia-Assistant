@@ -35,6 +35,8 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
 
     public event EventHandler<string>? SendRequested;
 
+    public event EventHandler? FocusRequested;
+
     public event EventHandler? StopRequested;
 
     public ObservableCollection<ModelOption> Models { get; } = [];
@@ -71,7 +73,7 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
 
     public bool ShowStop => IsBusy;
 
-    public string Placeholder => "描述你要做的事，Enter 发送，Shift+Enter 换行";
+    public string Placeholder => "描述你要做的事，越具体越好";
 
     public string ModelLabel => _settings.Current.Model;
 
@@ -204,6 +206,8 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
         settings.RecentWorkspaces.Insert(0, folder);
         Refresh();
     }
+
+    public void RequestFocus() => FocusRequested?.Invoke(this, EventArgs.Empty);
 
     public async Task SetModelAsync(string modelId)
     {

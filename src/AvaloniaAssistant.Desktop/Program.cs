@@ -65,6 +65,15 @@ internal static class Program
                 case "--run" when index + 1 < args.Length:
                     AppLaunchOptions.RunPrompt = args[++index];
                     break;
+                case "--composer-text" when index + 1 < args.Length:
+                    AppLaunchOptions.ComposerText = args[++index];
+                    break;
+                case "--press-enter":
+                    AppLaunchOptions.PressEnter = true;
+                    break;
+                case "--data-dir" when index + 1 < args.Length:
+                    AppPaths.UseRoot(args[++index]);
+                    break;
             }
         }
     }

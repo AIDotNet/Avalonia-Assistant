@@ -1,20 +1,23 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:arc="https://github.com/AtomUICommunity/TKCode.Arc"
+             xmlns:controls="using:AvaloniaAssistant.UI.Controls"
              x:Class="AvaloniaAssistant.UI.Views.SidebarView">
   <Border Background="{StaticResource SidebarBrush}" Padding="12,16,12,10">
     <Grid RowDefinitions="Auto,Auto,*,Auto">
       <Grid ColumnDefinitions="Auto,*,Auto">
-        <Border Width="30" Height="30" CornerRadius="9" Background="{StaticResource AccentBrush}">
-          <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Sparkles}"
-                        Size="17"
-                        Foreground="{StaticResource AccentForegroundBrush}"
-                        HorizontalAlignment="Center"
-                        VerticalAlignment="Center" />
-        </Border>
-        <StackPanel Grid.Column="1" Margin="9,0,0,0" VerticalAlignment="Center" Spacing="1">
-          <TextBlock Text="Avalonia Assistant" FontSize="13" FontWeight="SemiBold" />
-          <TextBlock Text="{Binding VersionText}" Classes="caption" FontSize="10.5" />
+        <controls:BrandMark Width="32" Height="32" VerticalAlignment="Center" />
+        <StackPanel Grid.Column="1" Margin="9,0,0,0" VerticalAlignment="Center" Spacing="0">
+          <TextBlock Text="Avalonia Assistant"
+                     FontSize="13"
+                     FontWeight="SemiBold"
+                     LineHeight="16"
+                     VerticalAlignment="Center" />
+          <TextBlock Text="{Binding VersionText}"
+                     Classes="caption"
+                     FontSize="10"
+                     LineHeight="13"
+                     VerticalAlignment="Center" />
         </StackPanel>
         <Button Grid.Column="2"
                 Classes="icon"

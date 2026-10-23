@@ -64,6 +64,15 @@
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="FontSize" Value="12.5" />
     <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="Button.mode-chip">
+    <Setter Property="MinWidth" Value="68" />
+    <Setter Property="Padding" Value="0,0" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
   </Style>
   <Style Selector="Button.chip:pointerover">
     <Setter Property="Background" Value="{StaticResource SurfaceMutedBrush}" />
@@ -261,8 +270,27 @@
     <Setter Property="FontSize" Value="12" />
   </Style>
 
-  <Style Selector="arc|Textarea.composer arc|FieldFrame">
+  <Style Selector="arc|Textarea.composer /template/ arc|Field arc|FieldFrame">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
+  </Style>
+  <Style Selector="arc|Textarea.composer /template/ TextPresenter">
+    <Setter Property="FocusAdorner" Value="{x:Null}" />
+  </Style>
+  <Style Selector="arc|Textarea.composer /template/ ScrollViewer">
+    <Setter Property="FocusAdorner" Value="{x:Null}" />
+  </Style>
+
+  <Style Selector="Border.save-toast">
+    <Setter Property="Background" Value="{StaticResource SuccessSubtleBrush}" />
+    <Setter Property="BorderBrush" Value="#BFD8BF" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="Padding" Value="13,8" />
+    <Setter Property="BoxShadow" Value="{StaticResource CardShadow}" />
+  </Style>
+  <Style Selector="Border.save-toast.error">
+    <Setter Property="Background" Value="{StaticResource DangerSubtleBrush}" />
+    <Setter Property="BorderBrush" Value="#F0CFCB" />
   </Style>
 </Styles>

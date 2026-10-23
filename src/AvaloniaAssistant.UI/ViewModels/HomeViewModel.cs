@@ -106,7 +106,11 @@ public sealed partial class HomeViewModel : ObservableObject
         => await _host.StartNewChatAsync(card.Prompt);
 
     [RelayCommand]
-    private void UseQuickPrompt(QuickPromptViewModel prompt) => Composer.Text = prompt.Prompt;
+    private void UseQuickPrompt(QuickPromptViewModel prompt)
+    {
+        Composer.Text = prompt.Prompt;
+        Composer.RequestFocus();
+    }
 
     [RelayCommand]
     private async Task OpenSettingsAsync() => await _host.OpenSettingsAsync();

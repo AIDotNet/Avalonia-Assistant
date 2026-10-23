@@ -6,18 +6,31 @@ namespace AvaloniaAssistant.Storage;
 
 public static class AppPaths
 {
-    public static string Root { get; } = Path.Combine(
+    private static string? _root;
+
+    public static string Root => _root ??= Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "AvaloniaAssistant");
 
-    public static string Sessions { get; } = Path.Combine(Root, "sessions");
+    public static string Sessions => Path.Combine(Root, "sessions");
 
-    public static string SettingsFile { get; } = Path.Combine(Root, "settings.json");
+    public static string SettingsFile => Path.Combine(Root, "settings.json");
 
-    public static string DefaultWorkspace { get; } = Path.Combine(
+    public static string DefaultWorkspace => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
         "AvaloniaAssistant",
         "Workspace");
+
+    /// <summary>覆盖数据根目录（便携模式 / 测试隔离）。必须在 EnsureCreated 前调用。</summary>
+    public static void UseRoot(string root)
+    {
+        if (string.IsNullOrWhiteSpace(root))
+        {
+            throw new ArgumentException("数据目录不能为空。", nameof(root));
+        }
+
+        _root = Path.GetFullPath(root);
+    }
 
     public static void EnsureCreated()
     {

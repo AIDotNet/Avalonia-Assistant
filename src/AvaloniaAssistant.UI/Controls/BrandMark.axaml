@@ -1,0 +1,16 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="AvaloniaAssistant.UI.Controls.BrandMark">
+  <Viewbox Stretch="Uniform">
+    <Border Width="32" Height="32" CornerRadius="9" Background="#1C1C1A">
+      <Canvas Width="32" Height="32">
+        <Path Data="M 9,23 L 16,9 L 23,23 M 11.7,18 L 20.3,18"
+              Stroke="#FFFFFF"
+              StrokeThickness="2.2"
+              StrokeLineCap="Round"
+              StrokeJoin="Round" />
+        <Ellipse Canvas.Left="24" Canvas.Top="5" Width="3.2" Height="3.2" Fill="#C9B8FF" />
+      </Canvas>
+    </Border>
+  </Viewbox>
+</UserControl>

@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Input;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media.Imaging;
 using AvaloniaAssistant.UI.Services;
@@ -68,12 +69,35 @@ public partial class AssistantApp : Application
                 await viewModel.StartNewChatAsync(AppLaunchOptions.RunPrompt);
             }
 
+            if (!string.IsNullOrWhiteSpace(AppLaunchOptions.ComposerText))
+            {
+                viewModel.Home.Composer.Text = AppLaunchOptions.ComposerText;
+                viewModel.Home.Composer.RequestFocus();
+            }
+
+            if (AppLaunchOptions.PressEnter)
+            {
+                await Task.Delay(800);
+                var topLevel = TopLevel.GetTopLevel(window);
+                if (topLevel?.FocusManager?.GetFocusedElement() is InputElement focused)
+                {
+                    focused.RaiseEvent(new KeyEventArgs
+                    {
+                        RoutedEvent = InputElement.KeyDownEvent,
+                        Key = Key.Enter,
+                        KeyModifiers = KeyModifiers.None,
+                        Source = focused,
+                    });
+                }
+            }
+
             if (string.IsNullOrWhiteSpace(AppLaunchOptions.ScreenshotPath))
             {
                 return;
             }
 
-            await Task.Delay(string.IsNullOrWhiteSpace(AppLaunchOptions.RunPrompt) ? 1600 : 4500);
+            var waitingForRun = !string.IsNullOrWhiteSpace(AppLaunchOptions.RunPrompt) || AppLaunchOptions.PressEnter;
+            await Task.Delay(waitingForRun ? 4500 : 1600);
             Capture(window, AppLaunchOptions.ScreenshotPath);
             desktop.Shutdown();
         }

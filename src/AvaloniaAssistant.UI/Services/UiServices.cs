@@ -112,4 +112,10 @@ public static class AppLaunchOptions
 
     /// <summary>开发用：启动后自动发送一条消息（配合 --screenshot 做端到端验证）。</summary>
     public static string? RunPrompt { get; set; }
+
+    /// <summary>开发用：预填并聚焦输入框，检查焦点态和 Enter 发送。</summary>
+    public static string? ComposerText { get; set; }
+
+    /// <summary>开发用：预填后模拟一次 Enter，验证发送链路。</summary>
+    public static bool PressEnter { get; set; }
 }

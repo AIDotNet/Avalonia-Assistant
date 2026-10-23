@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:arc="https://github.com/AtomUICommunity/TKCode.Arc"
              xmlns:views="using:AvaloniaAssistant.UI.Views"
+             xmlns:controls="using:AvaloniaAssistant.UI.Controls"
              x:Class="AvaloniaAssistant.UI.Views.HomeView">
   <Grid RowDefinitions="Auto,*">
     <Grid Margin="26,16,22,0" ColumnDefinitions="*,Auto">
@@ -25,47 +26,44 @@
     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
       <StackPanel MaxWidth="800"
                   HorizontalAlignment="Center"
-                  Margin="28,26,28,40">
+                  Margin="28,18,28,30">
 
-        <Border Width="46" Height="46" CornerRadius="14" Background="{StaticResource AccentBrush}" HorizontalAlignment="Center">
-          <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Sparkles}"
-                        Size="23"
-                        Foreground="{StaticResource AccentForegroundBrush}"
-                        HorizontalAlignment="Center"
-                        VerticalAlignment="Center" />
-        </Border>
+        <controls:BrandMark Width="44" Height="44" HorizontalAlignment="Center" />
 
         <TextBlock Text="{Binding Headline}"
-                   FontSize="33"
+                   FontSize="32"
                    FontWeight="SemiBold"
                    HorizontalAlignment="Center"
-                   Margin="0,18,0,0" />
+                   Margin="0,14,0,0" />
 
         <TextBlock Text="{Binding Subtitle}"
                    Classes="muted"
                    FontSize="13"
                    HorizontalAlignment="Center"
-                   Margin="0,9,0,0" />
+                   Margin="0,7,0,0" />
 
         <StackPanel Orientation="Horizontal"
                     HorizontalAlignment="Center"
                     Spacing="8"
-                    Margin="0,20,0,0">
-          <Button Classes="chip"
+                    Margin="0,14,0,0">
+          <Button Classes="chip mode-chip"
                   Classes.active="{Binding IsOffice}"
                   Command="{Binding SetModeCommand}"
-                  CommandParameter="office"
-                  Content="办公" />
-          <Button Classes="chip"
+                  CommandParameter="office">
+            <TextBlock Text="办公" HorizontalAlignment="Center" VerticalAlignment="Center" />
+          </Button>
+          <Button Classes="chip mode-chip"
                   Classes.active="{Binding IsDevelopment}"
                   Command="{Binding SetModeCommand}"
-                  CommandParameter="development"
-                  Content="开发" />
-          <Button Classes="chip"
+                  CommandParameter="development">
+            <TextBlock Text="开发" HorizontalAlignment="Center" VerticalAlignment="Center" />
+          </Button>
+          <Button Classes="chip mode-chip"
                   Classes.active="{Binding IsDesign}"
                   Command="{Binding SetModeCommand}"
-                  CommandParameter="design"
-                  Content="设计" />
+                  CommandParameter="design">
+            <TextBlock Text="设计" HorizontalAlignment="Center" VerticalAlignment="Center" />
+          </Button>
         </StackPanel>
 
         <Border IsVisible="{Binding ShowSetupBanner}"
@@ -92,9 +90,9 @@
           </Grid>
         </Border>
 
-        <views:ComposerView DataContext="{Binding Composer}" Margin="0,18,0,0" />
+        <views:ComposerView DataContext="{Binding Composer}" Margin="0,14,0,0" />
 
-        <ItemsControl ItemsSource="{Binding QuickPrompts}" Margin="0,15,0,0">
+        <ItemsControl ItemsSource="{Binding QuickPrompts}" Margin="0,12,0,0">
           <ItemsControl.ItemsPanel>
             <ItemsPanelTemplate>
               <WrapPanel ItemSpacing="8" LineSpacing="8" />
@@ -116,7 +114,7 @@
 
         <TextBlock Text="或者，从这些开始"
                    Classes="section-title"
-                   Margin="2,30,0,10" />
+                   Margin="2,22,0,8" />
 
         <ItemsControl ItemsSource="{Binding Cards}">
           <ItemsControl.ItemsPanel>
@@ -129,7 +127,7 @@
               <Button Classes="card-button"
                       Command="{Binding $parent[ItemsControl].DataContext.UseCardCommand}"
                       CommandParameter="{Binding}">
-                <Border Classes="card" Padding="15" Height="104">
+                <Border Classes="card" Padding="14" Height="96">
                   <Grid ColumnDefinitions="Auto,*,Auto">
                     <Border Width="34" Height="34" CornerRadius="10" Background="{StaticResource SurfaceMutedBrush}" VerticalAlignment="Top">
                       <arc:ArcGlyph Data="{Binding Icon}"

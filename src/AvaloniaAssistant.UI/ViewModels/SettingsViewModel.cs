@@ -1,7 +1,10 @@
 using System.Collections.ObjectModel;
+using Avalonia.Media;
+using Avalonia.Threading;
 using AvaloniaAssistant.Abstractions;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using TKCode.Arc;
 
 namespace AvaloniaAssistant.UI.ViewModels;
 
@@ -113,10 +116,32 @@ public sealed partial class SettingsViewModel : ObservableObject
         "AvaloniaAssistant");
 
     [ObservableProperty]
-    private string savedText;
+    private string savedText = string.Empty;
 
     [ObservableProperty]
     private bool isSaving;
+
+    [ObservableProperty]
+    private string saveButtonText = "保存设置";
+
+    [ObservableProperty]
+    private bool showSaveToast;
+
+    [ObservableProperty]
+    private string saveToastText = "设置已保存";
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SaveToastBrush))]
+    [NotifyPropertyChangedFor(nameof(SaveToastIcon))]
+    private bool isSaveError;
+
+    public IBrush SaveToastBrush => IsSaveError
+        ? new SolidColorBrush(Color.Parse("#B3261E"))
+        : new SolidColorBrush(Color.Parse("#2E7D32"));
+
+    public Geometry SaveToastIcon => IsSaveError ? ArcIcons.CircleAlert : ArcIcons.CircleCheck;
+
+    private DispatcherTimer? _toastTimer;
 
     [RelayCommand]
     private void SelectProvider(ProviderOptionViewModel option)
@@ -173,6 +198,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         }
 
         IsSaving = true;
+        SaveButtonText = "保存中…";
         try
         {
             if (string.IsNullOrWhiteSpace(Settings.Model))
@@ -187,15 +213,36 @@ public sealed partial class SettingsViewModel : ObservableObject
 
             await _host.SettingsProvider.SaveAsync(Settings);
             SavedText = $"已保存 · {DateTime.Now:HH:mm:ss}";
+            ShowToast("设置已保存", error: false);
         }
         catch (Exception ex)
         {
             SavedText = "保存失败：" + ex.Message;
+            ShowToast("保存失败，请重试", error: true);
         }
         finally
         {
             IsSaving = false;
         }
+    }
+
+    private void ShowToast(string text, bool error)
+    {
+        SaveToastText = text;
+        IsSaveError = error;
+        ShowSaveToast = true;
+        SaveButtonText = error ? "重新保存" : "已保存";
+
+        _toastTimer?.Stop();
+        _toastTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2.6) };
+        _toastTimer.Tick += (_, _) =>
+        {
+            ShowSaveToast = false;
+            SaveButtonText = "保存设置";
+            _toastTimer?.Stop();
+            _toastTimer = null;
+        };
+        _toastTimer.Start();
     }
 
     [RelayCommand]

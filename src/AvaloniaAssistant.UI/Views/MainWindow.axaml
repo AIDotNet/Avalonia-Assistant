@@ -4,6 +4,7 @@
         xmlns:arc="https://github.com/AtomUICommunity/TKCode.Arc"
         x:Class="AvaloniaAssistant.UI.Views.MainWindow"
         Title="Avalonia Assistant"
+        Icon="/Assets/app.ico"
         Width="1280"
         Height="820"
         MinWidth="1000"

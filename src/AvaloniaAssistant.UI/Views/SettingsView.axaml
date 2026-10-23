@@ -147,15 +147,37 @@
 
     <Border Grid.Row="2" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0" Padding="28,12">
       <Grid ColumnDefinitions="*,Auto">
-        <TextBlock Text="{Binding SavedText}" Classes="caption" VerticalAlignment="Center" />
+        <TextBlock Text="{Binding SavedText}"
+                   Classes="caption"
+                   Foreground="{Binding SaveToastBrush}"
+                   VerticalAlignment="Center"
+                   TextTrimming="CharacterEllipsis" />
         <Button Grid.Column="1"
                 Classes="approve"
                 Height="34"
                 Padding="18,0"
                 Command="{Binding SaveCommand}"
                 IsEnabled="{Binding !IsSaving}"
-                Content="保存设置" />
+                Content="{Binding SaveButtonText}" />
       </Grid>
+    </Border>
+
+    <Border Grid.RowSpan="3"
+            Classes="save-toast"
+            Classes.error="{Binding IsSaveError}"
+            IsVisible="{Binding ShowSaveToast}"
+            HorizontalAlignment="Right"
+            VerticalAlignment="Top"
+            Margin="0,62,24,0">
+      <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
+        <arc:ArcGlyph Data="{Binding SaveToastIcon}"
+                      Size="15"
+                      Foreground="{Binding SaveToastBrush}"
+                      VerticalAlignment="Center" />
+        <TextBlock Text="{Binding SaveToastText}"
+                   FontSize="12"
+                   VerticalAlignment="Center" />
+      </StackPanel>
     </Border>
   </Grid>
 </UserControl>

@@ -2,6 +2,76 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:arc="https://github.com/AtomUICommunity/TKCode.Arc"
              x:Class="AvaloniaAssistant.UI.Views.ComposerView">
+  <UserControl.Resources>
+    <ControlTheme x:Key="ComposerTextarea" TargetType="arc:Textarea">
+      <Setter Property="Template">
+        <ControlTemplate TargetType="arc:Textarea">
+          <arc:Field Name="PART_Field"
+                     Label="{TemplateBinding Label}"
+                     Description="{TemplateBinding Description}"
+                     ErrorMessage="{TemplateBinding EffectiveErrorMessage}"
+                     IsLabelVisible="{TemplateBinding IsLabelVisible}"
+                     Size="{TemplateBinding Size}">
+            <arc:FieldFrame Name="PART_Frame"
+                            Cursor="IBeam"
+                            MinHeight="64"
+                            Padding="0"
+                            VerticalContentAlignment="Stretch"
+                            Size="{TemplateBinding Size}"
+                            IsInvalid="{TemplateBinding IsInvalid}"
+                            IsReadOnly="{TemplateBinding IsReadOnly}"
+                            IsFocusActive="{TemplateBinding IsFocused}"
+                            Prefix="{TemplateBinding Prefix}"
+                            Suffix="{TemplateBinding Suffix}"
+                            Background="Transparent"
+                            BorderThickness="0">
+              <Panel>
+                <ScrollViewer Name="PART_ScrollViewer"
+                              HorizontalScrollBarVisibility="Disabled"
+                              VerticalScrollBarVisibility="Auto"
+                              IsScrollChainingEnabled="True"
+                              BringIntoViewOnFocusChange="{TemplateBinding (ScrollViewer.BringIntoViewOnFocusChange)}">
+                  <Panel>
+                    <TextBlock Name="PART_Placeholder"
+                               Foreground="{TemplateBinding PlaceholderForeground}"
+                               Text="{TemplateBinding PlaceholderText}"
+                               TextAlignment="{TemplateBinding TextAlignment}"
+                               TextWrapping="Wrap"
+                               LineHeight="{TemplateBinding LineHeight}"
+                               VerticalAlignment="Top">
+                      <TextBlock.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                          <Binding ElementName="PART_TextPresenter" Path="PreeditText" Converter="{x:Static StringConverters.IsNullOrEmpty}" />
+                          <Binding RelativeSource="{RelativeSource TemplatedParent}" Path="Text" Converter="{x:Static StringConverters.IsNullOrEmpty}" />
+                        </MultiBinding>
+                      </TextBlock.IsVisible>
+                    </TextBlock>
+                    <TextPresenter Name="PART_TextPresenter"
+                                   Text="{TemplateBinding Text, Mode=TwoWay}"
+                                   CaretBlinkInterval="{TemplateBinding CaretBlinkInterval}"
+                                   CaretIndex="{TemplateBinding CaretIndex}"
+                                   SelectionStart="{TemplateBinding SelectionStart}"
+                                   SelectionEnd="{TemplateBinding SelectionEnd}"
+                                   TextAlignment="{TemplateBinding TextAlignment}"
+                                   TextWrapping="{TemplateBinding TextWrapping}"
+                                   LineHeight="{TemplateBinding LineHeight}"
+                                   LetterSpacing="{TemplateBinding LetterSpacing}"
+                                   PasswordChar="{TemplateBinding PasswordChar}"
+                                   RevealPassword="{TemplateBinding RevealPassword}"
+                                   SelectionBrush="{TemplateBinding SelectionBrush}"
+                                   SelectionForegroundBrush="{TemplateBinding SelectionForegroundBrush}"
+                                   CaretBrush="{TemplateBinding CaretBrush}"
+                                   VerticalAlignment="Top" />
+                  </Panel>
+                </ScrollViewer>
+              </Panel>
+            </arc:FieldFrame>
+          </arc:Field>
+        </ControlTemplate>
+      </Setter>
+    </ControlTheme>
+  </UserControl.Resources>
+
   <StackPanel>
     <Border Background="{StaticResource SurfaceBrush}"
             BorderBrush="{StaticResource BorderStrongBrush}"
@@ -12,12 +82,13 @@
       <Grid RowDefinitions="Auto,Auto">
         <arc:Textarea x:Name="Input"
                       Classes="composer"
+                      Theme="{StaticResource ComposerTextarea}"
                       Text="{Binding Text, Mode=TwoWay}"
                       Placeholder="{Binding Placeholder}"
                       IsResizable="False"
-                      MinHeight="54"
-                      MaxHeight="170"
-                      KeyDown="OnInputKeyDown" />
+                      MinHeight="64"
+                      MaxHeight="160"
+                      FocusAdorner="{x:Null}" />
 
         <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" Margin="0,6,0,0">
           <Button Classes="icon"
@@ -25,6 +96,13 @@
                   ToolTip.Tip="把文件路径交给助手">
             <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Paperclip}" Size="16" />
           </Button>
+
+          <TextBlock Grid.Column="1"
+                     Text="Enter 发送 · Shift+Enter 换行"
+                     Classes="caption"
+                     FontSize="10"
+                     Margin="7,0,0,0"
+                     VerticalAlignment="Center" />
 
           <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
             <Button Classes="pill" Click="OnModelClick" ToolTip.Tip="切换模型">
@@ -75,7 +153,7 @@
                TextWrapping="Wrap"
                Margin="4,7,4,0" />
 
-    <Grid ColumnDefinitions="*,Auto" Margin="4,7,4,0">
+    <Grid ColumnDefinitions="*" Margin="4,7,4,0">
       <StackPanel Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
         <Button Classes="pill" Click="OnWorkspaceClick" ToolTip.Tip="{Binding WorkspacePath}">
           <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
@@ -86,10 +164,6 @@
         </Button>
         <TextBlock Text="本地运行" Classes="caption" VerticalAlignment="Center" Margin="6,0,0,0" />
       </StackPanel>
-      <TextBlock Grid.Column="1"
-                 Text="Enter 发送 · Shift+Enter 换行"
-                 Classes="caption"
-                 VerticalAlignment="Center" />
     </Grid>
   </StackPanel>
 </UserControl>

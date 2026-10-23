@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
+using Avalonia.Threading;
 using AvaloniaAssistant.Abstractions;
 using AvaloniaAssistant.UI.ViewModels;
 
@@ -13,12 +14,45 @@ public partial class ComposerView : UserControl
     public ComposerView()
     {
         AvaloniaXamlLoader.Load(this);
+        AddHandler(KeyDownEvent, OnInputKeyDown, RoutingStrategies.Tunnel);
+        AttachedToVisualTree += (_, _) => Dispatcher.UIThread.Post(
+            () => this.FindControl<Control>("Input")?.Focus(),
+            DispatcherPriority.Input);
     }
 
     private ComposerViewModel? ViewModel => DataContext as ComposerViewModel;
 
+    protected override void OnDataContextChanged(EventArgs e)
+    {
+        if (oldViewModel is not null)
+        {
+            oldViewModel.FocusRequested -= OnFocusRequested;
+        }
+
+        oldViewModel = ViewModel;
+        if (oldViewModel is not null)
+        {
+            oldViewModel.FocusRequested += OnFocusRequested;
+        }
+
+        base.OnDataContextChanged(e);
+    }
+
+    private ComposerViewModel? oldViewModel;
+
+    private void OnFocusRequested(object? sender, EventArgs e)
+    {
+        Avalonia.Threading.Dispatcher.UIThread.Post(() => this.FindControl<Control>("Input")?.Focus(), DispatcherPriority.Input);
+    }
+
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
+        if (oldViewModel is not null)
+        {
+            oldViewModel.FocusRequested -= OnFocusRequested;
+            oldViewModel = null;
+        }
+
         ViewModel?.CancelRecording();
         base.OnDetachedFromVisualTree(e);
     }
@@ -30,9 +64,14 @@ public partial class ComposerView : UserControl
             return;
         }
 
-        e.Handled = true;
         var viewModel = ViewModel;
-        if (viewModel?.SendCommand.CanExecute(null) == true)
+        if (viewModel is null)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        if (viewModel.SendCommand.CanExecute(null))
         {
             viewModel.SendCommand.Execute(null);
         }
