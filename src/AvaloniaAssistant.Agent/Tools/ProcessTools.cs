@@ -10,7 +10,7 @@ internal sealed class ProcessListTool : IAgentTool
         "list_processes",
         "查看运行中的进程",
         "按内存占用列出当前占用最高的进程，可用于判断某个程序是否在运行。",
-        "系统",
+        "进程",
         RequiresApproval: false,
         Parameters:
         [
@@ -63,7 +63,7 @@ internal sealed class ProcessStopTool : IAgentTool
         "stop_process",
         "结束进程",
         "按 PID 结束进程（含子进程）。属于破坏性操作，执行前必须让用户确认。",
-        "系统",
+        "进程",
         RequiresApproval: true,
         Parameters:
         [

@@ -9,4 +9,7 @@
   <ItemGroup>
     <ProjectReference Include="..\AvaloniaAssistant.Abstractions\AvaloniaAssistant.Abstractions.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="AvaloniaAssistant.Agent.Tests" />
+  </ItemGroup>
 </Project>

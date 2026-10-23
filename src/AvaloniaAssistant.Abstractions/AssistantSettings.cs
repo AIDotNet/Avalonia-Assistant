@@ -116,6 +116,12 @@ public sealed class AssistantSettings
     /// <summary>当前任务默认工作区；为空时使用用户主目录下的 AvaloniaAssistant/Workspace。</summary>
     public string WorkspacePath { get; set; } = string.Empty;
 
+    /// <summary>
+    /// 是否信任工作区里的 <c>.pi</c> 配置（技能、MCP 服务端、AGENTS.md）。
+    /// 桌面助理的工作区由用户自己选择，默认信任；把助理指向来路不明的目录时应关掉。
+    /// </summary>
+    public bool TrustWorkspace { get; set; } = true;
+
     public string UserName { get; set; } = Environment.UserName;
 
     public List<string> RecentWorkspaces { get; set; } = [];
@@ -138,6 +144,7 @@ public sealed class AssistantSettings
         SpeechModel = SpeechModel,
         Permission = Permission,
         WorkspacePath = WorkspacePath,
+        TrustWorkspace = TrustWorkspace,
         UserName = UserName,
         RecentWorkspaces = [.. RecentWorkspaces],
         DisabledTools = [.. DisabledTools],

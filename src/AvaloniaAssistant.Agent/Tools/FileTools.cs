@@ -250,7 +250,7 @@ internal sealed class OpenPathTool : IAgentTool
         "open_path",
         "打开文件或文件夹",
         "用系统默认程序打开文件，或在资源管理器里打开文件夹。",
-        "应用",
+        "文件",
         RequiresApproval: false,
         Parameters:
         [

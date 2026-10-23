@@ -2,17 +2,24 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Threading.Channels;
 using AvaloniaAssistant.Abstractions;
-using Pi.Agent;
 using Pi.Agent.Types;
-using PiAgent = Pi.Agent.Agent;
 using Pi.Ai.Types;
+using Pi.CodingAgent.Core;
 
 namespace AvaloniaAssistant.Agent;
 
 /// <summary>
-/// 用 pi.net 的 Agent 循环实现 <see cref="IAssistantRuntime"/>。
-/// 这里是整个解决方案里唯一认识 Pi.* 类型的地方（除测试外）。
+/// 用 Pi.CodingAgent 的会话运行时实现 <see cref="IAssistantRuntime"/>。
 /// </summary>
+/// <remarks>
+/// 和上一版（直接用 Pi.Agent 的裸循环）的区别：
+/// <list type="bullet">
+/// <item>会话是 CodingAgent 的 <see cref="AgentSession"/>，自带技能、MCP、上下文压缩、自动重试；</item>
+/// <item>三层权限仍然挂在 <c>Pi.Agent.Agent.BeforeToolCall</c> 上，CodingAgent 自己只把该钩子用于
+/// 扩展的 tool_call 事件，这里先串上它再跑审批，扩展行为不受影响；</item>
+/// <item>会话存档仍然由 <see cref="ISessionStore"/> 负责，CodingAgent 用内存会话，避免两套 JSON 打架。</item>
+/// </list>
+/// </remarks>
 public sealed class PiAgentRuntime : IAssistantRuntime
 {
     private static readonly Dictionary<AgentProviderKind, string[]> KnownModels = new()
@@ -24,24 +31,23 @@ public sealed class PiAgentRuntime : IAssistantRuntime
     };
 
     private readonly ISettingsProvider _settings;
-    private readonly IPiStreamFactory _streams;
+    private readonly IPiStreamFactory? _streams;
     private readonly AgentToolRegistry _registry;
-    private readonly Dictionary<string, PiAgent> _active = new(StringComparer.Ordinal);
-    private readonly object _activeGate = new();
+    private readonly Dictionary<string, SessionHolder> _sessions = new(StringComparer.Ordinal);
+    private readonly SemaphoreSlim _sessionGate = new(1, 1);
 
-    public PiAgentRuntime(
-        ISettingsProvider settings,
-        IPiStreamFactory? streams = null,
-        AgentToolRegistry? registry = null)
+    public PiAgentRuntime(ISettingsProvider settings, IPiStreamFactory? streams = null, AgentToolRegistry? registry = null)
     {
         _settings = settings;
-        _streams = streams ?? new PiStreamFactory();
+        _streams = streams;
         _registry = registry ?? new AgentToolRegistry();
     }
 
     public IReadOnlyList<ModelOption> Models => BuildModels(_settings.Current);
 
     public IReadOnlyList<AgentToolInfo> Tools => _registry.Tools;
+
+    public AgentCapabilities Capabilities => CapabilityScanner.Scan(_settings.Current);
 
     public async IAsyncEnumerable<AgentStreamEvent> RunAsync(
         AgentRunRequest request,
@@ -68,146 +74,28 @@ public sealed class PiAgentRuntime : IAssistantRuntime
 
         var writer = channel.Writer;
         var modelOption = ResolveModel(settings);
-        var tools = _registry.CreateTools(request, settings.DisabledTools, out var catalog);
-        var model = new Model(
-            modelOption.Id,
-            modelOption.Name,
-            settings.Protocol == AgentProtocol.AnthropicMessages ? "anthropic-messages" : "openai-completions",
-            settings.Provider.ToString().ToLowerInvariant());
+        var cwd = ResolveWorkspace(request.WorkspacePath);
 
-        var agent = CreateAgent(request, settings, model, tools, catalog, writer);
-        lock (_activeGate)
+        SessionHolder? holder = null;
+        string? initError = null;
+        try
         {
-            _active[request.SessionId] = agent;
+            holder = await GetOrCreateSessionAsync(request, settings, cwd, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            initError = ex.Message;
         }
 
-        using var cancellation = cancellationToken.Register(agent.Abort);
-        var run = Task.Run(async () =>
+        if (holder is null)
         {
-            try
-            {
-                await writer.WriteAsync(new AgentStreamEvent.RunStarted(request.SessionId, modelOption.Id)).ConfigureAwait(false);
-                await agent.Prompt(request.Prompt).ConfigureAwait(false);
-
-                var last = agent.Messages.OfType<AssistantMessage>().LastOrDefault();
-                await writer.WriteAsync(new AgentStreamEvent.RunCompleted(
-                    MapStop(last?.StopReason),
-                    last?.ErrorMessage,
-                    last?.UsageStats?.Input ?? 0,
-                    last?.UsageStats?.Output ?? 0,
-                    modelOption.Id)).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                writer.TryWrite(new AgentStreamEvent.RunCompleted(AgentStopReason.Aborted, null, 0, 0, modelOption.Id));
-            }
-            catch (Exception ex)
-            {
-                writer.TryWrite(new AgentStreamEvent.RunFailed(ex.Message));
-            }
-            finally
-            {
-                lock (_activeGate)
-                {
-                    _active.Remove(request.SessionId);
-                }
-
-                writer.TryComplete();
-            }
-        }, CancellationToken.None);
-
-        await foreach (var @event in channel.Reader.ReadAllAsync(CancellationToken.None).ConfigureAwait(false))
-        {
-            yield return @event;
+            yield return new AgentStreamEvent.RunFailed($"会话初始化失败：{initError}");
+            yield break;
         }
 
-        await run.ConfigureAwait(false);
-    }
-
-    public void Abort(string sessionId)
-    {
-        PiAgent? agent;
-        lock (_activeGate)
-        {
-            _active.TryGetValue(sessionId, out agent);
-        }
-
-        agent?.Abort();
-    }
-
-    private PiAgent CreateAgent(
-        AgentRunRequest request,
-        AssistantSettings settings,
-        Model model,
-        IReadOnlyList<AgentTool> tools,
-        IReadOnlyDictionary<string, AgentToolInfo> catalog,
-        ChannelWriter<AgentStreamEvent> writer)
-    {
-        var messages = new List<ChatMessage>
-        {
-            new SystemMessage(MessageContent.From(SystemPromptBuilder.Build(request, tools))),
-        };
-
-        foreach (var turn in request.History)
-        {
-            if (string.IsNullOrWhiteSpace(turn.Text))
-            {
-                continue;
-            }
-
-            messages.Add(turn.Role == "assistant"
-                ? Messages.AssistantText(turn.Text)
-                : Messages.UserText(turn.Text));
-        }
-
-        var agent = new PiAgent(new AgentOptions
-        {
-            Messages = messages,
-            Model = model,
-            Tools = tools,
-            StreamFn = _streams.Create(settings),
-            ToolExecution = ToolExecutionMode.Sequential,
-            BeforeToolCall = async (context, token) =>
-            {
-                if (!catalog.TryGetValue(context.ToolCall.Name, out var info))
-                {
-                    return null;
-                }
-
-                if (info.IsMutating && request.Permission == PermissionMode.ReadOnly)
-                {
-                    return new BeforeToolCallResult(
-                        Block: true,
-                        Reason: $"当前是只读模式，已阻止「{info.Label}」。需要修改时请把权限切换为「工作区」或「完全访问」。");
-                }
-
-                if (!info.RequiresApproval || request.Permission == PermissionMode.FullAccess)
-                {
-                    return null;
-                }
-
-                if (request.ApprovalGate is null)
-                {
-                    return new BeforeToolCallResult(Block: true, Reason: "没有可用的授权界面，已阻止该操作。");
-                }
-
-                var approved = await request.ApprovalGate.RequestAsync(
-                    new ToolApprovalRequest(
-                        request.SessionId,
-                        info.Name,
-                        info.Label,
-                        FormatArguments(context.Args),
-                        $"{info.Label} 会修改本机状态，需要你确认。",
-                        request.Permission),
-                    token).ConfigureAwait(false);
-
-                return approved
-                    ? null
-                    : new BeforeToolCallResult(Block: true, Reason: "用户拒绝了该操作。请停下来说明原因，不要重复尝试。");
-            },
-        });
-
-        var subscription = agent.Subscribe((@event, _) =>
+        var session = holder.Session;
+        var catalog = holder.Catalog;
+        using var subscription = session.Agent.Subscribe((@event, _) =>
         {
             switch (@event)
             {
@@ -240,10 +128,235 @@ public sealed class PiAgentRuntime : IAssistantRuntime
             return Task.CompletedTask;
         });
 
-        // Agent 没有暴露取消订阅的公共字段；订阅随 agent 生命周期结束，
-        // 运行时为每次运行新建 agent，因此不会跨运行泄漏监听器。
-        _ = subscription;
-        return agent;
+        using var cancellation = cancellationToken.Register(() => _ = session.AbortAsync());
+
+        var run = Task.Run(async () =>
+        {
+            try
+            {
+                await writer.WriteAsync(new AgentStreamEvent.RunStarted(request.SessionId, modelOption.Id)).ConfigureAwait(false);
+                await session.PromptAsync(request.Prompt, new PromptOptions { Source = "interactive" }).ConfigureAwait(false);
+
+                var last = session.Messages.OfType<AssistantMessage>().LastOrDefault();
+                var stats = session.GetSessionStats();
+                await writer.WriteAsync(new AgentStreamEvent.RunCompleted(
+                    MapStop(last?.StopReason),
+                    last?.ErrorMessage,
+                    stats.Tokens.Input,
+                    stats.Tokens.Output,
+                    modelOption.Id)).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                writer.TryWrite(new AgentStreamEvent.RunCompleted(AgentStopReason.Aborted, null, 0, 0, modelOption.Id));
+            }
+            catch (Exception ex)
+            {
+                writer.TryWrite(new AgentStreamEvent.RunFailed(ex.Message));
+            }
+            finally
+            {
+                holder.LastHistory = request.History;
+                writer.TryComplete();
+            }
+        }, CancellationToken.None);
+
+        await foreach (var @event in channel.Reader.ReadAllAsync(CancellationToken.None).ConfigureAwait(false))
+        {
+            yield return @event;
+        }
+
+        await run.ConfigureAwait(false);
+    }
+
+    public void Abort(string sessionId)
+    {
+        SessionHolder? holder;
+        lock (_sessions)
+        {
+            _sessions.TryGetValue(sessionId, out holder);
+        }
+
+        if (holder is not null)
+        {
+            _ = holder.Session.AbortAsync();
+        }
+    }
+
+    private async Task<SessionHolder> GetOrCreateSessionAsync(
+        AgentRunRequest request,
+        AssistantSettings settings,
+        string cwd,
+        CancellationToken cancellationToken)
+    {
+        var history = request.History;
+        lock (_sessions)
+        {
+            if (_sessions.TryGetValue(request.SessionId, out var cached) && cached.Matches(history, settings))
+            {
+                return cached;
+            }
+        }
+
+        await _sessionGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            lock (_sessions)
+            {
+                // 双检：并发两轮同时进来时只建一次会话。
+                if (_sessions.TryGetValue(request.SessionId, out var cached) && cached.Matches(history, settings))
+                {
+                    return cached;
+                }
+            }
+
+            var tools = _registry.CreateCustomTools(request, settings.DisabledTools, out var catalog);
+            var session = await CodingSessionFactory
+                .CreateAsync(settings, cwd, tools, _streams?.Create(settings), cancellationToken)
+                .ConfigureAwait(false);
+
+            InstallPermissionHook(session, request, catalog);
+            SeedHistory(session, history);
+
+            var holder = new SessionHolder
+            {
+                Session = session,
+                Catalog = catalog,
+                LastHistory = history,
+                Permission = request.Permission,
+                Model = settings.Model,
+                ApiKey = settings.ApiKey,
+                BaseUrl = settings.BaseUrl,
+                DisabledTools = [.. settings.DisabledTools],
+            };
+
+            lock (_sessions)
+            {
+                _sessions[request.SessionId] = holder;
+            }
+
+            return holder;
+        }
+        finally
+        {
+            _sessionGate.Release();
+        }
+    }
+
+    /// <summary>
+    /// 三层权限。CodingAgent 在构造时已经把这个钩子指向扩展的 tool_call 事件，这里先调用原钩子，
+    /// 再叠加本项目的只读拦截与逐次授权。
+    /// </summary>
+    private static void InstallPermissionHook(
+        AgentSession session,
+        AgentRunRequest request,
+        IReadOnlyDictionary<string, AgentToolInfo> catalog)
+    {
+        var previous = session.Agent.BeforeToolCall;
+        session.Agent.BeforeToolCall = async (context, token) =>
+        {
+            if (previous is not null)
+            {
+                var prior = await previous(context, token).ConfigureAwait(false);
+                if (prior?.Block == true)
+                {
+                    return prior;
+                }
+            }
+
+            var name = context.ToolCall.Name;
+            var info = catalog.TryGetValue(name, out var known) ? known : null;
+            var mutating = ToolAccess.IsMutating(name, info);
+
+            if (mutating && request.Permission == PermissionMode.ReadOnly)
+            {
+                return new BeforeToolCallResult(
+                    Block: true,
+                    Reason: $"当前是只读模式，已阻止「{info?.Label ?? name}」。需要修改时请把权限切换为「工作区」或「完全访问」。");
+            }
+
+            if (!ToolAccess.RequiresApproval(name, info) || request.Permission == PermissionMode.FullAccess)
+            {
+                return null;
+            }
+
+            if (request.ApprovalGate is null)
+            {
+                return new BeforeToolCallResult(Block: true, Reason: "没有可用的授权界面，已阻止该操作。");
+            }
+
+            var approved = await request.ApprovalGate.RequestAsync(
+                new ToolApprovalRequest(
+                    request.SessionId,
+                    name,
+                    info?.Label ?? name,
+                    FormatArguments(context.Args),
+                    $"{info?.Label ?? name} 会修改本机状态，需要你确认。",
+                    request.Permission),
+                token).ConfigureAwait(false);
+
+            return approved
+                ? null
+                : new BeforeToolCallResult(Block: true, Reason: "用户拒绝了该操作。请停下来说明原因，不要重复尝试。");
+        };
+    }
+
+    /// <summary>
+    /// 把界面侧的历史灌进新会话。CodingAgent 的 system prompt 以 sections 形式单独维护，
+    /// 这里补一条空 system 占位，保证后续差异更新落在头部。
+    /// </summary>
+    private static void SeedHistory(AgentSession session, IReadOnlyList<HistoryTurn> history)
+    {
+        var messages = new List<ChatMessage>();
+        foreach (var turn in history)
+        {
+            if (string.IsNullOrWhiteSpace(turn.Text))
+            {
+                continue;
+            }
+
+            messages.Add(turn.Role == "assistant"
+                ? Messages.AssistantText(turn.Text)
+                : Messages.UserText(turn.Text));
+        }
+
+        if (messages.Count == 0)
+        {
+            return;
+        }
+
+        var system = session.Agent.Messages.OfType<SystemMessage>().FirstOrDefault();
+        messages.Insert(0, system ?? new SystemMessage(MessageContent.From(string.Empty)));
+        session.Agent.Messages = messages;
+    }
+
+    private static bool SameHistory(IReadOnlyList<HistoryTurn> left, IReadOnlyList<HistoryTurn> right)
+    {
+        if (left.Count != right.Count)
+        {
+            return false;
+        }
+
+        for (var index = 0; index < left.Count; index++)
+        {
+            if (left[index].Role != right[index].Role || left[index].Text != right[index].Text)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static string ResolveWorkspace(string? workspacePath)
+    {
+        if (!string.IsNullOrWhiteSpace(workspacePath) && Directory.Exists(workspacePath))
+        {
+            return Path.GetFullPath(workspacePath);
+        }
+
+        var fallback = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        return Directory.Exists(fallback) ? fallback : Environment.CurrentDirectory;
     }
 
     private static IReadOnlyList<ModelOption> BuildModels(AssistantSettings settings)
@@ -305,5 +418,36 @@ public sealed class PiAgentRuntime : IAssistantRuntime
         }
 
         return result?.ToString();
+    }
+
+    private sealed class SessionHolder
+    {
+        public required AgentSession Session { get; init; }
+
+        public required IReadOnlyDictionary<string, AgentToolInfo> Catalog { get; init; }
+
+        public IReadOnlyList<HistoryTurn> LastHistory { get; set; } = [];
+
+        public required PermissionMode Permission { get; init; }
+
+        public required string Model { get; init; }
+
+        public required string ApiKey { get; init; }
+
+        public required string BaseUrl { get; init; }
+
+        public required IReadOnlyList<string> DisabledTools { get; init; }
+
+        /// <summary>
+        /// 会话复用条件：历史一致，且权限 / 模型 / 端点 / 工具开关都没变。
+        /// 权限变了必须重建——BeforeToolCall 闭包和内置工具集都是建会话时定下的。
+        /// </summary>
+        public bool Matches(IReadOnlyList<HistoryTurn> history, AssistantSettings settings)
+            => Permission == settings.Permission
+               && Model == settings.Model
+               && ApiKey == settings.ApiKey
+               && BaseUrl == settings.BaseUrl
+               && DisabledTools.SequenceEqual(settings.DisabledTools)
+               && SameHistory(LastHistory, history);
     }
 }

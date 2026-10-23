@@ -56,6 +56,20 @@ public sealed class StorageFilePicker : IFilePicker
 
 public static class Ui
 {
+    /// <summary>把用户目录缩成 ~，避免路径把界面撑长。</summary>
+    public static string ShortenPath(string? path)
+    {
+        if (string.IsNullOrEmpty(path))
+        {
+            return string.Empty;
+        }
+
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        return !string.IsNullOrEmpty(home) && path.StartsWith(home, StringComparison.OrdinalIgnoreCase)
+            ? "~" + path[home.Length..]
+            : path;
+    }
+
     public static async Task OnUiAsync(Action action)
     {
         if (Dispatcher.UIThread.CheckAccess())

@@ -10,7 +10,7 @@ internal sealed class RunCommandTool : IAgentTool
         "run_command",
         "执行命令",
         "在工作区里执行一条 shell 命令并返回输出。用于构建、测试、查看目录等。属于高风险操作，执行前必须让用户确认。",
-        "执行",
+        "命令",
         RequiresApproval: true,
         Parameters:
         [

@@ -1,7 +1,7 @@
 # Avalonia Assistant
 
-Windows 桌面 AI 助理。Agent 循环用 [pi.net](https://github.com/AIDotNet/pi.net)，界面用
-[TKCode.Arc](https://github.com/AIDotNet/TKCode.Arc)，交互参考 WorkBuddy：左侧任务与空间，
+Windows 桌面 AI 助理。Agent 循环用 [pi.net](https://github.com/AIDotNet/pi.net) 的 **Pi.CodingAgent**，
+界面用 [TKCode.Arc](https://github.com/AIDotNet/TKCode.Arc)，交互参考 WorkBuddy：左侧任务与空间，
 中间对话，输入框里带模型、权限和工作区选择。
 
 ![首页](docs/images/home.png)
@@ -9,13 +9,15 @@ Windows 桌面 AI 助理。Agent 循环用 [pi.net](https://github.com/AIDotNet/
 ## 现在能做什么
 
 - **流式对话**：DeepSeek / OpenAI / Anthropic / 任意 OpenAI 兼容端点（Ollama、LM Studio、vLLM、One-API）。
-- **真的会动手**：12 个本机工具，覆盖系统信息、进程、文件、命令、网页。
+- **真的会动手**：自建 12 个系统工具 + CodingAgent 内置的 read / grep / find / ls / edit。
+- **技能与 MCP**：工作区 `.pi/skills` 的 `SKILL.md` 按需加载；`.pi/mcp.json` 的 MCP 服务端启动时连接。
+- **长会话能自己压缩**：CodingAgent 的上下文压缩与自动重试，不必手动清空。
 - **三档权限**：只读 / 工作区 / 完全访问；执行命令、结束进程会在对话里弹授权卡。
 - **工具过程可见**：每次调用都有卡片，参数、结果、耗时、成功/失败可展开。
 - **会话留在本机**：一个会话一个 JSON 文件，侧边栏按今天 / 昨天 / 最近 7 天分组。
 - **Markdown**：标题、列表、表格、行内代码、代码块高亮。
 - **语音输入**：NAudio 录音 + `/audio/transcriptions` 转写（端点需支持）。
-- **技能页**：工具可见、可开关，开关持久化。
+- **技能页**：卡片式浏览，按分类筛选、关键词搜索，开关持久化。
 
 | 会话 | 设置 |
 | --- | --- |
@@ -32,15 +34,18 @@ Windows 桌面 AI 助理。Agent 循环用 [pi.net](https://github.com/AIDotNet/
 | 层 | 框架 | 引用包 | 版本 |
 | --- | --- | --- | --- |
 | UI 框架 | [TKCode.Arc](https://github.com/AIDotNet/TKCode.Arc)（AtomUI 生态） | `TKCode.Arc`、`TKCode.Arc.Fonts` | 0.3.0-preview.1 |
-| Agent 框架 | [pi.net](https://github.com/AIDotNet/pi.net)（Pi 的 .NET 移植） | `Pi.Agent`（传递引入 `Pi.Ai`） | 1.4.1 |
+| Agent 框架 | [pi.net](https://github.com/AIDotNet/pi.net)（Pi 的 .NET 移植） | `Pi.CodingAgent`（传递引入 `Pi.Agent` / `Pi.Ai` / `Pi.Mcp` 等） | 1.4.1 |
 
 - **TKCode.Arc 负责界面**：控件、主题、图标字体全部来自 Arc，入口在 `Program.BuildAvaloniaApp`
   里一次装好——`WithArcFonts()` 加 `UseAtomUI(b => b.UseDesktopControls().UseArc())`，
   页面、样式、VM 都在 `AvaloniaAssistant.UI`。
-- **pi.net 负责 Agent**：由 `Pi.Agent` 的 `Agent` + `AgentOptions`（`StreamFn` / `Model` /
-  `Messages` / `Tools` / `BeforeToolCall`）驱动整条循环，流式事件、工具声明、thinking 都来自 `Pi.Ai`；
-  provider 适配、事件映射、工具注册收在 `AvaloniaAssistant.Agent`。
-- **两边只在一个地方碰面**：`AvaloniaAssistant.Desktop` 这个组合根。`UI` 不引用 `Pi.Agent`，
+- **pi.net 负责 Agent**：`Sdk.CreateAgentSessionAsync` 装配出 `AgentSession`，技能、MCP、
+  上下文压缩、自动重试都由它带着；模型出入仍由本项目自己的 provider 设置决定，
+  通过 `ProviderConfigInput.StreamSimple` 直连 `Pi.Ai` 的流式实现，不读 `~/.pi/agent/auth.json`。
+- **权限没有让给框架**：CodingAgent 的 `BeforeToolCall` 只服务扩展的 `tool_call` 事件，
+  本项目在它外面串了一层三档权限与授权卡片（`PiAgentRuntime.InstallPermissionHook`）。
+  只读模式下连 `edit` 都不会出现在工具集里。
+- **两边只在一个地方碰面**：`AvaloniaAssistant.Desktop` 这个组合根。`UI` 不引用 `Pi.*`，
   `Agent` 不引用 Avalonia，换掉其中任何一个都不用动另一边。
 
 两个包都直接走 NuGet，不依赖本机参考仓库路径。Arc 包与本地源码的命名空间差异
@@ -106,11 +111,13 @@ Avalonia-Assistant/
 │   │   ├── ChatSession.cs                # 会话 / 消息 / 工具调用 DTO
 │   │   └── AssistantSettings.cs          # 设置、provider 预设、权限
 │   ├── AvaloniaAssistant.Agent/          # 唯一认识 pi.net 的项目
-│   │   ├── PiAgentRuntime.cs             # Agent 装配、事件映射、abort
-│   │   ├── PiStreamFactory.cs            # OpenAI / Anthropic 流式入口
-│   │   ├── AgentToolRegistry.cs          # 工具清单 → AgentTool
-│   │   ├── SystemPromptBuilder.cs        # 中文系统提示
-│   │   └── Tools/                        # 12 个内置工具
+│   │   ├── PiAgentRuntime.cs             # 会话缓存、事件映射、权限钩子、abort
+│   │   ├── CodingSessionFactory.cs       # ModelRuntime + Sdk 装配（技能 / MCP / 内置扩展）
+│   │   ├── CapabilityScanner.cs          # 扫 .pi/skills 与 mcp.json，供界面展示
+│   │   ├── ToolAccess.cs                 # 内置 / MCP 工具的安全属性判定
+│   │   ├── PiStreamFactory.cs            # 测试可替换的 OpenAI / Anthropic 流式入口
+│   │   ├── AgentToolRegistry.cs          # 自建工具清单 → ToolDefinition
+│   │   └── Tools/                        # 12 个自建工具
 │   ├── AvaloniaAssistant.Storage/        # settings.json / sessions/*.json
 │   ├── AvaloniaAssistant.Speech/         # NAudio 录音 + 转写
 │   ├── AvaloniaAssistant.UI/             # 窗口、页面、VM、样式
@@ -118,7 +125,7 @@ Avalonia-Assistant/
 │   │   ├── ViewModels/                   # 命令、会话状态、消息 VM
 │   │   └── Styles/                       # Tokens.axaml / AppStyles.axaml
 │   └── AvaloniaAssistant.Desktop/        # 入口、DI、Arc 初始化
-├── tests/AvaloniaAssistant.Agent.Tests/  # 9 个测试
+├── tests/AvaloniaAssistant.Agent.Tests/  # 15 个测试
 └── docs/
     ├── research.md               # 两个参考项目的结构与集成方式
     ├── migration.md              # 旧功能逐项盘点与取舍
@@ -129,19 +136,55 @@ Avalonia-Assistant/
 ## 分层与解耦
 
 ```
-UI ──► Abstractions ◄── Agent ──► Pi.Agent
+UI ──► Abstractions ◄── Agent ──► Pi.CodingAgent ──► Pi.Agent / Pi.Ai / Pi.Mcp
         ▲   ▲
    Storage  Speech
 ```
 
-- `UI` 不引用 `Pi.Agent`，只消费 `IAssistantRuntime` 与 `AgentStreamEvent`；
+- `UI` 不引用任何 `Pi.*`，只消费 `IAssistantRuntime`、`AgentStreamEvent` 与 `AgentCapabilities`；
 - `Agent` 不引用 Avalonia，工具执行结果只返回文本；
 - `Desktop` 是唯一同时认识两边的组合根。
 
 想换 Agent 框架：实现 `IAssistantRuntime` 并在 `Program.cs` 替换注册。
 想换 UI：`Agent` / `Storage` 不变。详见 [docs/architecture.md](docs/architecture.md)。
 
+## 技能与 MCP
+
+两者都按 CodingAgent 的目录约定发现，不需要写代码：
+
+```
+<工作区>/.pi/
+├── skills/<名称>/SKILL.md     # 项目级技能，frontmatter 写 name / description
+└── mcp.json                   # 项目级 MCP 服务端
+~/.pi/agent/
+├── skills/<名称>/SKILL.md     # 全局技能
+└── mcp.json                   # 全局 MCP 服务端
+```
+
+- 技能的正文由内置 `read` 工具按需加载，模型只先看到名字和描述；`/skill:<名称>` 也能显式触发。
+- MCP 服务端**必须写 `"exposure": "direct"`**，否则工具只留给 codemode，模型直接调不到：
+
+```json
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "D:/work"],
+      "exposure": "direct"
+    }
+  }
+}
+```
+
+- 项目级 `.pi` 属于「需要信任」的配置（技能、MCP、`AGENTS.md` 都会进上下文）。
+  桌面助理默认信任你选的工作区，`settings.json` 里把 `TrustWorkspace` 设为 `false` 可以关掉，
+  关掉后只读全局 `~/.pi/agent`。
+- 技能页会列出扫到的技能与 MCP 服务端（只报配置，不代表已连上）；加完文件点「重新扫描」，
+  新配置在下一个会话生效。
+
 ## 内置工具
+
+自建工具（`AvaloniaAssistant.Agent/Tools`）：
 
 | 工具 | 说明 | 权限 |
 | --- | --- | --- |
@@ -158,6 +201,17 @@ UI ──► Abstractions ◄── Agent ──► Pi.Agent
 | `open_url` | 浏览器打开链接 | 只读 |
 | `current_time` | 当前时间与时区 | 只读 |
 
+CodingAgent 提供的内置工具（`tools` allowlist 里固定启用）：
+
+| 工具 | 说明 | 权限 |
+| --- | --- | --- |
+| `read` | 按行读文件，技能正文靠它加载 | 只读 |
+| `grep` | 正则搜内容，遵循 `.gitignore` | 只读 |
+| `find` | glob 找文件，遵循 `.gitignore` | 只读 |
+| `ls` | 列目录 | 只读 |
+| `edit` | 最小替换改文件 | 需确认 / 只读模式不启用 |
+| `mcp__<server>__<tool>` | MCP 服务端暴露的工具 | 需确认 / 只读模式拦截 |
+
 路径默认限制在当前工作区；要越界需要切到「完全访问」。
 `open_path` 不会直接启动 `.exe` / `.bat` / `.ps1` 等可执行文件；需要运行时走 `run_command` 并确认。
 
@@ -171,6 +225,9 @@ dotnet test tests/AvaloniaAssistant.Agent.Tests
 
 - Faux 模型驱动的完整 agent 循环与工具调用；
 - 只读模式拦截、授权拒绝、缺 API Key；
+- 切换权限后会话重建，只读模式立即生效；
+- 项目级技能发现（真实 `SKILL.md` → system prompt）；
+- MCP 端到端：测试里起一个 Node stdio 服务端，断言 `mcp__demo__echo` 进入可调用工具集；
 - 本机 TCP 模拟 OpenAI SSE 端点，验证真实 HTTP 流式与工具声明；
 - 文件工具的目录 / 读取 / 越界写入；
 - settings / session 的 JSON 往返。
@@ -211,8 +268,11 @@ dotnet run --project src/AvaloniaAssistant.Desktop -- --run "用三句话介绍�
 
 - **API Key 明文保存**在 `settings.json`，目前没有接 DPAPI；不要在共享机器上使用生产密钥。
 - **语音转写依赖端点**支持 `/audio/transcriptions`；DeepSeek 官方端点不支持，会给出错误提示。
-- **没有定时任务 / 专家市场 / MCP**：导航里暂未提供入口，避免假按钮；扩展点见架构文档。
-- **会话不会自动压缩**：长会话会把完整历史带给模型，token 消耗随轮次增长。
+- **MCP 工具要写 `exposure: "direct"`**：不写就只有 codemode / tool_search 能碰到，模型直接调不到。
+- **会话存档仍是本项目自己的 JSON**：CodingAgent 的会话跑在内存里，压缩结果不跨进程保存；
+  重启后由 `sessions/*.json` 的历史重建上下文，压缩收益会重新累计。
+- **上下文窗口按 128k 估算**：模型真实窗口不在本地目录里，压缩触发点据此计算，特殊模型需要手动调。
+- **没有定时任务 / 专家市场**：导航里暂未提供入口，避免假按钮；扩展点见架构文档。
 - **Windows 优先**：代码里对 macOS/Linux 的路径和 shell 做了分支，但只在 Windows 上验证过。
 
 ## 文档

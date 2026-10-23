@@ -77,16 +77,51 @@ public sealed class PiAgentRuntimeTests
         Assert.False(stream.Created);
     }
 
+    [Fact]
+    public async Task SwitchingToReadOnlyRebuildsSessionAndBlocksMutatingTools()
+    {
+        var stream = new ScriptedStreamFactory(
+        [
+            Faux.Response.ToolUse(new ToolCallContent("call-1", "run_command", new { command = "echo hi" })),
+            Faux.Response.Text("好的，不执行。"),
+        ]);
+
+        var runtime = new PiAgentRuntime(new FakeSettings(), stream);
+        var sessionId = Guid.NewGuid().ToString("n");
+
+        // 第一轮工作区、无授权界面 → 被拦；第二轮切到只读 → 应在工具执行前被拦。
+        await CollectAsync(runtime, sessionId, "第一句", PermissionMode.Workspace, history: []);
+        var events = await CollectAsync(
+            runtime,
+            sessionId,
+            "帮我执行命令",
+            PermissionMode.ReadOnly,
+            history: [HistoryTurn.User("第一句"), HistoryTurn.Assistant("好的，不执行。")]);
+
+        var finished = Assert.Single(events.OfType<AgentStreamEvent.ToolFinished>());
+        Assert.True(finished.IsError);
+        Assert.Contains("只读", finished.Result);
+    }
+
     private static async Task<List<AgentStreamEvent>> CollectAsync(
         IAssistantRuntime runtime,
         string prompt,
         PermissionMode permission = PermissionMode.Workspace,
         IToolApprovalGate? gate = null)
+        => await CollectAsync(runtime, Guid.NewGuid().ToString("n"), prompt, permission, gate, []);
+
+    private static async Task<List<AgentStreamEvent>> CollectAsync(
+        IAssistantRuntime runtime,
+        string sessionId,
+        string prompt,
+        PermissionMode permission,
+        IToolApprovalGate? gate = null,
+        IReadOnlyList<HistoryTurn>? history = null)
     {
         var request = new AgentRunRequest(
-            Guid.NewGuid().ToString("n"),
+            sessionId,
             prompt,
-            [],
+            history ?? [],
             "office",
             permission,
             Path.GetTempPath(),

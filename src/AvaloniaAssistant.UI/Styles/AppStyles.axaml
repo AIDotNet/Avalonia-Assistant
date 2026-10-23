@@ -184,6 +184,18 @@
     <Setter Property="CornerRadius" Value="12" />
   </Style>
 
+  <Style Selector="Border.tool-tile">
+    <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="12" />
+    <Setter Property="Padding" Value="13,12" />
+  </Style>
+  <Style Selector="Border.tool-tile:pointerover">
+    <Setter Property="BorderBrush" Value="{StaticResource BorderStrongBrush}" />
+    <Setter Property="Background" Value="{StaticResource SurfaceMutedBrush}" />
+  </Style>
+
   <Style Selector="TextBlock.section-title">
     <Setter Property="FontSize" Value="11" />
     <Setter Property="FontWeight" Value="Medium" />

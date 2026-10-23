@@ -120,7 +120,7 @@ internal sealed class CurrentTimeTool : IAgentTool
         "current_time",
         "查看当前时间",
         "返回本机当前日期、时间和时区。安排日程或计算时间差时使用。",
-        "系统",
+        "时间",
         RequiresApproval: false,
         Parameters: []);
 

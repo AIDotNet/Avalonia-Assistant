@@ -9,6 +9,9 @@ public interface IAssistantRuntime
 
     IReadOnlyList<AgentToolInfo> Tools { get; }
 
+    /// <summary>内置工具、技能与 MCP 配置的快照，供界面展示。</summary>
+    AgentCapabilities Capabilities { get; }
+
     IAsyncEnumerable<AgentStreamEvent> RunAsync(
         AgentRunRequest request,
         CancellationToken cancellationToken = default);
