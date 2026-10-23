@@ -25,20 +25,36 @@ Windows 桌面 AI 助理。Agent 循环用 [pi.net](https://github.com/AIDotNet/
 | --- | --- |
 | ![技能](docs/images/tools.png) | ![资料库](docs/images/library.png) |
 
-## 技术栈
+## 两个核心框架
+
+界面用 **TKCode.Arc**，Agent 循环用 **pi.net**，其余选型都是围着这两个补的。
+
+| 层 | 框架 | 引用包 | 版本 |
+| --- | --- | --- | --- |
+| UI 框架 | [TKCode.Arc](https://github.com/AIDotNet/TKCode.Arc)（AtomUI 生态） | `TKCode.Arc`、`TKCode.Arc.Fonts` | 0.3.0-preview.1 |
+| Agent 框架 | [pi.net](https://github.com/AIDotNet/pi.net)（Pi 的 .NET 移植） | `Pi.Agent`（传递引入 `Pi.Ai`） | 1.4.1 |
+
+- **TKCode.Arc 负责界面**：控件、主题、图标字体全部来自 Arc，入口在 `Program.BuildAvaloniaApp`
+  里一次装好——`WithArcFonts()` 加 `UseAtomUI(b => b.UseDesktopControls().UseArc())`，
+  页面、样式、VM 都在 `AvaloniaAssistant.UI`。
+- **pi.net 负责 Agent**：由 `Pi.Agent` 的 `Agent` + `AgentOptions`（`StreamFn` / `Model` /
+  `Messages` / `Tools` / `BeforeToolCall`）驱动整条循环，流式事件、工具声明、thinking 都来自 `Pi.Ai`；
+  provider 适配、事件映射、工具注册收在 `AvaloniaAssistant.Agent`。
+- **两边只在一个地方碰面**：`AvaloniaAssistant.Desktop` 这个组合根。`UI` 不引用 `Pi.Agent`，
+  `Agent` 不引用 Avalonia，换掉其中任何一个都不用动另一边。
+
+两个包都直接走 NuGet，不依赖本机参考仓库路径。Arc 包与本地源码的命名空间差异
+（`AtomUICommunity` vs `AIDotNet`）及踩坑记录见 [docs/research.md](docs/research.md)。
+
+## 其余技术栈
 
 | 层 | 选型 | 版本 |
 | --- | --- | --- |
 | 运行时 | .NET | 10.0（`net10.0`） |
-| UI | Avalonia | 12.1.4 |
-| 组件 | TKCode.Arc + AtomUI.Desktop.Controls | 0.3.0-preview.1 / 6.2.8 |
-| Agent | Pi.Agent（NuGet，传递引入 Pi.Ai） | 1.4.1 |
+| 基础 UI | Avalonia | 12.1.4 |
+| 控件库 | AtomUI.Desktop.Controls（Arc 依赖） | 6.2.8 |
 | MVVM | CommunityToolkit.Mvvm | 8.4.0 |
 | 语音 | NAudio | 2.2.1 |
-
-`pi.net` 和 `TKCode.Arc` 都直接引用 NuGet 包，不依赖本机参考仓库路径。
-Arc 包与本地源码的命名空间差异（`AtomUICommunity` vs `AIDotNet`）及踩坑记录见
-[docs/research.md](docs/research.md)。
 
 ## 快速开始
 

@@ -4,6 +4,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Input;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media.Imaging;
+using Avalonia.VisualTree;
 using AvaloniaAssistant.UI.Services;
 using AvaloniaAssistant.UI.ViewModels;
 using AvaloniaAssistant.UI.Views;
@@ -115,22 +116,25 @@ public partial class AssistantApp : Application
 
     private static void Capture(Window window, string path)
     {
-        // 位图的像素尺寸必须乘上系统缩放比例（例如 175%），否则渲染内容会被压到左上角、
-        // 右侧与底部留出空白，看起来像"截图不居中"。
-        var scaling = window.RenderScaling > 0 ? window.RenderScaling : 1.0;
-        var size = new PixelSize(
-            Math.Max(1, (int)Math.Round(window.Bounds.Width * scaling)),
-            Math.Max(1, (int)Math.Round(window.Bounds.Height * scaling)));
-
-        var bitmap = new RenderTargetBitmap(size, new Vector(96 * scaling, 96 * scaling));
-        bitmap.Render(window);
-
         var directory = Path.GetDirectoryName(path);
         if (!string.IsNullOrWhiteSpace(directory))
         {
             Directory.CreateDirectory(directory);
         }
 
+        // 渲染窗口的视觉根（带背景的那一层），而不是 Window 本身：
+        // Window 会让 RenderTargetBitmap 漏掉合成层（按钮、图标），
+        // 只渲染 Content 又会在右下留下透明边。视觉根两者都能兼顾。
+        var root = window.GetVisualChildren().OfType<Visual>().FirstOrDefault()
+                   ?? (Visual?)window.Content
+                   ?? window;
+
+        var size = new PixelSize(
+            Math.Max(1, (int)Math.Round(root.Bounds.Width)),
+            Math.Max(1, (int)Math.Round(root.Bounds.Height)));
+
+        var bitmap = new RenderTargetBitmap(size, new Vector(96, 96));
+        bitmap.Render(root);
         bitmap.Save(path, PngBitmapEncoderOptions.Default);
     }
 }

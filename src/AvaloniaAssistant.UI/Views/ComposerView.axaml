@@ -3,7 +3,11 @@
              xmlns:arc="https://github.com/AtomUICommunity/TKCode.Arc"
              x:Class="AvaloniaAssistant.UI.Views.ComposerView">
   <UserControl.Resources>
-    <ControlTheme x:Key="ComposerTextarea" TargetType="arc:Textarea">
+    <!-- 基于 Arc 默认主题派生，只替换模板：直接新建 ControlTheme 会丢掉
+         PlaceholderForeground / Foreground / FontSize 等 Setter，占位文字会变透明。 -->
+    <ControlTheme x:Key="ComposerTextarea"
+                  TargetType="arc:Textarea"
+                  BasedOn="{StaticResource {x:Type arc:Textarea}}">
       <Setter Property="Template">
         <ControlTemplate TargetType="arc:Textarea">
           <arc:Field Name="PART_Field"
@@ -15,7 +19,7 @@
             <arc:FieldFrame Name="PART_Frame"
                             Cursor="IBeam"
                             MinHeight="64"
-                            Padding="0"
+                            Padding="6,0,0,0"
                             VerticalContentAlignment="Stretch"
                             Size="{TemplateBinding Size}"
                             IsInvalid="{TemplateBinding IsInvalid}"

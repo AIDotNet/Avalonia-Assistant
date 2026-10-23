@@ -10,7 +10,7 @@
         </Button>
         <StackPanel Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Center" Spacing="1">
           <TextBlock Text="{Binding WorkspaceName}" FontSize="14" FontWeight="Medium" TextTrimming="CharacterEllipsis" />
-          <TextBlock Text="{Binding WorkspacePath}" Classes="caption" FontSize="10.5" TextTrimming="CharacterEllipsis" />
+          <TextBlock Text="{Binding WorkspacePathDisplay}" Classes="caption" FontSize="10.5" TextTrimming="CharacterEllipsis" />
         </StackPanel>
         <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2">
           <Button Classes="icon" Command="{Binding PickWorkspaceCommand}" ToolTip.Tip="切换工作区">
@@ -28,7 +28,7 @@
 
     <Grid Grid.Row="1">
       <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel MaxWidth="820" Margin="28,18,28,28" HorizontalAlignment="Center" Spacing="10">
+        <StackPanel Margin="96,16,96,24" Spacing="8">
           <TextBlock Text="{Binding StatusText}" Classes="section-title" Margin="2,0,0,4" IsVisible="{Binding !IsEmpty}" />
 
           <ItemsControl ItemsSource="{Binding Items}">
@@ -76,7 +76,7 @@
                         VerticalAlignment="Center" />
         </Border>
         <TextBlock Text="{Binding StatusText}" FontSize="13" FontWeight="Medium" HorizontalAlignment="Center" />
-        <TextBlock Text="资料库展示当前工作区的顶层文件。换一个工作区，或让助手先写点东西进来。"
+        <TextBlock Text="展示当前工作区的顶层文件。换个工作区，或让助手先写点内容。"
                    Classes="caption"
                    TextWrapping="Wrap"
                    TextAlignment="Center"

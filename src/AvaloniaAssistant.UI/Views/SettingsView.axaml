@@ -16,7 +16,7 @@
     </Border>
 
     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-      <StackPanel MaxWidth="760" Margin="28,24,28,28" Spacing="22" HorizontalAlignment="Center">
+      <StackPanel Margin="96,22,96,26" Spacing="20">
 
         <StackPanel Spacing="12">
           <TextBlock Text="模型服务" FontSize="15" FontWeight="SemiBold" />
@@ -48,20 +48,19 @@
             </ItemsControl.ItemTemplate>
           </ItemsControl>
 
-          <Grid ColumnDefinitions="*,Auto">
-            <arc:Input Label="API Key"
-                       Placeholder="sk-..."
-                       Text="{Binding ApiKey, Mode=TwoWay}"
-                       PasswordChar="●" />
-            <Button Grid.Column="1"
-                    Classes="icon"
-                    Click="OnRevealKeyClick"
-                    ToolTip.Tip="显示/隐藏密钥"
-                    Margin="6,22,0,0"
-                    VerticalAlignment="Center">
-              <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Eye}" Size="15" />
-            </Button>
-          </Grid>
+          <arc:Input x:Name="KeyBox"
+                     Label="API Key"
+                     Placeholder="sk-..."
+                     Text="{Binding ApiKey, Mode=TwoWay}"
+                     PasswordChar="●">
+            <arc:Input.Suffix>
+              <Button Classes="icon"
+                      Click="OnRevealKeyClick"
+                      ToolTip.Tip="显示/隐藏密钥">
+                <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Eye}" Size="15" />
+              </Button>
+            </arc:Input.Suffix>
+          </arc:Input>
 
           <arc:Input Label="Base URL"
                      Placeholder="https://api.deepseek.com/v1"

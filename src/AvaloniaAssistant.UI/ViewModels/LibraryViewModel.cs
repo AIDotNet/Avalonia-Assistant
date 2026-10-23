@@ -45,6 +45,24 @@ public sealed partial class LibraryViewModel : ObservableObject
 
     public string WorkspacePath => _host.Settings.WorkspacePath;
 
+    /// <summary>标题栏里显示的路径，用户目录缩写为 ~，避免长路径挤满一行。</summary>
+    public string WorkspacePathDisplay
+    {
+        get
+        {
+            var path = WorkspacePath;
+            var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            if (string.IsNullOrEmpty(home) || string.IsNullOrEmpty(path))
+            {
+                return path;
+            }
+
+            return path.StartsWith(home, StringComparison.OrdinalIgnoreCase)
+                ? "~" + path[home.Length..]
+                : path;
+        }
+    }
+
     public string WorkspaceName
     {
         get
@@ -124,6 +142,7 @@ public sealed partial class LibraryViewModel : ObservableObject
     {
         await _host.AddWorkspaceAsync();
         OnPropertyChanged(nameof(WorkspacePath));
+        OnPropertyChanged(nameof(WorkspacePathDisplay));
         OnPropertyChanged(nameof(WorkspaceName));
         await RefreshAsync();
     }

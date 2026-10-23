@@ -5,7 +5,7 @@
              xmlns:controls="using:AvaloniaAssistant.UI.Controls"
              x:Class="AvaloniaAssistant.UI.Views.HomeView">
   <Grid RowDefinitions="Auto,*">
-    <Grid Margin="26,16,22,0" ColumnDefinitions="*,Auto">
+    <Grid Margin="28,16,28,0" ColumnDefinitions="*,Auto">
       <TextBlock Text="{Binding Greeting}"
                  Classes="caption"
                  FontSize="12"
@@ -26,7 +26,7 @@
     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
       <StackPanel MaxWidth="800"
                   HorizontalAlignment="Center"
-                  Margin="28,18,28,30">
+                  Margin="28,14,28,10">
 
         <controls:BrandMark Width="44" Height="44" HorizontalAlignment="Center" />
 
@@ -34,7 +34,7 @@
                    FontSize="32"
                    FontWeight="SemiBold"
                    HorizontalAlignment="Center"
-                   Margin="0,14,0,0" />
+                   Margin="0,12,0,0" />
 
         <TextBlock Text="{Binding Subtitle}"
                    Classes="muted"
@@ -45,7 +45,7 @@
         <StackPanel Orientation="Horizontal"
                     HorizontalAlignment="Center"
                     Spacing="8"
-                    Margin="0,14,0,0">
+                    Margin="0,12,0,0">
           <Button Classes="chip mode-chip"
                   Classes.active="{Binding IsOffice}"
                   Command="{Binding SetModeCommand}"
@@ -72,7 +72,7 @@
                 BorderThickness="1"
                 CornerRadius="12"
                 Padding="14,11"
-                Margin="0,16,0,0">
+                Margin="0,14,0,0">
           <Grid ColumnDefinitions="Auto,*,Auto">
             <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Key}"
                           Size="16"
@@ -90,9 +90,9 @@
           </Grid>
         </Border>
 
-        <views:ComposerView DataContext="{Binding Composer}" Margin="0,14,0,0" />
+        <views:ComposerView DataContext="{Binding Composer}" Margin="0,12,0,0" />
 
-        <ItemsControl ItemsSource="{Binding QuickPrompts}" Margin="0,12,0,0">
+        <ItemsControl ItemsSource="{Binding QuickPrompts}" Margin="0,10,0,0">
           <ItemsControl.ItemsPanel>
             <ItemsPanelTemplate>
               <WrapPanel ItemSpacing="8" LineSpacing="8" />
@@ -114,17 +114,18 @@
 
         <TextBlock Text="或者，从这些开始"
                    Classes="section-title"
-                   Margin="2,22,0,8" />
+                   Margin="2,16,0,8" />
 
-        <ItemsControl ItemsSource="{Binding Cards}">
+        <ItemsControl ItemsSource="{Binding Cards}" Margin="0,0,-12,-12">
           <ItemsControl.ItemsPanel>
             <ItemsPanelTemplate>
-              <WrapPanel ItemWidth="372" ItemSpacing="12" LineSpacing="12" />
+              <UniformGrid Columns="2" />
             </ItemsPanelTemplate>
           </ItemsControl.ItemsPanel>
           <ItemsControl.ItemTemplate>
             <DataTemplate>
               <Button Classes="card-button"
+                      Margin="0,0,12,12"
                       Command="{Binding $parent[ItemsControl].DataContext.UseCardCommand}"
                       CommandParameter="{Binding}">
                 <Border Classes="card" Padding="14" Height="96">
@@ -158,7 +159,7 @@
         <TextBlock Text="内容由 AI 生成，请核对重要信息。"
                    Classes="caption"
                    HorizontalAlignment="Center"
-                   Margin="0,26,0,0" />
+                   Margin="0,10,0,0" />
       </StackPanel>
     </ScrollViewer>
   </Grid>

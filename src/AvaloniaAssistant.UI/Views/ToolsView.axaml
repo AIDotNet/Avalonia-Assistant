@@ -16,7 +16,7 @@
     </Border>
 
     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-      <StackPanel MaxWidth="820" Margin="28,22,28,32" Spacing="18" HorizontalAlignment="Center">
+      <StackPanel Margin="96,20,96,26" Spacing="16">
         <TextBlock Text="助手可以调用的本机能力。关闭后不会出现在模型可用的工具里；执行命令、结束进程等高风险动作仍会逐次征求你的同意。"
                    Classes="caption"
                    TextWrapping="Wrap"
