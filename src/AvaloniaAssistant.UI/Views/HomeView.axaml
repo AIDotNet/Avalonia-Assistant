@@ -10,17 +10,10 @@
                  Classes="caption"
                  FontSize="12"
                  VerticalAlignment="Center" />
-      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
-        <Button Classes="pill" Click="OnWorkspaceClick" ToolTip.Tip="切换工作区">
-          <StackPanel Orientation="Horizontal" Spacing="5">
-            <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Folder}" Size="12" />
-            <TextBlock Text="工作区" FontSize="11.5" />
-          </StackPanel>
-        </Button>
-        <Button Classes="icon" Command="{Binding OpenSettingsCommand}" ToolTip.Tip="设置">
-          <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Settings}" Size="15" />
-        </Button>
-      </StackPanel>
+      <!-- 工作区切换只留在输入框下面那一条，右上角不再重复一个入口 -->
+      <Button Grid.Column="1" Classes="icon" Command="{Binding OpenSettingsCommand}" ToolTip.Tip="设置">
+        <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Settings}" Size="15" />
+      </Button>
     </Grid>
 
     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
