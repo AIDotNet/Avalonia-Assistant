@@ -22,6 +22,38 @@ public partial class SidebarView : UserControl
     public SidebarView()
     {
         AvaloniaXamlLoader.Load(this);
+        AttachedToVisualTree += OnSidebarAttached;
+    }
+
+    /// <summary>
+    /// 侧栏是从 MainWindow.axaml 实例化的，构造函数里命名控件还没填充，
+    /// FindControl 会拿到 null；等进了可视树再挂 Esc。
+    /// </summary>
+    private void OnSidebarAttached(object? sender, VisualTreeAttachmentEventArgs e)
+    {
+        if (_searchWired)
+        {
+            return;
+        }
+
+        if (this.FindControl<Control>("TaskSearch") is { } search)
+        {
+            search.AddHandler(KeyDownEvent, OnSearchKeyDown, RoutingStrategies.Tunnel);
+            _searchWired = true;
+        }
+    }
+
+    private bool _searchWired;
+
+    private void OnSearchKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Escape || _host is null || !_host.IsSearching)
+        {
+            return;
+        }
+
+        _host.ClearSearchCommand.Execute(null);
+        e.Handled = true;
     }
 
     /// <summary>

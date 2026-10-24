@@ -237,6 +237,43 @@ public partial class ComposerView : UserControl
             Foreground = ThemeBrush("TextSecondaryBrush", Brushes.Gray),
         });
 
+        // 放过「都允许」就把这件事摆出来：否则 pill 上写着默认权限，行为其实已经变了。
+        if (viewModel.HasSessionAllowedTools)
+        {
+            var reset = new Button
+            {
+                Classes = { "ghost-action" },
+                Content = "恢复逐次确认",
+                HorizontalAlignment = HorizontalAlignment.Left,
+                Padding = new Thickness(0),
+                Foreground = ThemeBrush("WarningBrush", Brushes.DarkOrange),
+            };
+            reset.Click += (_, _) =>
+            {
+                _permissionFlyout?.Hide();
+                viewModel.ResetSessionAllowedCommand.Execute(null);
+            };
+
+            var allowed = new StackPanel { Spacing = 3 };
+            allowed.Children.Add(new TextBlock
+            {
+                Text = $"本次对话已放行 {viewModel.SessionAllowedCount} 个工具，不再逐次确认",
+                FontSize = 11,
+                LineHeight = 16,
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = ThemeBrush("WarningBrush", Brushes.DarkOrange),
+            });
+            allowed.Children.Add(reset);
+
+            stack.Children.Add(new Border
+            {
+                Background = ThemeBrush("WarningSubtleBrush", Brushes.Wheat),
+                CornerRadius = new CornerRadius(9),
+                Padding = new Thickness(10, 7),
+                Child = allowed,
+            });
+        }
+
         stack.Children.Add(new Border
         {
             Height = 1,

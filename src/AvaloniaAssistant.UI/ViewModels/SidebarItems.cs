@@ -67,6 +67,10 @@ public sealed partial class SessionItemViewModel : ObservableObject
     [ObservableProperty]
     private bool isCardOpen;
 
+    /// <summary>这一轮还在跑。切走之后也要看得见，否则不知道任务到底跑没跑完。</summary>
+    [ObservableProperty]
+    private bool isRunning;
+
     [RelayCommand]
     private void Open() => _open(Id);
 

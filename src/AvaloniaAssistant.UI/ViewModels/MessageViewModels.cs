@@ -261,7 +261,26 @@ public sealed partial class AssistantMessageViewModel : MessageViewModel
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasStopNote))]
     [NotifyPropertyChangedFor(nameof(ShowActions))]
+    [NotifyPropertyChangedFor(nameof(ShowContinue))]
     private bool isStopped;
+
+    /// <summary>是不是最后一条回复。「继续」只对最后一条开放：改前面的会把后面全冲掉。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowContinue))]
+    private bool isLatest;
+
+    public bool ShowContinue => IsStopped && IsLatest;
+
+    /// <summary>点「继续」时由对话上下文接过去，接着同一条气泡往下写。</summary>
+    public Func<Task>? ContinueRequested { get; set; }
+
+    /// <summary>被用户按停之后重新开跑：清掉停止标记，让气泡回到流式状态。</summary>
+    public void Resume()
+    {
+        IsStopped = false;
+        IsStreaming = true;
+        EnsureTimer();
+    }
 
     /// <summary>复制按钮的回执。点完变「已复制」，一会儿自己复原。</summary>
     [ObservableProperty]
@@ -368,6 +387,9 @@ public sealed partial class AssistantMessageViewModel : MessageViewModel
 
     [RelayCommand]
     private Task RetryAsync() => RetryRequested?.Invoke() ?? Task.CompletedTask;
+
+    [RelayCommand]
+    private Task ContinueAsync() => ContinueRequested?.Invoke() ?? Task.CompletedTask;
 
     private void EnsureTimer()
     {

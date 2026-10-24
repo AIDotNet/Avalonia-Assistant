@@ -22,6 +22,16 @@
                      TextTrimming="CharacterEllipsis" />
         </Button>
 
+        <!-- 后台还在跑：转圈和对话里的「正在处理」是同一个语义，比一个圆点更不容易被读成未读 -->
+        <arc:ArcSpinner IsVisible="{Binding IsRunning}"
+                        Width="11"
+                        Height="11"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Center"
+                        Margin="0,0,28,0"
+                        Foreground="{StaticResource TextMutedBrush}"
+                        ToolTip.Tip="正在运行" />
+
         <Button Classes="icon row-more"
                 Width="22"
                 Height="22"
@@ -137,6 +147,16 @@
                         Size="13"
                         Foreground="{StaticResource TextMutedBrush}" />
         </arc:Input.Prefix>
+        <arc:Input.Suffix>
+          <Button Classes="icon"
+                  Width="22"
+                  Height="22"
+                  Command="{Binding ClearSearchCommand}"
+                  IsVisible="{Binding IsSearching}"
+                  ToolTip.Tip="清空搜索">
+            <arc:ArcGlyph Data="{x:Static arc:ArcIcons.CircleX}" Size="12" />
+          </Button>
+        </arc:Input.Suffix>
       </arc:Input>
 
       <ScrollViewer Grid.Row="3"

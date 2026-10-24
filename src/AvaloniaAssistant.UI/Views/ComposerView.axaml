@@ -326,6 +326,18 @@
                            FontSize="12"
                            Foreground="{Binding PermissionForeground}"
                            VerticalAlignment="Center" />
+                <Border IsVisible="{Binding HasSessionAllowedTools}"
+                        Background="{StaticResource WarningSubtleBrush}"
+                        CornerRadius="5"
+                        Padding="4,1"
+                        Margin="1,0,0,0"
+                        VerticalAlignment="Center"
+                        ToolTip.Tip="本次对话里点过「都允许」的工具，点这里可以恢复逐次确认">
+                  <TextBlock Text="{Binding SessionAllowedBadge}"
+                             FontSize="9.5"
+                             Foreground="{StaticResource WarningBrush}"
+                             VerticalAlignment="Center" />
+                </Border>
                 <arc:ArcGlyph Data="{x:Static arc:ArcIcons.ChevronDown}"
                               Size="12"
                               Foreground="{Binding PermissionForeground}" />

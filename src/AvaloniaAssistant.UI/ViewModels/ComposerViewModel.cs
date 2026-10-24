@@ -122,6 +122,23 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
 
     public bool HasSetupHint => !string.IsNullOrWhiteSpace(SetupHint);
 
+    /// <summary>本次对话里被「都允许」放行的工具数。挂在权限 pill 上，别让人忘了自己关过确认。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSessionAllowedTools))]
+    [NotifyPropertyChangedFor(nameof(SessionAllowedBadge))]
+    [NotifyPropertyChangedFor(nameof(PermissionTooltip))]
+    private int sessionAllowedCount;
+
+    public bool HasSessionAllowedTools => SessionAllowedCount > 0;
+
+    public string SessionAllowedBadge => $"已放行 {SessionAllowedCount}";
+
+    /// <summary>权限浮层里的「恢复逐次确认」，由对话页负责真正清空放行记录。</summary>
+    public event EventHandler? ResetSessionAllowedRequested;
+
+    [RelayCommand]
+    private void ResetSessionAllowed() => ResetSessionAllowedRequested?.Invoke(this, EventArgs.Empty);
+
     public bool HasVoiceError => !string.IsNullOrWhiteSpace(VoiceError);
 
     public string MicTooltip => IsRecording ? "停止并转写" : "语音输入";
@@ -144,7 +161,9 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
     /// <summary>权限说明，展示在权限浮层顶部。</summary>
     public string PermissionDetail => PermissionModeText.Detail(_settings.Current.Permission);
 
-    public string PermissionTooltip => $"工具权限：{PermissionLabel}";
+    public string PermissionTooltip => HasSessionAllowedTools
+        ? $"工具权限：{PermissionLabel}（本次已放行 {SessionAllowedCount} 个工具）"
+        : $"工具权限：{PermissionLabel}";
 
     /// <summary>是否处于完全访问。开关直接绑定这个属性，读写都走 <see cref="SetPermissionAsync"/>。</summary>
     public bool IsFullAccess

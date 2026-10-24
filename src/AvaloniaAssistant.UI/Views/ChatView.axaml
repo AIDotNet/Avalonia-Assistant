@@ -245,6 +245,11 @@
                     Command="{Binding RetryCommand}"
                     ToolTip.Tip="重新生成这条回复（会丢弃它之后的内容）"
                     Content="重试" />
+            <Button Classes="ghost-action"
+                    Command="{Binding ContinueCommand}"
+                    IsVisible="{Binding ShowContinue}"
+                    ToolTip.Tip="接着这条回复往下写，已写过的内容不重来"
+                    Content="继续" />
             <TextBlock Text="{Binding TokenText}"
                        IsVisible="{Binding HasTokens}"
                        Classes="caption"

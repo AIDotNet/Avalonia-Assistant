@@ -18,7 +18,7 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
     /// <summary>「本会话都允许」记住的工具名。只在这次对话里有效，不写进设置。</summary>
     private readonly HashSet<string> _sessionAllowedTools = new(StringComparer.Ordinal);
 
-    public ChatViewModel(MainWindowViewModel host, ChatSession? session)
+    public ChatViewModel(MainWindowViewModel host, ChatSession? session, bool consumePendingDraft = true)
     {
         _host = host;
         _runtime = host.Runtime;
@@ -30,16 +30,28 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
             Mode = host.Settings.Mode,
         };
 
+        var isNewSession = session is null;
+
         Composer = new ComposerViewModel(host);
         Composer.SendRequested += async (_, request) => await SendPromptAsync(request);
         Composer.StopRequested += (_, _) => Stop();
         Composer.PermissionChanged += OnPermissionChanged;
+        Composer.ResetSessionAllowedRequested += OnResetSessionAllowed;
 
         Messages.CollectionChanged += OnMessagesChanged;
         _settings.Changed += OnSettingsChanged;
 
         // 从设置页 / 首页转一圈回来，刚才没发出去的那段话还在。
-        if (host.TryGetDraft(Session.Id) is { Length: > 0 } draft)
+        if (isNewSession)
+        {
+            // 带着明确提示词开的新任务不接旧草稿：那句话属于上一个没做完的任务，
+            // 顶到这里会被随后的发送立刻清掉；留在原地，等下一次「新建任务」再接。
+            if (consumePendingDraft && host.TakePendingDraft() is { Length: > 0 } pending)
+            {
+                Composer.Text = pending;
+            }
+        }
+        else if (host.TryGetDraft(Session.Id) is { Length: > 0 } draft)
         {
             Composer.Text = draft;
         }
@@ -48,6 +60,9 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
     }
 
     public ChatSession Session { get; }
+
+    /// <summary>任务被删掉了：这一轮跑完不要再写回存档，否则删掉的任务会自己回来。</summary>
+    public bool IsDiscarded { get; set; }
 
     public void Dispose()
     {
@@ -65,7 +80,22 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
 
         _settings.Changed -= OnSettingsChanged;
         Composer.PermissionChanged -= OnPermissionChanged;
+        Composer.ResetSessionAllowedRequested -= OnResetSessionAllowed;
         Composer.Dispose();
+    }
+
+    /// <summary>把「本会话都允许」的放行记录清掉，回到逐次确认。</summary>
+    private void OnResetSessionAllowed(object? sender, EventArgs e)
+    {
+        if (_sessionAllowedTools.Count == 0)
+        {
+            return;
+        }
+
+        _sessionAllowedTools.Clear();
+        Composer.SessionAllowedCount = 0;
+        Messages.Add(new NoticeMessageViewModel("已恢复逐次确认：执行命令、调用 MCP 前会再问你。"));
+        RequestScroll(true);
     }
 
     private void OnSettingsChanged(object? sender, EventArgs e)
@@ -237,60 +267,107 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
         await RunPromptAsync(prompt, addUserMessage: false);
     }
 
-    private async Task RunPromptAsync(PromptRequest input, bool addUserMessage)
+    /// <summary>
+    /// 接着一条被停掉的回复继续写：不新增用户消息、不新增气泡，让同一条回复往下长。
+    /// 只允许最后一条——改中间那条会把后面的内容全冲掉。
+    /// </summary>
+    private async Task ContinueFromAsync(AssistantMessageViewModel message)
+    {
+        if (IsBusy || !message.IsStopped)
+        {
+            return;
+        }
+
+        if (!ReferenceEquals(Messages.LastOrDefault(), message))
+        {
+            return;
+        }
+
+        // 这句话不写进消息流，也不写进存档：用户没有真的提问，只是让模型接着写。
+        var instruction = new PromptRequest(
+            "接着上面没写完的部分继续，不要重复已经写过的内容，也不要重新开头。",
+            []);
+
+        await RunPromptAsync(instruction, addUserMessage: false, continuation: message);
+    }
+
+    /// <summary>
+    /// 跑一轮。<paramref name="continuation"/> 非空表示「接着这条回复继续写」：
+    /// 不新增用户消息、不新增气泡，把新内容追加到同一个 AssistantMessageViewModel 上。
+    /// </summary>
+    private async Task RunPromptAsync(PromptRequest input, bool addUserMessage, AssistantMessageViewModel? continuation = null)
     {
         IsBusy = true;
         Composer.IsBusy = true;
         StatusText = "正在准备…";
 
-        AssistantMessageViewModel? assistant = null;
+        AssistantMessageViewModel? assistant = continuation;
         ChatEntry? assistantEntry = null;
         var stopReason = AgentStopReason.Completed;
 
         try
         {
-            if (addUserMessage)
+            if (continuation is null)
             {
-                Session.Entries.Add(new ChatEntry
+                if (addUserMessage)
                 {
-                    Kind = ChatEntryKind.User,
-                    Text = input.Text,
-                    Attachments = [.. input.Attachments],
-                    Images = [.. input.Images ?? []],
-                });
+                    Session.Entries.Add(new ChatEntry
+                    {
+                        Kind = ChatEntryKind.User,
+                        Text = input.Text,
+                        Attachments = [.. input.Attachments],
+                        Images = [.. input.Images ?? []],
+                    });
 
-                Messages.Add(new UserMessageViewModel(input.Text, input.Attachments, input.Images));
+                    Messages.Add(new UserMessageViewModel(input.Text, input.Attachments, input.Images));
 
-                if (Session.Entries.Count(entry => entry.Kind == ChatEntryKind.User) == 1)
-                {
-                    Session.Title = SessionText.BuildTitle(input.Text);
-                    OnPropertyChanged(nameof(Title));
+                    if (Session.Entries.Count(entry => entry.Kind == ChatEntryKind.User) == 1)
+                    {
+                        Session.Title = SessionText.BuildTitle(input.Text);
+                        OnPropertyChanged(nameof(Title));
 
-                    // 第一句话落下来就把任务写进侧栏，不等这一轮跑完：
-                    // 模型还在流的时候侧栏里本来什么都没有，用户会以为任务没建成；
-                    // 而且整轮跑完才写文件的话，中途关掉应用这条任务就没了。
-                    await _host.RegisterSessionAsync(Session);
+                        // 第一句话落下来就把任务写进侧栏，不等这一轮跑完：
+                        // 模型还在流的时候侧栏里本来什么都没有，用户会以为任务没建成；
+                        // 而且整轮跑完才写文件的话，中途关掉应用这条任务就没了。
+                        await _host.RegisterSessionAsync(Session);
+                    }
                 }
+
+                assistantEntry = new ChatEntry
+                {
+                    Kind = ChatEntryKind.Assistant,
+                    Model = _settings.Current.Model,
+                };
+                Session.Entries.Add(assistantEntry);
+
+                assistant = new AssistantMessageViewModel
+                {
+                    ScrollRequested = () => RequestScroll(false),
+                };
+                // 重试要能定位到自己这一轮，所以先把实例建好再把回调挂上去
+                assistant.RetryRequested = () => RetryFromAsync(assistant);
+                assistant.ContinueRequested = () => ContinueFromAsync(assistant);
+                Messages.Add(assistant);
+            }
+            else
+            {
+                // 继续写：沿用原来那条助手条目，跑完把整段文字一次性写回去，存档里仍是一条回复
+                assistantEntry = Session.Entries.LastOrDefault(entry => entry.Kind == ChatEntryKind.Assistant);
+                if (assistantEntry is null)
+                {
+                    // 理论上不会发生；真碰上了也别让工具事件往 null 上写
+                    assistantEntry = new ChatEntry { Kind = ChatEntryKind.Assistant, Model = _settings.Current.Model };
+                    Session.Entries.Add(assistantEntry);
+                }
+
+                assistant!.Resume();
             }
 
-            // addUserMessage=false（重试）时，最后一条也是这次要重发的 user，
-            // 一并从历史里排除，否则模型会看到重复的问题。
-            var historyEntries = Session.Entries.Take(Session.Entries.Count - 1);
-
-            assistantEntry = new ChatEntry
-            {
-                Kind = ChatEntryKind.Assistant,
-                Model = _settings.Current.Model,
-            };
-            Session.Entries.Add(assistantEntry);
-
-            assistant = new AssistantMessageViewModel
-            {
-                ScrollRequested = () => RequestScroll(false),
-            };
-            // 重试要能定位到自己这一轮，所以先把实例建好再把回调挂上去
-            assistant.RetryRequested = () => RetryFromAsync(assistant);
-            Messages.Add(assistant);
+            // addUserMessage=false（重试）时，最后一条也是这次要重发的 user，一并排除；
+            // 继续写则保留半截回复，模型得看见自己写到哪儿了。
+            var historyEntries = continuation is null
+                ? Session.Entries.Take(Session.Entries.Count - 1).ToList()
+                : Session.Entries.ToList();
 
             var request = new AgentRunRequest(
                 Session.Id,
@@ -463,13 +540,21 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
 
             RequestScroll(false);
 
-            try
+            // 任务已经被删了就别再写回去，否则删掉的任务会自己回来
+            if (IsDiscarded)
             {
-                await _host.SaveSessionAsync(Session);
+                StatusText = "已删除";
             }
-            catch (Exception ex)
+            else
             {
-                StatusText = "会话保存失败：" + ex.Message;
+                try
+                {
+                    await _host.SaveSessionAsync(Session);
+                }
+                catch (Exception ex)
+                {
+                    StatusText = "会话保存失败：" + ex.Message;
+                }
             }
         }
     }
@@ -496,6 +581,7 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
                         ScrollRequested = () => RequestScroll(false),
                     };
                     assistant.RetryRequested = () => RetryFromAsync(assistant);
+                    assistant.ContinueRequested = () => ContinueFromAsync(assistant);
                     assistant.SetPersisted(entry.Text, entry.Reasoning);
                     assistant.IsStopped = entry.Stopped;
 
@@ -554,8 +640,23 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
     private void OnMessagesChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         OnPropertyChanged(nameof(HasMessages));
+        RefreshContinueAvailability();
+
         var addedUserMessage = e.NewItems?.OfType<UserMessageViewModel>().Any() == true;
         RequestScroll(addedUserMessage);
+    }
+
+    /// <summary>
+    /// 「继续」只挂在最后一条消息上，而且这条必须是助手回复：
+    /// 后面已经有新提问（或别的条目）时，接着写会把后面的内容冲掉。
+    /// </summary>
+    private void RefreshContinueAvailability()
+    {
+        var last = Messages.Count > 0 ? Messages[^1] as AssistantMessageViewModel : null;
+        foreach (var message in Messages.OfType<AssistantMessageViewModel>())
+        {
+            message.IsLatest = ReferenceEquals(message, last);
+        }
     }
 
     private sealed class ChatApprovalGate(ChatViewModel owner) : IToolApprovalGate
@@ -586,7 +687,11 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
                     request.Arguments,
                     request.Reason,
                     allowed => completion.TrySetResult(allowed));
-                card.AllowAlwaysRequested = () => owner._sessionAllowedTools.Add(request.ToolName);
+                card.AllowAlwaysRequested = () =>
+                {
+                    owner._sessionAllowedTools.Add(request.ToolName);
+                    owner.Composer.SessionAllowedCount = owner._sessionAllowedTools.Count;
+                };
                 owner.Messages.Add(card);
 
                 // 用户正在上面读旧内容时不要抢滚动条，只在底部飘一句提示；

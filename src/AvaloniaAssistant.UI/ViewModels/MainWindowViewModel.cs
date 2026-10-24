@@ -20,6 +20,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// <summary>搜索之后还剩几条任务，给「任务 (n)」用。</summary>
     private int _visibleSessionCount;
 
+    /// <summary>
+    /// 还在跑、但页面已经切走的对话。留着这个 ViewModel，流不会断、工具调用照常走，
+    /// 切回来还是原来那一屏，而不是一个「等它跑完再读盘」的空壳。
+    /// </summary>
+    private readonly Dictionary<string, ChatViewModel> _backgroundChats = new(StringComparer.Ordinal);
+
     /// <summary>「任务」区是展开还是收起。null 表示用户还没动过，按有没有空间来定。</summary>
     private bool? _taskSectionExpanded;
 
@@ -96,8 +102,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// <summary>
     /// 还没有空间时「任务」默认展开——第一眼就该看见刚建的任务；
     /// 任务都挂在空间下之后默认收起，不让同一批任务在侧栏里占两遍位置。
+    /// 搜索时强制展开：否则命中结果藏在收起的标题里，只看见个数字。
     /// </summary>
-    public bool IsTaskSectionExpanded => _taskSectionExpanded ?? Workspaces.Count == 0;
+    public bool IsTaskSectionExpanded => IsSearching || (_taskSectionExpanded ?? Workspaces.Count == 0);
 
     /// <summary>「空间」里有没有东西可点；没有就说明当前是普通任务。</summary>
     public bool HasWorkspaces => Workspaces.Count > 0;
@@ -154,6 +161,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     partial void OnSessionQueryChanged(string value) => RebuildSidebar();
 
+    /// <summary>搜索框右边那个 ×：一次清空，别让人一个个删。</summary>
+    [RelayCommand]
+    private void ClearSearch() => SessionQuery = string.Empty;
+
     public bool IsSearching => !string.IsNullOrWhiteSpace(SessionQuery);
 
     /// <summary>搜索之后还剩几条。没搜的时候恒为 true。</summary>
@@ -164,6 +175,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     [ObservableProperty]
     private object? currentPage;
+
+    private string? ActiveChatId => (CurrentPage as ChatViewModel)?.Session.Id;
 
     [ObservableProperty]
     private bool isSidebarVisible = true;
@@ -180,9 +193,60 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private async Task NewTaskAsync()
     {
-        var chat = new ChatViewModel(this, null);
+        var chat = CreateChat(null);
         CurrentPage = chat;
         await SetActiveSessionAsync(null);
+    }
+
+    /// <summary>
+    /// 建一个对话页，并盯着它的运行状态：侧栏的小圆点靠这个，
+    /// 后台跑完之后的释放也靠这个。
+    /// </summary>
+    private ChatViewModel CreateChat(ChatSession? session, bool consumePendingDraft = true)
+    {
+        var chat = new ChatViewModel(this, session, consumePendingDraft);
+        chat.PropertyChanged += OnChatPropertyChanged;
+        return chat;
+    }
+
+    private void OnChatPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(ChatViewModel.IsBusy) || sender is not ChatViewModel chat)
+        {
+            return;
+        }
+
+        SetRunningFlag(chat.Session.Id, chat.IsBusy);
+    }
+
+    private void SetRunningFlag(string sessionId, bool running)
+    {
+        foreach (var item in AllSessionItems())
+        {
+            if (item.Id == sessionId)
+            {
+                item.IsRunning = running;
+            }
+        }
+    }
+
+    private IEnumerable<SessionItemViewModel> AllSessionItems()
+        => SessionGroups.SelectMany(group => group.Items)
+            .Concat(Workspaces.SelectMany(workspace => workspace.Sessions));
+
+    /// <summary>
+    /// 把已经跑完的后台对话放掉：存档已经写盘，重新打开会从磁盘读回来。
+    /// 只在下一次切换页面时清，避免在它自己的 finally 里把 VM 拆掉。
+    /// </summary>
+    private void EvictFinishedBackgroundChats()
+    {
+        foreach (var id in _backgroundChats.Where(pair => !pair.Value.IsBusy).Select(pair => pair.Key).ToList())
+        {
+            var chat = _backgroundChats[id];
+            _backgroundChats.Remove(id);
+            chat.PropertyChanged -= OnChatPropertyChanged;
+            chat.Dispose();
+        }
     }
 
     [RelayCommand]
@@ -220,7 +284,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     private async Task OpenNewChatAsync(PromptRequest? request)
     {
-        var chat = new ChatViewModel(this, null);
+        var chat = CreateChat(null, consumePendingDraft: request is null);
         CurrentPage = chat;
         await SetActiveSessionAsync(null);
 
@@ -232,6 +296,21 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     public async Task OpenSessionAsync(string sessionId)
     {
+        // 已经在看这一条，就别再建一个新 VM 把旧的挤到后台去
+        if (CurrentPage is ChatViewModel current && current.Session.Id == sessionId)
+        {
+            await SetActiveSessionAsync(sessionId);
+            return;
+        }
+
+        // 这条任务还在后台跑：直接把活的实例接回来，流不会断
+        if (_backgroundChats.Remove(sessionId, out var running))
+        {
+            CurrentPage = running;
+            await SetActiveSessionAsync(sessionId);
+            return;
+        }
+
         if (!_sessionCache.TryGetValue(sessionId, out var session))
         {
             var loaded = await _sessions.LoadAllAsync();
@@ -244,7 +323,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             _sessionCache[session.Id] = session;
         }
 
-        CurrentPage = new ChatViewModel(this, session);
+        CurrentPage = CreateChat(session);
         await SetActiveSessionAsync(session.Id);
     }
 
@@ -257,7 +336,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
         await _sessions.SaveAsync(session);
         await ReloadSessionsAsync();
-        await SetActiveSessionAsync(session.Id);
+
+        // 高亮只跟着「用户正在看的那条」走：后台任务跑完不该把侧栏选中项抢过去。
+        await SetActiveSessionAsync(ActiveChatId);
     }
 
     /// <summary>
@@ -275,7 +356,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
         await _sessions.SaveAsync(session);
         await ReloadWorkspacesAsync();
-        await SetActiveSessionAsync(session.Id);
+        await SetActiveSessionAsync(ActiveChatId);
     }
 
     /// <summary>会话落在哪个空间，就把那个空间展开。</summary>
@@ -292,6 +373,21 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     public async Task DeleteSessionAsync(string sessionId)
     {
+        // 删的正好是还在跑的那一条：先停掉，再标成已丢弃，
+        // 否则它跑完还会把存档写回去，删掉的任务自己又冒出来。
+        if (CurrentPage is ChatViewModel active && active.Session.Id == sessionId)
+        {
+            active.IsDiscarded = true;
+            active.StopCommand.Execute(null);
+        }
+        else if (_backgroundChats.Remove(sessionId, out var background))
+        {
+            background.IsDiscarded = true;
+            background.StopCommand.Execute(null);
+            background.PropertyChanged -= OnChatPropertyChanged;
+            background.Dispose();
+        }
+
         await _sessions.DeleteAsync(sessionId);
         _sessionCache.Remove(sessionId);
         _drafts.Remove(sessionId);
@@ -704,7 +800,19 @@ public sealed partial class MainWindowViewModel : ObservableObject
             RenameSessionAsync)
         {
             IsActive = session.Id == activeId,
+            IsRunning = IsChatRunning(session.Id),
         };
+
+    /// <summary>这条任务是不是还在跑：可能正在看，也可能被放到后台了。</summary>
+    private bool IsChatRunning(string sessionId)
+    {
+        if (CurrentPage is ChatViewModel current && current.Session.Id == sessionId)
+        {
+            return current.IsBusy;
+        }
+
+        return _backgroundChats.TryGetValue(sessionId, out var background) && background.IsBusy;
+    }
 
     /// <summary>改任务标题。成功返回 null，失败返回一句能直接展示的原因。</summary>
     public async Task<string?> RenameSessionAsync(string sessionId, string newTitle)
@@ -779,7 +887,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public void LoadDemoChat()
     {
         var session = DemoData.CreateSession(Settings.WorkspacePath);
-        CurrentPage = new ChatViewModel(this, session);
+        CurrentPage = CreateChat(session);
     }
 
     /// <summary>仅用于 --screenshot：塞几轮假对话，让侧栏的空间/任务分层能看出效果。</summary>
@@ -840,10 +948,31 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     partial void OnCurrentPageChanging(object? oldValue, object? newValue)
     {
-        if (oldValue is ChatViewModel chat)
+        EvictFinishedBackgroundChats();
+
+        if (oldValue is not ChatViewModel chat)
         {
-            chat.Dispose();
+            return;
         }
+
+        // 被删掉的那条不用留：它已经被标成丢弃，跑完也不会写回存档
+        if (chat.IsDiscarded)
+        {
+            chat.PropertyChanged -= OnChatPropertyChanged;
+            chat.Dispose();
+            return;
+        }
+
+        // 还在跑：页面换走，但这一轮留在后台继续走完。
+        // 以前这里直接 Dispose，流会断在半截，用户也看不见它还在烧 token。
+        if (chat.IsBusy)
+        {
+            _backgroundChats[chat.Session.Id] = chat;
+            return;
+        }
+
+        chat.PropertyChanged -= OnChatPropertyChanged;
+        chat.Dispose();
     }
 
     partial void OnCurrentPageChanged(object? value)
