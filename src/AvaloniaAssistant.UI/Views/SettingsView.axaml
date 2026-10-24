@@ -283,6 +283,7 @@
                        VerticalAlignment="Center" />
             <Button Classes="ghost-action"
                     Command="{Binding SaveAndLeaveCommand}"
+                    IsEnabled="{Binding CanSave}"
                     Foreground="{StaticResource TextPrimaryBrush}"
                     Content="保存并返回" />
             <Button Classes="ghost-action"
@@ -321,7 +322,7 @@
                   Height="34"
                   Padding="18,0"
                   Command="{Binding SaveCommand}"
-                  IsEnabled="{Binding !IsSaving}"
+                  IsEnabled="{Binding CanSave}"
                   Content="{Binding SaveButtonText}" />
         </StackPanel>
       </Grid>

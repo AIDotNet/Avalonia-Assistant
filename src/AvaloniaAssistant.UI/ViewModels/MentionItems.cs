@@ -28,6 +28,9 @@ public sealed partial class PendingImageViewModel : ObservableObject
     /// <summary>悬停提示：尺寸、占用、估算 token，压缩过的还写出原图尺寸。</summary>
     public string Caption => Image.DetailCaption;
 
+    /// <summary>缩过尺寸的图在角上标一下：用户按原图习惯贴的，得知道进模型的不是那张原图。</summary>
+    public bool IsCompressed => Image.Compressed;
+
     [RelayCommand]
     private void Remove() => _remove?.Invoke(this);
 }

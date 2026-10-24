@@ -210,6 +210,13 @@ public partial class AssistantApp : Application
                             demoChat.ShowDemoToast();
                         }
 
+                        if (!string.IsNullOrWhiteSpace(AppLaunchOptions.ComposerImage)
+                            && File.Exists(AppLaunchOptions.ComposerImage))
+                        {
+                            // 贴图：4K 原图会被压到长边 1568，角上应该出现「已压缩」
+                            demoChat.Composer.AddImage(new Bitmap(AppLaunchOptions.ComposerImage));
+                        }
+
                         if (AppLaunchOptions.ComposerHint)
                         {
                             // 麦克风在没配 Key 时的就地说明：真点一下才有，截图里直接摆
@@ -242,6 +249,7 @@ public partial class AssistantApp : Application
                         // 摆出两个填错的值：字段下面该出红字，保存该被拦下
                         invalidPage.TemperatureText = "2.6";
                         invalidPage.MaxTokensText = "四万";
+                        Console.WriteLine($"[settings-invalid] 错误={invalidPage.HasFieldErrors} 保存可点={invalidPage.CanSave}");
                     }
 
                     break;
@@ -293,6 +301,7 @@ public partial class AssistantApp : Application
                     viewModel.LoadDemoChat();
                 }
 
+                var returnTarget = viewModel.CurrentPage;
                 var before = (viewModel.CurrentPage as ChatViewModel)?.Title ?? "(无)";
                 await viewModel.OpenSettingsAsync();
                 var entered = viewModel.CurrentPage is SettingsViewModel;
@@ -304,7 +313,45 @@ public partial class AssistantApp : Application
                 Console.WriteLine(
                     $"[verify-back] 原任务：{before} / 进设置：{entered} / 设置里返回提示：{hintInSettings}"
                     + $" / 返回后：{page?.GetType().Name}"
-                    + $" / 任务：{(page as ChatViewModel)?.Title ?? "(无)"}");
+                    + $" / 任务：{(page as ChatViewModel)?.Title ?? "(无)"}"
+                    + $" / 同一实例：{ReferenceEquals(page, returnTarget)}");
+            }
+
+            // 验收用：会话卡在审批上并切到后台，标题还认不认得出「等你确认」
+            if (AppLaunchOptions.VerifyApprovalBackground)
+            {
+                viewModel.LoadDemoSidebar();
+                viewModel.LoadDemoChat();
+
+                if (viewModel.CurrentPage is ChatViewModel waiting)
+                {
+                    waiting.IsBusy = true;
+                    waiting.PendingApprovalText = "执行命令 dotnet build";
+                    var onCurrent = viewModel.WindowTitle;
+
+                    await viewModel.NewTaskCommand.ExecuteAsync(null);
+
+                    var behind = viewModel.WindowTitle;
+
+                    // 再造一条「正在执行」：标题要把两件事并排写出来，不能只显示一个
+                    string combined;
+                    if (viewModel.CurrentPage is ChatViewModel runner)
+                    {
+                        runner.IsBusy = true;
+                        combined = viewModel.WindowTitle;
+                        runner.IsBusy = false;
+                    }
+                    else
+                    {
+                        combined = "(没拿到当前页)";
+                    }
+
+                    Console.WriteLine(
+                        $"[verify-approval-bg] 当前页='{onCurrent}'"
+                        + $" 切走后='{behind}'"
+                        + $" 后台审批数={viewModel.PendingApprovalCount}"
+                        + $" 并列='{combined}'");
+                }
             }
 
             // 验收用：MCP 删除三步，逐步比对 mcp.json 的原文

@@ -377,6 +377,12 @@ public static class AppLaunchOptions
     /// <summary>开发用：MCP 删除走三步（确认态 → 真删 → 撤销），逐步比对 mcp.json 的原文。</summary>
     public static bool VerifyMcp { get; set; }
 
+    /// <summary>开发用：把一张本地图片塞进输入框，检查压缩与角标。</summary>
+    public static string? ComposerImage { get; set; }
+
+    /// <summary>开发用：一条会话卡在审批上并切到后台，验收窗口标题仍然看得见。</summary>
+    public static bool VerifyApprovalBackground { get; set; }
+
     /// <summary>摆出「重跑会删掉后面几轮」的确认弹窗，检查版式与红色主按钮。</summary>
     public static bool ShowRetryConfirm { get; set; }
 

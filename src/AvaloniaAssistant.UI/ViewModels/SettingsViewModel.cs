@@ -148,11 +148,13 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasTemperatureError))]
     [NotifyPropertyChangedFor(nameof(HasFieldErrors))]
+    [NotifyPropertyChangedFor(nameof(CanSave))]
     private string? temperatureError;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasMaxTokensError))]
     [NotifyPropertyChangedFor(nameof(HasFieldErrors))]
+    [NotifyPropertyChangedFor(nameof(CanSave))]
     private string? maxTokensError;
 
     public bool HasTemperatureError => !string.IsNullOrWhiteSpace(TemperatureError);
@@ -161,6 +163,12 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
 
     /// <summary>有任一字段没填对：保存要拦下来，不能假装成功。</summary>
     public bool HasFieldErrors => HasTemperatureError || HasMaxTokensError;
+
+    /// <summary>
+    /// 保存按钮能不能点。字段没填对时直接禁掉——点得下去、点了才说「没保存」，
+    /// 等于让用户白按一次；验收口径写的是「非法时保存按钮不可用」。
+    /// </summary>
+    public bool CanSave => !IsSaving && !HasFieldErrors;
 
     private void ValidateTemperature(string? text)
     {
@@ -329,6 +337,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     private string savedText = string.Empty;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanSave))]
     private bool isSaving;
 
     [ObservableProperty]

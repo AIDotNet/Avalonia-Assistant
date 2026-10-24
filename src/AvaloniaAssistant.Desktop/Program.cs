@@ -187,6 +187,12 @@ internal static class Program
                 case "--verify-mcp":
                     AppLaunchOptions.VerifyMcp = true;
                     break;
+                case "--composer-image" when index + 1 < args.Length:
+                    AppLaunchOptions.ComposerImage = args[++index];
+                    break;
+                case "--verify-approval-bg":
+                    AppLaunchOptions.VerifyApprovalBackground = true;
+                    break;
                 case "--retry-confirm":
                     AppLaunchOptions.ShowRetryConfirm = true;
                     break;

@@ -205,6 +205,21 @@
                         ToolTip.Tip="{Binding Caption}">
                   <Panel>
                     <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" />
+
+                    <!-- 4K 截图落盘前被缩到长边 1568：角上标一下，别让用户以为原图进了上下文 -->
+                    <Border IsVisible="{Binding IsCompressed}"
+                            Background="#CC000000"
+                            CornerRadius="5"
+                            Padding="4,1"
+                            Margin="3"
+                            HorizontalAlignment="Left"
+                            VerticalAlignment="Bottom">
+                      <TextBlock Text="已压缩"
+                                 FontSize="10.5"
+                                 LineHeight="13"
+                                 Foreground="White" />
+                    </Border>
+
                     <Button Classes="image-remove"
                             Command="{Binding RemoveCommand}"
                             HorizontalAlignment="Right"

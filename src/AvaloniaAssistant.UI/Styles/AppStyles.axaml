@@ -556,6 +556,15 @@
   <Style Selector="Button.approve:pointerover">
     <Setter Property="Background" Value="#3A3A36" />
   </Style>
+  <!-- 禁用要有禁用样子：设置页字段没填对时按钮是禁用的，画成黑的等于没提示 -->
+  <Style Selector="Button.approve:disabled">
+    <Setter Property="Background" Value="{StaticResource BorderBrush}" />
+    <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
+  </Style>
+  <Style Selector="Button.approve:disabled /template/ ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource BorderBrush}" />
+    <Setter Property="TextBlock.Foreground" Value="{StaticResource TextMutedBrush}" />
+  </Style>
   <Style Selector="Button.deny">
     <Setter Property="Height" Value="32" />
     <Setter Property="MinWidth" Value="64" />
