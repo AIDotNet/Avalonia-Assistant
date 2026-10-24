@@ -173,6 +173,9 @@ public static class AppLaunchOptions
     /// <summary>开发用：预置一条资料引用，检查引用标签的版式。</summary>
     public static string? ComposerMention { get; set; }
 
+    /// <summary>开发用：进设置页后立刻点一次「测试连接」，用来在命令行验收真实配置。</summary>
+    public static bool TestConnection { get; set; }
+
     /// <summary>
     /// 开发用：把工作区浮层单独摆进一个窗口再截图。浮层挂在另一个 TopLevel 上，
     /// 直接截主窗口是看不到它的。

@@ -85,6 +85,9 @@ internal static class Program
                 case "--composer-mention" when index + 1 < args.Length:
                     AppLaunchOptions.ComposerMention = args[++index];
                     break;
+                case "--test-connection":
+                    AppLaunchOptions.TestConnection = true;
+                    break;
                 case "--workspace-picker":
                     AppLaunchOptions.ShowWorkspacePicker = true;
                     break;

@@ -59,6 +59,11 @@ public partial class AssistantApp : Application
                     break;
                 case "settings":
                     await viewModel.OpenSettingsAsync();
+                    if (AppLaunchOptions.TestConnection && viewModel.CurrentPage is SettingsViewModel settingsPage)
+                    {
+                        await settingsPage.TestConnectionCommand.ExecuteAsync(null);
+                    }
+
                     break;
                 case "tools":
                     viewModel.OpenTools();
