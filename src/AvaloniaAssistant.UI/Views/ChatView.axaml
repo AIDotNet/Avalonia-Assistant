@@ -511,29 +511,75 @@
                      Classes="caption"
                      FontSize="11.5"
                      TextWrapping="Wrap" />
+          <!-- 参数可以直接改：模型给错路径/参数时，不用整轮拒绝再重述一遍。
+               注意这是「拒绝这次调用 + 让模型带新参数重发」，不是就地改写工具入参——
+               SDK 只给了拦截，没有改写入口，所以下面那行说明必须写清楚。 -->
           <Border Background="#AAFFFFFF" CornerRadius="8" Padding="10,7">
-            <ScrollViewer MaxHeight="120" VerticalScrollBarVisibility="Auto">
-              <SelectableTextBlock Text="{Binding Arguments}"
-                                   FontFamily="{StaticResource MonoFontFamily}"
-                                   FontSize="10.5"
-                                   TextWrapping="Wrap"
-                                   Foreground="{StaticResource TextSecondaryBrush}" />
-            </ScrollViewer>
+            <StackPanel Spacing="3">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Text="参数（可以直接改）"
+                           Classes="section-title"
+                           FontSize="10"
+                           VerticalAlignment="Center" />
+                <Button Grid.Column="1"
+                        Classes="ghost-action"
+                        Content="还原"
+                        Command="{Binding ResetArgumentsCommand}"
+                        IsVisible="{Binding HasEdits}"
+                        ToolTip.Tip="改回模型给的原始参数" />
+              </Grid>
+
+              <arc:Textarea Text="{Binding EditedArguments, Mode=TwoWay}"
+                            AcceptsReturn="True"
+                            IsResizable="False"
+                            MinHeight="46"
+                            MaxHeight="112"
+                            FontFamily="{StaticResource MonoFontFamily}"
+                            FontSize="10.5"
+                            Foreground="{StaticResource TextSecondaryBrush}"
+                            CaretBrush="{StaticResource TextPrimaryBrush}"
+                            Placeholder="工具参数" />
+
+              <TextBlock Text="{Binding EditError}"
+                         IsVisible="{Binding HasEditError}"
+                         FontSize="10.5"
+                         LineHeight="15"
+                         TextWrapping="Wrap"
+                         Foreground="{StaticResource DangerBrush}" />
+            </StackPanel>
           </Border>
-          <Grid ColumnDefinitions="Auto,Auto,*,Auto" IsVisible="{Binding ShowActions}" Margin="0,2,0,0">
-            <Button Classes="approve" Command="{Binding AllowCommand}" Content="允许一次" />
-            <Button Grid.Column="1"
+
+          <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto" IsVisible="{Binding ShowActions}" Margin="0,2,0,0">
+            <Button Classes="approve"
+                    Command="{Binding AllowCommand}"
+                    IsVisible="{Binding !HasEdits}"
+                    Content="允许一次" />
+            <!-- 改过参数就只留一个主按钮：两个「允许」并排，点错一次就是按旧参数跑了 -->
+            <Button Classes="approve"
+                    Command="{Binding AllowEditedCommand}"
+                    IsVisible="{Binding HasEdits}"
+                    Content="按修改重试"
+                    ToolTip.Tip="拒绝这次调用，把改后的参数交给模型立刻重发一次" />
+            <Button Grid.Column="2"
                     Classes="deny"
                     Margin="8,0,0,0"
                     Command="{Binding DenyCommand}"
                     Content="拒绝" />
-            <Button Grid.Column="3"
+            <Button Grid.Column="4"
                     Classes="ghost-action"
                     VerticalAlignment="Center"
                     Command="{Binding AllowAlwaysCommand}"
                     ToolTip.Tip="这个工具在本次对话里不再逐次询问"
                     Content="{Binding AlwaysLabel}" />
           </Grid>
+
+          <TextBlock Text="改完按「按修改重试」：这次调用会被拦下，模型带着新参数立刻重发，重发的那一次不再重复问你。"
+                     IsVisible="{Binding HasEdits}"
+                     Classes="caption"
+                     FontSize="10"
+                     TextWrapping="Wrap"
+                     HorizontalAlignment="Right" />
+
           <TextBlock Text="Ctrl+Enter 允许一次 · Ctrl+Shift+Enter 本会话允许 · Esc 拒绝"
                      IsVisible="{Binding ShowActions}"
                      Classes="caption"
@@ -827,8 +873,12 @@
 
     <Border Grid.Row="3" Padding="26,8,26,14" Background="{StaticResource SurfaceBrush}">
       <StackPanel MaxWidth="840" HorizontalAlignment="Center">
-        <!-- 上下文水位：低于 40% 不出现；超过 70% 提示会开始压缩早期内容 -->
-        <StackPanel IsVisible="{Binding ShowContextMeter}" Margin="2,0,2,6" Spacing="3">
+        <!-- 上下文水位：低于 40% 不出现；超过 70% 提示会开始压缩早期内容。
+             分母跟着当前模型的窗口走，查不到时数字后面带 * -->
+        <StackPanel IsVisible="{Binding ShowContextMeter}"
+                    Margin="2,0,2,6"
+                    Spacing="3"
+                    ToolTip.Tip="{Binding ContextMeterHint}">
           <Grid ColumnDefinitions="*,Auto">
             <!-- 自绘水位：轨道 720 + 填充按比例，ProgressBar 在当前主题里 3px 高看不见 -->
             <Border Height="4"

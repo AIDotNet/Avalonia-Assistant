@@ -424,6 +424,17 @@ public partial class SidebarView : UserControl
     private Control BuildMenu(Flyout flyout, WorkspaceItemViewModel item)    {
         var rows = new StackPanel { Spacing = 1 };
 
+        // 切换当前工作区是个会改变「下一个任务落在哪」的动作，不能藏在展开/收起里。
+        // 展开只是为了看内容，所以这里给一个明确的入口。
+        if (!item.IsActive && _host is not null)
+        {
+            rows.Children.Add(MenuRow("设为当前工作区", ArcIcons.Check, () =>
+            {
+                CloseFlyouts();
+                _ = _host.SelectWorkspaceAsync(item.Path);
+            }));
+        }
+
         rows.Children.Add(MenuRow("打开文件夹", ArcIcons.FolderOpen, () =>
         {
             CloseFlyouts();

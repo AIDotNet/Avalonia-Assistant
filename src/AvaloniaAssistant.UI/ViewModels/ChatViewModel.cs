@@ -28,6 +28,12 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
     /// <summary>这一轮开始时的权限。生成中切档位不改变本轮行为，只能下一轮生效。</summary>
     private PermissionMode _runStartPermission;
 
+    /// <summary>
+    /// 用户在卡片里改过的参数。模型按理应原样重发；真原样回来时直接放行一次，
+    /// 否则「改完重试」会紧接着再弹一张一模一样的卡，等于让用户点两遍。
+    /// </summary>
+    private string? _pendingCorrectedArguments;
+
     /// <summary>生成中切过的档位。本轮结束后再补一条提示，不静默吞掉。</summary>
     private PermissionMode? _pendingPermission;
 
@@ -85,6 +91,7 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
         LoadEntries();
         RefreshDateHeaders();
         SyncComposerWorkspacePin();
+        RefreshContextWindow();
     }
 
     public ChatSession Session { get; }
@@ -156,6 +163,10 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
 
         // 已经开口的会话：胶囊仍显示钉住的那个目录，不能让设置把它带跑
         SyncComposerWorkspacePin();
+
+        // 换了模型：窗口可能完全不同（32k / 128k / 200k），水位条的分母要跟着换
+        RefreshContextWindow();
+
         OnPropertyChanged(nameof(HeaderSubtitle));
     }
 
@@ -246,11 +257,13 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
     public bool HasPendingApproval => !string.IsNullOrWhiteSpace(PendingApprovalText);
 
     /// <summary>
-    /// 上下文用量估算。数值来自上一轮 RunCompleted 的输入 + 输出 token：
-    /// 下一轮要把这些重新发一遍，所以它约等于"当前上下文有多满"。
-    /// 模型真实窗口不在本地，128k 是保守值（和 CodingSessionFactory 的估算保持一致）。
+    /// 当前模型的上下文窗口。以前写死 128k：换到 32k 的模型后，水位条显示 84% 时其实早就超了；
+    /// 换到 200k 的模型，70% 的提醒又来得太早。数值来自本地模型目录，查不到才用保守值。
     /// </summary>
-    private const long EstimatedContextWindow = 128_000;
+    private long _contextWindow = 128_000;
+
+    /// <summary>窗口是保守值而不是目录里的真实值。界面上要标「估算」，不能装作知道。</summary>
+    private bool _contextWindowEstimated = true;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ContextUsageRatio))]
@@ -259,9 +272,10 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
     [NotifyPropertyChangedFor(nameof(ShowContextMeter))]
     [NotifyPropertyChangedFor(nameof(IsContextTight))]
     [NotifyPropertyChangedFor(nameof(ContextMeterBrush))]
+    [NotifyPropertyChangedFor(nameof(ContextMeterHint))]
     private long contextTokens;
 
-    public double ContextUsageRatio => Math.Clamp(ContextTokens / (double)EstimatedContextWindow, 0, 1);
+    public double ContextUsageRatio => Math.Clamp(ContextTokens / (double)_contextWindow, 0, 1);
 
     /// <summary>
     /// 水位条的填充宽度。轨道固定 720（输入框 840 减去右侧百分比文字），
@@ -270,13 +284,41 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
     public double ContextMeterWidth => Math.Max(4, 720 * ContextUsageRatio);
 
     /// <summary>低于 40% 不显示：常态下多一条横线只会变成噪声。</summary>
-    public bool ShowContextMeter => ContextTokens > EstimatedContextWindow * 0.4;
+    public bool ShowContextMeter => ContextTokens > _contextWindow * 0.4;
 
     /// <summary>超过 70% 提示会开始压缩早期内容。</summary>
-    public bool IsContextTight => ContextTokens > EstimatedContextWindow * 0.7;
+    public bool IsContextTight => ContextTokens > _contextWindow * 0.7;
 
     public string ContextUsageText
-        => $"{ContextTokens / 1000d:0.#}k / 128k · {ContextUsageRatio:P0}";
+        => $"{ContextTokens / 1000d:0.#}k / {FormatWindow(_contextWindow)}"
+           + (_contextWindowEstimated ? "*" : string.Empty)
+           + $" · {ContextUsageRatio:P0}";
+
+    /// <summary>悬停说明：这个分母是从哪来的。目录里没有的模型要直说（* 就是它）。</summary>
+    public string ContextMeterHint => _contextWindowEstimated
+        ? $"本地模型目录里没有「{_settings.Current.Model}」的上下文窗口，* 表示按 {FormatWindow(_contextWindow)} 估算。"
+        : $"按「{_settings.Current.Model}」的 {FormatWindow(_contextWindow)} 上下文计算。";
+
+    private static string FormatWindow(long window)
+        => window >= 1000 ? $"{window / 1000d:0.#}k" : window.ToString();
+
+    /// <summary>模型切换会让窗口跟着变：换完模型，水位条的分母和 70% 那条线都得重算。</summary>
+    private void RefreshContextWindow()
+    {
+        var model = _runtime.Models.FirstOrDefault(
+            item => string.Equals(item.Id, _settings.Current.Model, StringComparison.Ordinal));
+
+        _contextWindow = model?.ContextWindow is > 0 ? model.ContextWindow : 128_000;
+        _contextWindowEstimated = model?.ContextWindowEstimated ?? true;
+
+        OnPropertyChanged(nameof(ContextUsageRatio));
+        OnPropertyChanged(nameof(ContextMeterWidth));
+        OnPropertyChanged(nameof(ContextUsageText));
+        OnPropertyChanged(nameof(ShowContextMeter));
+        OnPropertyChanged(nameof(IsContextTight));
+        OnPropertyChanged(nameof(ContextMeterBrush));
+        OnPropertyChanged(nameof(ContextMeterHint));
+    }
 
     public IBrush ContextMeterBrush => IsContextTight
         ? new SolidColorBrush(Color.Parse("#B3261E"))
@@ -810,6 +852,9 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
         Composer.IsBusy = true;
         StatusText = "正在准备…";
 
+        // 上一轮留下的「改后自动放行」不跨轮生效
+        _pendingCorrectedArguments = null;
+
         // 这一轮用开始时的权限快照。生成中再切档位，要等到下一轮。
         _runStartPermission = _settings.Current.Permission;
         _pendingPermission = null;
@@ -1117,16 +1162,26 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>仅用于 --screenshot：摆一张待确认的授权卡，检查快捷键提示和按钮版式。</summary>
-    public void AddDemoApproval()
+    /// <summary>
+    /// 仅用于 --screenshot：摆一张待确认的授权卡，检查快捷键提示和按钮版式。
+    /// <paramref name="edited"/> 为 true 时顺便把参数改成「用户改过」的样子，
+    /// 用来检查主按钮切换（允许一次 → 按修改重试）和「还原」入口。
+    /// </summary>
+    public void AddDemoApproval(bool edited = false)
     {
-        Messages.Add(new ApprovalMessageViewModel(
+        var card = new ApprovalMessageViewModel(
             "run_command",
             "执行命令",
             "{\n  \"command\": \"dotnet build\"\n}",
             "run_command 会用 shell 执行命令，需要你确认。",
-            _ => { }));
+            _ => { });
 
+        if (edited)
+        {
+            card.EditedArguments = "{\n  \"command\": \"dotnet build -c Release\"\n}";
+        }
+
+        Messages.Add(card);
         RequestScroll(true);
     }
 
@@ -1378,6 +1433,11 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
         {
             card.AllowAlwaysCommand.Execute(null);
         }
+        else if (card.HasEdits)
+        {
+            // 用户已经改过参数：Ctrl+Enter 提交的是眼前这份，不是模型原来那份
+            card.AllowEditedCommand.Execute(null);
+        }
         else
         {
             card.AllowCommand.Execute(null);
@@ -1413,24 +1473,59 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
         return $"{date:M月d日} {weekday}";
     }
 
+    /// <summary>
+    /// 两份工具参数是否等价。先按文本比，再按 JSON 结构比：
+    /// 模型原样重发时缩进、字段顺序可能变，纯文本比较会误判成「没改」。
+    /// </summary>
+    private static bool ArgumentsMatch(string left, string right)
+    {
+        if (string.Equals(left.Trim(), right.Trim(), StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        try
+        {
+            var a = System.Text.Json.Nodes.JsonNode.Parse(left);
+            var b = System.Text.Json.Nodes.JsonNode.Parse(right);
+            return a is not null && b is not null && System.Text.Json.Nodes.JsonNode.DeepEquals(a, b);
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return false;
+        }
+    }
+
     private sealed class ChatApprovalGate(ChatViewModel owner) : IToolApprovalGate
     {
-        public async Task<bool> RequestAsync(ToolApprovalRequest request, CancellationToken cancellationToken)
+        public async Task<ToolApprovalDecision> RequestAsync(
+            ToolApprovalRequest request,
+            CancellationToken cancellationToken)
         {
             // 完全访问在运行时那一层已经放行；这里再兜一次，避免会话复用了旧权限的闭包
             // 又把确认卡片弹出来。
             if (PermissionModeText.SkipsApproval(owner._settings.Current.Permission))
             {
-                return true;
+                return ToolApprovalDecision.Allow;
             }
 
             // 这一轮里用户点过「本会话都允许」，同一个工具不再问第二遍。
             if (owner._sessionAllowedTools.Contains(request.ToolName))
             {
-                return true;
+                return ToolApprovalDecision.Allow;
             }
 
-            var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            // 一条命令要跑，用户改了参数又点了「按修改重试」：模型把改后的参数原样发回来时
+            // 直接放行一次。不然紧接着会再弹一张同样的卡，等于让人点两遍。
+            if (owner._pendingCorrectedArguments is { } corrected
+                && ArgumentsMatch(corrected, request.Arguments))
+            {
+                owner._pendingCorrectedArguments = null;
+                return ToolApprovalDecision.Allow;
+            }
+
+            var completion = new TaskCompletionSource<ToolApprovalDecision>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
             ApprovalMessageViewModel? card = null;
 
             await Ui.OnUiAsync(() =>
@@ -1440,7 +1535,11 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
                     request.Label,
                     request.Arguments,
                     request.Reason,
-                    allowed => completion.TrySetResult(allowed));
+                    decision =>
+                    {
+                        owner._pendingCorrectedArguments = decision.CorrectedArguments;
+                        completion.TrySetResult(decision);
+                    });
                 card.AllowAlwaysRequested = () =>
                 {
                     owner._sessionAllowedTools.Add(request.ToolName);
@@ -1458,8 +1557,9 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
                 }
             });
 
-            using var registration = cancellationToken.Register(() => completion.TrySetResult(false));
-            var allowed = await completion.Task;
+            using var registration = cancellationToken.Register(
+                () => completion.TrySetResult(ToolApprovalDecision.Deny));
+            var decision = await completion.Task;
 
             if (card is not null)
             {
@@ -1467,7 +1567,7 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
                 await Ui.OnUiAsync(() => owner.PendingApprovalText = null);
             }
 
-            return allowed;
+            return decision;
         }
     }
 }

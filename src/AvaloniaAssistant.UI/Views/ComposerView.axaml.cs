@@ -615,11 +615,22 @@ public partial class ComposerView : UserControl
             Foreground = ThemeBrush("TextPrimaryBrush", Brushes.Black),
         });
 
-        if (!string.IsNullOrWhiteSpace(model.Description))
+        // 第二行先说上下文窗口：换模型时最该知道的就是它（决定水位条和压缩时机）
+        var detail = string.Join(
+            " · ",
+            new[]
+            {
+                model.ContextWindow > 0
+                    ? $"{model.ContextWindow / 1000d:0.#}k 上下文{(model.ContextWindowEstimated ? "*" : string.Empty)}"
+                    : string.Empty,
+                model.Description,
+            }.Where(part => !string.IsNullOrWhiteSpace(part)));
+
+        if (detail.Length > 0)
         {
             texts.Children.Add(new TextBlock
             {
-                Text = model.Description,
+                Text = detail,
                 FontSize = 10.5,
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 Foreground = ThemeBrush("TextMutedBrush", Brushes.Gray),

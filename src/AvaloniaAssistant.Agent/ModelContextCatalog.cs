@@ -68,7 +68,8 @@ internal static class ModelContextCatalog
         }
     }
 
-    private static Dictionary<string, long> Load(string path)
+    /// <summary>解析一个 models-store.json。internal 是给测试用的：真实路径在用户目录里，不该让测试去碰。</summary>
+    internal static Dictionary<string, long> Load(string path)
     {
         var result = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
 

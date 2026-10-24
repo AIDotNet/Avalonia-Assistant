@@ -553,14 +553,20 @@ public sealed partial class AssistantMessageViewModel : MessageViewModel
 
 public sealed partial class ApprovalMessageViewModel : MessageViewModel
 {
-    private readonly Action<bool> _resolve;
+    private readonly Action<ToolApprovalDecision> _resolve;
 
-    public ApprovalMessageViewModel(string toolName, string label, string arguments, string reason, Action<bool> resolve)
+    public ApprovalMessageViewModel(
+        string toolName,
+        string label,
+        string arguments,
+        string reason,
+        Action<ToolApprovalDecision> resolve)
     {
         ToolName = toolName;
         Label = label;
         Arguments = arguments;
         Reason = reason;
+        EditedArguments = arguments;
         _resolve = resolve;
     }
 
@@ -568,9 +574,30 @@ public sealed partial class ApprovalMessageViewModel : MessageViewModel
 
     public string Label { get; }
 
+    /// <summary>模型给的原始参数。改坏了可以一键还原。</summary>
     public string Arguments { get; }
 
     public string Reason { get; }
+
+    /// <summary>
+    /// 卡片里可以改的参数。SDK 只允许拦截、不允许改写工具参数，
+    /// 所以「按修改重试」实际是：拒绝这次调用 + 把改后的参数交给模型重发一次。
+    /// 文案和提示都要按这个事实写，不能说成「直接执行」。
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasEdits))]
+    private string editedArguments;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasEditError))]
+    private string? editError;
+
+    public bool HasEdits => !string.Equals(
+        (EditedArguments ?? string.Empty).Trim(),
+        (Arguments ?? string.Empty).Trim(),
+        StringComparison.Ordinal);
+
+    public bool HasEditError => !string.IsNullOrWhiteSpace(EditError);
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowActions))]
@@ -598,7 +625,7 @@ public sealed partial class ApprovalMessageViewModel : MessageViewModel
     public Action? AllowAlwaysRequested { get; set; }
 
     [RelayCommand]
-    private void Allow() => Resolve(true);
+    private void Allow() => Resolve(ToolApprovalDecision.Allow);
 
     [RelayCommand]
     private void AllowAlways()
@@ -611,14 +638,61 @@ public sealed partial class ApprovalMessageViewModel : MessageViewModel
         IsResolved = true;
         ResolutionText = "本会话已允许";
         AllowAlwaysRequested?.Invoke();
-        _resolve(true);
+        _resolve(ToolApprovalDecision.Allow);
+    }
+
+    /// <summary>改完参数再跑。校验不过就停在卡片上，别把一段坏 JSON 丢给模型。</summary>
+    [RelayCommand]
+    private void AllowEdited()
+    {
+        if (IsResolved)
+        {
+            return;
+        }
+
+        var corrected = (EditedArguments ?? string.Empty).Trim();
+        if (corrected.Length == 0)
+        {
+            EditError = "参数不能为空；不改的话直接点「允许一次」。";
+            return;
+        }
+
+        // 原始参数是 JSON 的（内置工具都走这条），改完必须还是 JSON：
+        // 否则模型收到一段解析不了的文本，只会再错一次。
+        if (LooksLikeJson(Arguments))
+        {
+            try
+            {
+                using var _ = JsonDocument.Parse(corrected);
+            }
+            catch (JsonException ex)
+            {
+                EditError = "改完不是合法 JSON：" + ex.Message;
+                return;
+            }
+        }
+
+        EditError = null;
+        Resolve(new ToolApprovalDecision(false, corrected));
     }
 
     [RelayCommand]
-    private void Deny() => Resolve(false);
+    private void ResetArguments()
+    {
+        EditedArguments = Arguments;
+        EditError = null;
+    }
 
+    private static bool LooksLikeJson(string? text)
+    {
+        var trimmed = (text ?? string.Empty).TrimStart();
+        return trimmed.StartsWith('{') || trimmed.StartsWith('[');
+    }
 
-    public void Resolve(bool allowed)
+    [RelayCommand]
+    private void Deny() => Resolve(ToolApprovalDecision.Deny);
+
+    public void Resolve(ToolApprovalDecision decision)
     {
         if (IsResolved)
         {
@@ -626,8 +700,12 @@ public sealed partial class ApprovalMessageViewModel : MessageViewModel
         }
 
         IsResolved = true;
-        ResolutionText = allowed ? "已允许" : "已拒绝";
-        _resolve(allowed);
+        ResolutionText = decision.Allowed
+            ? "已允许"
+            : decision.CorrectedArguments is { Length: > 0 }
+                ? "已改参数，让模型重试"
+                : "已拒绝";
+        _resolve(decision);
     }
 
     public void Cancel()
@@ -639,7 +717,7 @@ public sealed partial class ApprovalMessageViewModel : MessageViewModel
 
         IsResolved = true;
         ResolutionText = "已取消";
-        _resolve(false);
+        _resolve(ToolApprovalDecision.Deny);
     }
 }
 

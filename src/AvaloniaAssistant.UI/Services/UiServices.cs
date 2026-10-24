@@ -326,6 +326,9 @@ public static class AppLaunchOptions
     /// <summary>开发用：对话页摆一张待确认的授权卡，检查键盘提示与按钮版式。</summary>
     public static bool ApprovalDemo { get; set; }
 
+    /// <summary>开发用：把授权卡摆成「参数已改」的状态，检查主按钮切换与还原入口。</summary>
+    public static bool ApprovalEdited { get; set; }
+
     /// <summary>开发用：对当前焦点控件发一次 Esc，验证审批卡的键盘拒绝。</summary>
     public static bool PressEscape { get; set; }
 

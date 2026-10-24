@@ -1235,7 +1235,7 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
 
         if (!Models.Any(model => model.Id == current))
         {
-            Models.Insert(0, new ModelOption(current, current, "当前配置", string.Empty));
+            Models.Insert(0, new ModelOption(current, current, "当前配置", string.Empty, 128_000, true));
         }
     }
 }

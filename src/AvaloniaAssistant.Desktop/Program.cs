@@ -127,6 +127,10 @@ internal static class Program
                 case "--approval-demo":
                     AppLaunchOptions.ApprovalDemo = true;
                     break;
+                case "--approval-edited":
+                    AppLaunchOptions.ApprovalDemo = true;
+                    AppLaunchOptions.ApprovalEdited = true;
+                    break;
                 case "--press-escape":
                     AppLaunchOptions.PressEscape = true;
                     break;

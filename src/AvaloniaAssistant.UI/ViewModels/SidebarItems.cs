@@ -157,7 +157,7 @@ public sealed partial class WorkspaceItemViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(ShowCount))]
     private bool isExpanded = true;
 
-    /// <summary>点标题：展开/收起空间下的对话，同时把它设为当前工作区。</summary>
+    /// <summary>点标题：只展开/收起空间下的对话，不改变当前工作区（那是个显式动作，在 ⋯ 菜单里）。</summary>
     [RelayCommand]
     private void Toggle() => _toggle(this);
 

@@ -882,13 +882,16 @@ public sealed partial class MainWindowViewModel : ObservableObject
     }
 
     /// <summary>点空间标题：展开/收起它下面的对话，同时把这个空间设为当前工作区。</summary>
+    /// <summary>
+    /// 点空间标题：只展开/收起，不动「当前工作区」。
+    /// 以前这里顺手调了 <see cref="SelectWorkspaceAsync"/>：用户只是想看看这组里有什么，
+    /// 下一个新任务的落点却被改掉了，而且界面上没有任何提示。切换改成 ⋯ 菜单里的显式动作。
+    /// </summary>
     public void ToggleWorkspace(WorkspaceItemViewModel item)
     {
         var expand = !item.IsExpanded;
         SetCollapsed(Settings, item.Path, !expand);
         item.IsExpanded = expand;
-
-        _ = SelectWorkspaceAsync(item.Path);
     }
 
     /// <summary>

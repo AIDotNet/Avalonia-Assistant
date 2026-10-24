@@ -505,3 +505,53 @@ Grid   [task-row]         x=0 w=205   ← 244 - 38 缩进 - 1 竖线
 S1 和本轮侧栏改动直接相关：现在两个区都可收起了，展开/收起应该只是浏览动作，
 切换当前工作区建议改成空间行上的显式动作（或新建会话时附带）。这条没在本轮改，
 因为它会改变现有"点空间即切换"的交互，需要你确认取舍。
+
+---
+
+# P1 完成记录（2026-10-24 17:10~17:35）
+
+S1 / S2 / S3 三条。`dotnet test` 116 通过（新增 `ModelContextCatalogTests` 4 条），
+UI 与 Desktop 0 错误（Desktop 仍输出到 `.tmp/r3build/`，因为主程序还占着正式目录）。
+
+## S1 展开/收起不再改当前工作区
+
+- `ToggleWorkspace` 去掉末尾的 `SelectWorkspaceAsync`：点标题只折叠该空间。
+- 空间行的 `⋯` 菜单顶部新增「设为当前工作区」（仅当前未选中时出现），
+  这是唯一会改变「下一个任务落点」的入口。
+- 行上补 tooltip：「展开 / 收起这组任务；切换当前工作区用右侧 ⋯」。
+
+**验证**：读码 + 构建。菜单弹出要模拟点击，没有做成截图用例。
+
+## S2 上下文窗口跟着模型走
+
+- 新增 `Agent/ModelContextCatalog`：读 `~/.pi/agent/models-store.json` 的 `contextWindow`，
+  按文件修改时间缓存；查不到返回 null。
+- `ModelOption` 增加 `ContextWindow` / `ContextWindowEstimated`；`BuildModels` 和 `ResolveModel` 都从目录取值。
+- `CodingSessionFactory` 的自动压缩阈值改用同一个数——以前界面和压缩各写死 128k。
+- `ChatViewModel` 按当前模型刷新 `_contextWindow`：换模型后水位条分母、40% 显示线、70% 警示线一起变；
+  目录里没有的模型照旧用 128k，并在数字后标 `*`，悬停说明「本地目录里没有这个模型，按 128k 估算」。
+- 模型浮层每行第二行改成「272k 上下文 · 官方接口…」，换之前就能看到窗口差异。
+
+**验证**：`artifacts/r5-model-flyout.png`（gpt-6.1-sol 显示 272k、deepseek-flash 显示 128k*）、
+`artifacts/r5-context.png`（水位条 `108k / 128k* · 84%`）；4 条解析测试覆盖嵌套形状、坏条目、坏文件、重名取首个。
+
+## S3 审批卡可改参数
+
+先说清一个约束：SDK 的 `BeforeToolCallResult` 只有 `Block / Reason / Terminate`，**不能改写工具入参**
+（反射确认过）。所以「改完直接执行」在当前协议里做不到，实现的是：
+
+**改参数 → 拒绝这次调用 → 把改后的参数写进拒绝理由 → 模型立刻原样重发 → 重发那次自动放行一次。**
+
+- `IToolApprovalGate` 返回值从 `bool` 改成 `ToolApprovalDecision(bool Allowed, string? CorrectedArguments)`。
+- `PiAgentRuntime`：带改后参数时，拒绝理由写成明确指令（含完整 JSON），要求模型不要解释、不要改别的字段。
+- `ApprovalMessageViewModel`：参数区变成可编辑的 `Textarea`，带「还原」「按修改重试」；
+  原始参数是 JSON 的，改完必须仍是合法 JSON，否则就地报错、不发出去。
+- 主按钮二选一：没改过是「允许一次」，改过就只剩「按修改重试」——两个「允许」并排，点错一次就按旧参数跑了。
+- Ctrl+Enter 跟随当前内容：改过参数时提交的是眼前这份。
+- 改后的参数通过 `_pendingCorrectedArguments` 记住；模型重发时按 JSON 结构比对（缩进/字段顺序不同也算相同），
+  命中就自动放行一次，避免紧接着再弹一张一模一样的卡。换轮清空。
+
+**验证**：`artifacts/r5-approval.png`（可编辑参数区 + 允许一次）、
+`artifacts/r5-approval-edited.png`（主按钮切成「按修改重试」、还原出现、说明文字完整）。
+`--approval-edited` 是这轮新加的截图入口。**没有跑真实模型做端到端**：需要一次真实工具调用才能看到
+「拒绝 → 重发 → 自动放行」的完整链路，本轮只验证了协议映射与版式。

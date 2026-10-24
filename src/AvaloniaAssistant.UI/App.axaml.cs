@@ -177,7 +177,7 @@ public partial class AssistantApp : Application
 
                         if (AppLaunchOptions.ApprovalDemo)
                         {
-                            demoChat.AddDemoApproval();
+                            demoChat.AddDemoApproval(AppLaunchOptions.ApprovalEdited);
                         }
 
                         if (AppLaunchOptions.ApprovalWait)

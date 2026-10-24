@@ -203,11 +203,13 @@ public sealed class PiAgentRuntimeTests
 
         public string? ToolName { get; private set; }
 
-        public Task<bool> RequestAsync(ToolApprovalRequest request, CancellationToken cancellationToken)
+        public Task<ToolApprovalDecision> RequestAsync(
+            ToolApprovalRequest request,
+            CancellationToken cancellationToken)
         {
             Called = true;
             ToolName = request.ToolName;
-            return Task.FromResult(approve);
+            return Task.FromResult(approve ? ToolApprovalDecision.Allow : ToolApprovalDecision.Deny);
         }
     }
 }

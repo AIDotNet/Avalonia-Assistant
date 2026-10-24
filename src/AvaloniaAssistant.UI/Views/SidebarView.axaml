@@ -357,7 +357,8 @@
                     <Grid Classes="workspace-row" ColumnDefinitions="*,Auto,Auto">
                       <Button Classes="nav ws-head"
                               Classes.active="{Binding IsActive}"
-                              Command="{Binding ToggleCommand}">
+                              Command="{Binding ToggleCommand}"
+                              ToolTip.Tip="展开 / 收起这组任务；切换当前工作区用右侧 ⋯">
                         <Grid ColumnDefinitions="Auto,Auto,*,Auto">
                           <Panel Width="12" VerticalAlignment="Center">
                             <arc:ArcGlyph Data="{x:Static arc:ArcIcons.ChevronDown}"
