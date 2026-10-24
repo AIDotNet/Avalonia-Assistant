@@ -255,7 +255,28 @@ public sealed partial class AssistantMessageViewModel : MessageViewModel
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasError))]
     [NotifyPropertyChangedFor(nameof(ShowActions))]
+    [NotifyPropertyChangedFor(nameof(ShowErrorAction))]
     private string? error;
+
+    /// <summary>失败分类的标题，例如「API Key 没通过」。原始报错仍然放在 <see cref="Error"/> 里。</summary>
+    [ObservableProperty]
+    private string? errorTitle;
+
+    /// <summary>下一步该干什么。</summary>
+    [ObservableProperty]
+    private string? errorHint;
+
+    /// <summary>按钮文案：去设置 / 重试 / 新建任务。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowErrorAction))]
+    private string? errorActionLabel;
+
+    /// <summary>按钮按下去之后走哪条路，由对话上下文决定。</summary>
+    public RunErrorKind ErrorActionKind { get; set; }
+
+    public Func<Task>? ErrorActionRequested { get; set; }
+
+    public bool ShowErrorAction => HasError && !string.IsNullOrWhiteSpace(ErrorActionLabel);
 
     /// <summary>用户主动停止。和 <see cref="Error"/> 分开：停止不是故障，不能画成红框。</summary>
     [ObservableProperty]
@@ -390,6 +411,9 @@ public sealed partial class AssistantMessageViewModel : MessageViewModel
 
     [RelayCommand]
     private Task ContinueAsync() => ContinueRequested?.Invoke() ?? Task.CompletedTask;
+
+    [RelayCommand]
+    private Task RunErrorActionAsync() => ErrorActionRequested?.Invoke() ?? Task.CompletedTask;
 
     private void EnsureTimer()
     {

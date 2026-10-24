@@ -170,41 +170,63 @@
 
     <Border Grid.Row="2" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0" Padding="28,12">
       <Grid ColumnDefinitions="*,Auto">
-        <!-- 有改动又点了返回：给两条明确的路，不静默丢弃 -->
-        <StackPanel Orientation="Horizontal"
-                    Spacing="8"
-                    VerticalAlignment="Center"
-                    IsVisible="{Binding ShowLeavePrompt}">
-          <arc:ArcGlyph Data="{x:Static arc:ArcIcons.CircleAlert}"
-                        Size="13"
-                        Foreground="{StaticResource WarningBrush}"
-                        VerticalAlignment="Center" />
-          <TextBlock Text="改动还没保存"
+        <StackPanel VerticalAlignment="Center" Spacing="2">
+          <!-- 有改动又点了返回：给两条明确的路，不静默丢弃 -->
+          <StackPanel Orientation="Horizontal"
+                      Spacing="8"
+                      VerticalAlignment="Center"
+                      IsVisible="{Binding ShowLeavePrompt}">
+            <arc:ArcGlyph Data="{x:Static arc:ArcIcons.CircleAlert}"
+                          Size="13"
+                          Foreground="{StaticResource WarningBrush}"
+                          VerticalAlignment="Center" />
+            <TextBlock Text="改动还没保存"
+                       FontSize="11.5"
+                       Foreground="{StaticResource WarningBrush}"
+                       VerticalAlignment="Center" />
+            <Button Classes="ghost-action"
+                    Command="{Binding SaveAndLeaveCommand}"
+                    Foreground="{StaticResource TextPrimaryBrush}"
+                    Content="保存并返回" />
+            <Button Classes="ghost-action"
+                    Command="{Binding DiscardAndLeaveCommand}"
+                    Content="放弃改动" />
+          </StackPanel>
+
+          <!-- 测试连接的结果：成功绿、失败红，改过相关字段就自动消失 -->
+          <TextBlock Text="{Binding TestResultText}"
+                     IsVisible="{Binding ShowTestResult}"
+                     Foreground="{Binding TestBrush}"
                      FontSize="11.5"
-                     Foreground="{StaticResource WarningBrush}"
-                     VerticalAlignment="Center" />
-          <Button Classes="ghost-action"
-                  Command="{Binding SaveAndLeaveCommand}"
-                  Foreground="{StaticResource TextPrimaryBrush}"
-                  Content="保存并返回" />
-          <Button Classes="ghost-action"
-                  Command="{Binding DiscardAndLeaveCommand}"
-                  Content="放弃改动" />
+                     LineHeight="17"
+                     TextWrapping="Wrap"
+                     MaxWidth="640" />
+
+          <TextBlock Text="{Binding SavedText}"
+                     IsVisible="{Binding !ShowLeavePrompt}"
+                     Classes="caption"
+                     Foreground="{Binding SaveToastBrush}"
+                     VerticalAlignment="Center"
+                     TextTrimming="CharacterEllipsis" />
         </StackPanel>
 
-        <TextBlock Text="{Binding SavedText}"
-                   IsVisible="{Binding !ShowLeavePrompt}"
-                   Classes="caption"
-                   Foreground="{Binding SaveToastBrush}"
-                   VerticalAlignment="Center"
-                   TextTrimming="CharacterEllipsis" />
-        <Button Grid.Column="1"
-                Classes="approve"
-                Height="34"
-                Padding="18,0"
-                Command="{Binding SaveCommand}"
-                IsEnabled="{Binding !IsSaving}"
-                Content="{Binding SaveButtonText}" />
+        <StackPanel Grid.Column="1"
+                    Orientation="Horizontal"
+                    Spacing="8"
+                    VerticalAlignment="Center">
+          <Button Classes="chip"
+                  Height="34"
+                  Padding="14,0"
+                  Command="{Binding TestConnectionCommand}"
+                  IsEnabled="{Binding !IsTesting}"
+                  Content="{Binding TestButtonText}" />
+          <Button Classes="approve"
+                  Height="34"
+                  Padding="18,0"
+                  Command="{Binding SaveCommand}"
+                  IsEnabled="{Binding !IsSaving}"
+                  Content="{Binding SaveButtonText}" />
+        </StackPanel>
       </Grid>
     </Border>
 

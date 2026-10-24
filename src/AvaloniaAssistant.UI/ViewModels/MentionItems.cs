@@ -104,6 +104,37 @@ public sealed partial class MentionItemViewModel : ObservableObject
         };
     }
 
+    /// <summary>
+    /// 从文件选择器拿到的任意一个文件。走和 @ 引用同一条链路，
+    /// 发送时才读正文，和「把路径写进正文让模型自己去读」是两回事。
+    /// </summary>
+    public static MentionItemViewModel FromFile(string fullPath)
+    {
+        var name = System.IO.Path.GetFileName(fullPath);
+        var style = FileTypeStyle.For(System.IO.Path.GetExtension(name));
+        var size = 0L;
+        try
+        {
+            size = new FileInfo(fullPath).Length;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // 读不到大小不影响引用本身，发送时还会再检查一次存在性
+        }
+
+        return new MentionItemViewModel
+        {
+            Id = "file:" + fullPath,
+            Name = name,
+            Path = fullPath,
+            FullPath = fullPath,
+            Kind = style.Label,
+            Size = size,
+            TileBackground = style.Background,
+            IconBrush = style.Foreground,
+        };
+    }
+
     public string Id { get; private init; } = string.Empty;
 
     public string Name { get; private init; } = string.Empty;

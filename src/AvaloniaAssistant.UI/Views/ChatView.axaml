@@ -221,10 +221,47 @@
                   BorderThickness="1"
                   CornerRadius="9"
                   Padding="10,8">
-            <TextBlock Text="{Binding Error}"
-                       TextWrapping="Wrap"
-                       FontSize="12"
-                       Foreground="{StaticResource DangerBrush}" />
+            <StackPanel Spacing="6">
+              <Grid ColumnDefinitions="Auto,*,Auto">
+                <arc:ArcGlyph Data="{x:Static arc:ArcIcons.CircleAlert}"
+                              Size="13"
+                              Foreground="{StaticResource DangerBrush}"
+                              VerticalAlignment="Top"
+                              Margin="0,1,0,0" />
+                <TextBlock Grid.Column="1"
+                           Text="{Binding ErrorTitle}"
+                           FontSize="12"
+                           FontWeight="Medium"
+                           Foreground="{StaticResource DangerBrush}"
+                           TextWrapping="Wrap"
+                           Margin="7,0,8,0"
+                           VerticalAlignment="Center" />
+                <!-- 401 点一百次重试也没用，按钮要指向真正能解决它的地方 -->
+                <Button Grid.Column="2"
+                        Classes="ghost-action"
+                        Command="{Binding RunErrorActionCommand}"
+                        IsVisible="{Binding ShowErrorAction}"
+                        Content="{Binding ErrorActionLabel}"
+                        Foreground="{StaticResource DangerBrush}"
+                        VerticalAlignment="Top" />
+              </Grid>
+
+              <TextBlock Text="{Binding ErrorHint}"
+                         IsVisible="{Binding ErrorHint, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                         FontSize="11.5"
+                         LineHeight="17"
+                         TextWrapping="Wrap"
+                         Foreground="{StaticResource TextSecondaryBrush}" />
+
+              <!-- 原始报错留着，但压到最后一行，不占主位 -->
+              <ScrollViewer MaxHeight="88" VerticalScrollBarVisibility="Auto">
+                <SelectableTextBlock Text="{Binding Error}"
+                                     FontFamily="{StaticResource MonoFontFamily}"
+                                     FontSize="10.5"
+                                     TextWrapping="Wrap"
+                                     Foreground="{StaticResource TextMutedBrush}" />
+              </ScrollViewer>
+            </StackPanel>
           </Border>
 
           <!-- 用户按停不是故障：中性一行说明，不套危险色 -->

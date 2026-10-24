@@ -20,6 +20,10 @@ internal static class Program
     [STAThread]
     public static void Main(string[] args)
     {
+        // 第一件事：本机 / 内网地址直连，别被系统代理（Clash 之类）接管。
+        // 必须在任何 HttpClient 被创建之前。
+        LocalNetworkProxy.Apply();
+
         ParseArguments(args);
         AppPaths.EnsureCreated();
 

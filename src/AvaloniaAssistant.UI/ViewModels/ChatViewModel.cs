@@ -278,7 +278,7 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
             return;
         }
 
-        if (!ReferenceEquals(Messages.LastOrDefault(), message))
+        if (!ReferenceEquals(LastMeaningfulMessage(), message))
         {
             return;
         }
@@ -304,6 +304,7 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
         AssistantMessageViewModel? assistant = continuation;
         ChatEntry? assistantEntry = null;
         var stopReason = AgentStopReason.Completed;
+        var failed = false;
 
         try
         {
@@ -456,8 +457,8 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
 
                         if (!string.IsNullOrWhiteSpace(completed.Error))
                         {
-                            assistant.Error = completed.Error;
-                            assistantEntry.Error = completed.Error;
+                            SetError(assistant, assistantEntry, completed.Error);
+                            failed = true;
                         }
 
                         if (completed.StopReason == AgentStopReason.Aborted && string.IsNullOrWhiteSpace(assistant.Error))
@@ -468,16 +469,15 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
                         }
                         else if (completed.StopReason == AgentStopReason.Length)
                         {
-                            assistant.Error = "回复达到长度上限，已截断。";
-                            assistantEntry.Error = assistant.Error;
+                            SetError(assistant, assistantEntry, "回复达到长度上限，已截断。");
                         }
 
                         break;
                     }
 
-                    case AgentStreamEvent.RunFailed failed:
-                        assistant.Error = failed.Message;
-                        assistantEntry.Error = failed.Message;
+                    case AgentStreamEvent.RunFailed runFailed:
+                        SetError(assistant, assistantEntry, runFailed.Message);
+                        failed = true;
                         StatusText = "运行失败";
                         break;
                 }
@@ -495,9 +495,10 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
         {
             if (assistant is not null)
             {
-                assistant.Error = ex.Message;
+                SetError(assistant, assistantEntry, ex.Message);
             }
 
+            failed = true;
             StatusText = "运行失败";
         }
         finally
@@ -513,7 +514,7 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
                     }
                     else
                     {
-                        assistant.Error = "模型没有返回内容。";
+                        SetError(assistant, assistantEntry, "模型没有返回内容。");
                     }
                 }
             }
@@ -532,7 +533,9 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
             Session.UpdatedAt = DateTimeOffset.Now;
             IsBusy = false;
             Composer.IsBusy = false;
-            StatusText = stopReason == AgentStopReason.Aborted ? "已停止" : "完成";
+            StatusText = failed
+                ? "运行失败"
+                : stopReason == AgentStopReason.Aborted ? "已停止" : "完成";
             if (IsAtBottom)
             {
                 FloatingHint = null;
@@ -584,6 +587,12 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
                     assistant.ContinueRequested = () => ContinueFromAsync(assistant);
                     assistant.SetPersisted(entry.Text, entry.Reasoning);
                     assistant.IsStopped = entry.Stopped;
+
+                    // 存档里只有原始报错，分类和按钮要在这里补回来
+                    if (!string.IsNullOrWhiteSpace(entry.Error))
+                    {
+                        SetError(assistant, null, entry.Error!);
+                    }
 
                     foreach (var record in entry.ToolCalls)
                     {
@@ -649,13 +658,68 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
     /// <summary>
     /// 「继续」只挂在最后一条消息上，而且这条必须是助手回复：
     /// 后面已经有新提问（或别的条目）时，接着写会把后面的内容冲掉。
+    /// 权限变更那类提示不算「后文」，它们只是插在后面的说明，不影响继续。
     /// </summary>
     private void RefreshContinueAvailability()
     {
-        var last = Messages.Count > 0 ? Messages[^1] as AssistantMessageViewModel : null;
+        var last = LastMeaningfulMessage() as AssistantMessageViewModel;
         foreach (var message in Messages.OfType<AssistantMessageViewModel>())
         {
             message.IsLatest = ReferenceEquals(message, last);
+        }
+    }
+
+    /// <summary>跳过只有提示性质的系统消息，找真正的内容尾巴。</summary>
+    private MessageViewModel? LastMeaningfulMessage()
+    {
+        for (var index = Messages.Count - 1; index >= 0; index--)
+        {
+            if (Messages[index] is not NoticeMessageViewModel)
+            {
+                return Messages[index];
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// 失败时不要只丢一段原文：分成几类，给一句人话和一个真的能解决问题的按钮。
+    /// </summary>
+    private void SetError(AssistantMessageViewModel message, ChatEntry? entry, string raw)
+    {
+        message.Error = raw;
+        if (entry is not null)
+        {
+            entry.Error = raw;
+        }
+
+        var info = RunErrorInfo.Classify(raw);
+        message.ErrorTitle = info.Title;
+        message.ErrorHint = info.Hint;
+        message.ErrorActionLabel = info.ActionLabel;
+        message.ErrorActionKind = info.Kind;
+        message.ErrorActionRequested = () => HandleErrorActionAsync(message);
+    }
+
+    private async Task HandleErrorActionAsync(AssistantMessageViewModel message)
+    {
+        switch (message.ErrorActionKind)
+        {
+            case RunErrorKind.Auth:
+            case RunErrorKind.ModelNotFound:
+            case RunErrorKind.Quota:
+            case RunErrorKind.LengthLimit:
+                await _host.OpenSettingsAsync();
+                break;
+
+            case RunErrorKind.ContextTooLong:
+                _host.NewTaskCommand.Execute(null);
+                break;
+
+            default:
+                await RetryFromAsync(message);
+                break;
         }
     }
 

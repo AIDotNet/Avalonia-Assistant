@@ -20,6 +20,14 @@ public interface IAssistantRuntime
     void Abort(string sessionId);
 
     /// <summary>
+    /// 用一份（可能还没保存的）设置发一次最小请求，验证 Key、地址、模型、协议能不能通。
+    /// 设置页的「测试连接」走这里，不依赖当前会话。
+    /// </summary>
+    Task<ConnectionTestResult> TestConnectionAsync(
+        AssistantSettings settings,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// 丢弃缓存中的会话，下次运行重新装配。装了新技能 / 改了 MCP 配置后调用，
     /// 否则要等应用重启才生效。
     /// </summary>

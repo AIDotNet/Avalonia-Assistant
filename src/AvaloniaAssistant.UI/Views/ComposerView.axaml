@@ -288,7 +288,7 @@
           <StackPanel Orientation="Horizontal" Spacing="2">
             <Button Classes="icon"
                     Command="{Binding AttachCommand}"
-                    ToolTip.Tip="把文件路径交给助手">
+                    ToolTip.Tip="把文件交给助手（可多选）">
               <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Paperclip}" Size="16" />
             </Button>
             <Button Classes="icon"
@@ -367,6 +367,19 @@
         </Grid>
       </Grid>
     </Border>
+
+    <!-- 正在读引用 / 正在录音：这些等待以前在界面上没有痕迹 -->
+    <StackPanel Orientation="Horizontal"
+                Spacing="6"
+                IsVisible="{Binding HasActivity}"
+                Margin="6,7,4,0"
+                VerticalAlignment="Center">
+      <arc:ArcSpinner Width="12" Height="12" Foreground="{StaticResource TextMutedBrush}" />
+      <TextBlock Text="{Binding ActivityText}"
+                 FontSize="11"
+                 Foreground="{StaticResource TextSecondaryBrush}"
+                 VerticalAlignment="Center" />
+    </StackPanel>
 
     <!-- 没配模型服务：留在原地提示，不把人踢去设置页，也不动已经写好的字 -->
     <Border IsVisible="{Binding HasSetupHint}"

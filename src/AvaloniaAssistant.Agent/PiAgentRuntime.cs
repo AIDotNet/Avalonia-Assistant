@@ -47,6 +47,12 @@ public sealed class PiAgentRuntime : IAssistantRuntime
 
     public IReadOnlyList<AgentToolInfo> Tools => _registry.Tools;
 
+    /// <inheritdoc />
+    public Task<ConnectionTestResult> TestConnectionAsync(
+        AssistantSettings settings,
+        CancellationToken cancellationToken = default)
+        => ConnectionProbe.TestAsync(settings, cancellationToken);
+
     public AgentCapabilities Capabilities => CapabilityScanner.Scan(_settings.Current);
 
     public async IAsyncEnumerable<AgentStreamEvent> RunAsync(

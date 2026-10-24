@@ -71,6 +71,14 @@ public partial class ComposerView : UserControl
             return;
         }
 
+        // 录音中按 Esc：放弃这段录音，别让它继续占着麦克风
+        if (e.Key == Key.Escape && viewModel.IsRecording)
+        {
+            viewModel.CancelRecording();
+            e.Handled = true;
+            return;
+        }
+
         // Ctrl+V 顺手看看剪贴板里有没有图：有就收进待发送列表。
         // 文本仍然交给 Textarea 自己粘，不抢它的活。
         if (e.Key == Key.V && e.KeyModifiers.HasFlag(KeyModifiers.Control))

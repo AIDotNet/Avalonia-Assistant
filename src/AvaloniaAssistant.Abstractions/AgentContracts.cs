@@ -48,6 +48,23 @@ public sealed record ModelOption(
     string ProviderName,
     string Description);
 
+/// <summary>
+/// 「测试连接」的结果。成功时带一次往返耗时，失败时带一句人话和可折叠的原文。
+/// </summary>
+public sealed record ConnectionTestResult(bool Ok, string Title, string Detail, long ElapsedMs)
+{
+    public string Summary => Ok
+        ? $"{Title} · {ElapsedMs} ms"
+        : $"{Title}：{Detail}";
+
+    public static ConnectionTestResult Success(string model, long elapsedMs)
+        => new(true, $"连上了，{model} 有响应", string.Empty, elapsedMs);
+
+    public static ConnectionTestResult Failure(string title, string detail, long elapsedMs)
+        => new(false, title, detail, elapsedMs);
+}
+
+
 public sealed record ToolParameterInfo(
     string Name,
     string Type,

@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Text.RegularExpressions;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using Avalonia.Threading;
 using AvaloniaAssistant.Abstractions;
 using AvaloniaAssistant.Storage;
 using AvaloniaAssistant.UI.Services;
@@ -122,6 +123,13 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
 
     public bool HasSetupHint => !string.IsNullOrWhiteSpace(SetupHint);
 
+    /// <summary>正在读引用 / 正在录音时的一行状态。之前这两种等待在界面上完全没有痕迹。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasActivity))]
+    private string? activityText;
+
+    public bool HasActivity => !string.IsNullOrWhiteSpace(ActivityText);
+
     /// <summary>本次对话里被「都允许」放行的工具数。挂在权限 pill 上，别让人忘了自己关过确认。</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasSessionAllowedTools))]
@@ -212,7 +220,7 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
         }
 
         var value = Text?.Trim() ?? string.Empty;
-        if (value.Length == 0 && Images.Count == 0)
+        if (value.Length == 0 && Images.Count == 0 && References.Count == 0)
         {
             return;
         }
@@ -230,7 +238,7 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
 
         if (value.Length == 0)
         {
-            value = "看下这张图。";
+            value = Images.Count > 0 ? "看下这张图。" : "看下这些文件。";
         }
 
         // 引用的是工作区文件时，正文要现场读：文件可能刚被改过，索引里的旧内容不作数。
@@ -288,7 +296,7 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
     }
 
     private bool CanSend() => !IsBusy && !IsSending && !IsRecording
-        && (!string.IsNullOrWhiteSpace(Text) || Images.Count > 0);
+        && (!string.IsNullOrWhiteSpace(Text) || Images.Count > 0 || References.Count > 0);
 
     partial void OnTextChanged(string? value)
     {
@@ -429,15 +437,17 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
         return true;
     }
 
-    private void AddReference(MentionItemViewModel item)
+    private bool AddReference(MentionItemViewModel item)
     {
         if (References.Any(reference => reference.Id == item.Id))
         {
-            return;
+            return false;
         }
 
         References.Add(item);
         OnPropertyChanged(nameof(HasReferences));
+        SendCommand.NotifyCanExecuteChanged();
+        return true;
     }
 
     [RelayCommand]
@@ -480,6 +490,7 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
         }
 
         OnPropertyChanged(nameof(HasReferences));
+        SendCommand.NotifyCanExecuteChanged();
     }
 
     /// <summary>工具条上的「@」：在光标末尾补一个 @ 并直接把浮层打开，不用先打字再想词。</summary>
@@ -653,15 +664,18 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private async Task AttachAsync()
     {
-        var file = await _picker.PickFileAsync("选择要交给助手的文件");
-        if (string.IsNullOrWhiteSpace(file))
+        // 一次可以选多个；每个都变成引用标签，和 @ 引用走同一条「发送时读正文」的链路，
+        // 不再是往正文里塞一行路径让模型自己去读。
+        var files = await _picker.PickFilesAsync("选择要交给助手的文件");
+        if (files.Count == 0)
         {
             return;
         }
 
-        Text = string.IsNullOrWhiteSpace(Text)
-            ? $"请阅读这个文件并帮我处理：{file}"
-            : $"{Text.TrimEnd()}\n\n文件：{file}";
+        foreach (var path in files)
+        {
+            AddReference(MentionItemViewModel.FromFile(path));
+        }
 
         // 选完文件光标应该还在输入框末尾，不该停在纸夹按钮上。
         RequestFocus();
@@ -704,7 +718,65 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private async Task UseDefaultPermissionAsync() => await SetPermissionAsync(PermissionMode.Workspace);
 
-    public void Dispose() => _settings.Changed -= _settingsChanged;
+    public void Dispose()
+    {
+        _settings.Changed -= _settingsChanged;
+        StopRecordingTicker();
+    }
+
+    partial void OnIsSendingChanged(bool value) => UpdateActivity();
+
+    partial void OnIsRecordingChanged(bool value)
+    {
+        if (value)
+        {
+            StartRecordingTicker();
+        }
+        else
+        {
+            StopRecordingTicker();
+        }
+
+        UpdateActivity();
+    }
+
+    private DispatcherTimer? _recordingTicker;
+    private DateTimeOffset _recordingStartedAt;
+
+    private void StartRecordingTicker()
+    {
+        _recordingStartedAt = DateTimeOffset.Now;
+        _recordingTicker?.Stop();
+        _recordingTicker = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        _recordingTicker.Tick += (_, _) => UpdateActivity();
+        _recordingTicker.Start();
+    }
+
+    private void StopRecordingTicker()
+    {
+        _recordingTicker?.Stop();
+        _recordingTicker = null;
+    }
+
+    /// <summary>把「正在等什么」写到输入框下面。读大文件、录音这两件事以前在界面上是无声的。</summary>
+    private void UpdateActivity()
+    {
+        if (IsRecording)
+        {
+            var elapsed = DateTimeOffset.Now - _recordingStartedAt;
+            ActivityText = $"正在录音 {elapsed:mm\\:ss} · 再点麦克风结束，Esc 取消";
+        }
+        else if (IsSending)
+        {
+            ActivityText = References.Count > 0
+                ? $"正在读取 {References.Count} 份引用…"
+                : "正在准备…";
+        }
+        else
+        {
+            ActivityText = null;
+        }
+    }
 
     public void Refresh()
     {

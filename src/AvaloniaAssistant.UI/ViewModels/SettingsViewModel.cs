@@ -65,6 +65,7 @@ public sealed partial class SettingsViewModel : ObservableObject
             Settings.ApiKey = value;
             OnPropertyChanged();
             Touch();
+            ClearTestResult();
         }
     }
 
@@ -76,6 +77,7 @@ public sealed partial class SettingsViewModel : ObservableObject
             Settings.BaseUrl = value;
             OnPropertyChanged();
             Touch();
+            ClearTestResult();
         }
     }
 
@@ -87,6 +89,7 @@ public sealed partial class SettingsViewModel : ObservableObject
             Settings.Model = value;
             OnPropertyChanged();
             Touch();
+            ClearTestResult();
         }
     }
 
@@ -129,6 +132,15 @@ public sealed partial class SettingsViewModel : ObservableObject
     private bool showLeavePrompt;
 
     private void Touch() => OnPropertyChanged(nameof(HasUnsavedChanges));
+
+    /// <summary>改了和连接有关的字段，上一次的测试结论就不作数了。</summary>
+    private void ClearTestResult()
+    {
+        if (TestResultText is not null)
+        {
+            TestResultText = null;
+        }
+    }
 
 
     public string WorkspacePath => Settings.WorkspacePath;
@@ -180,6 +192,62 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     public Geometry SaveToastIcon => IsSaveError ? ArcIcons.CircleAlert : ArcIcons.CircleCheck;
 
+    /// <summary>「测试连接」正在进行。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(TestButtonText))]
+    [NotifyPropertyChangedFor(nameof(TestBrush))]
+    private bool isTesting;
+
+    public string TestButtonText => IsTesting ? "测试中…" : "测试连接";
+
+    /// <summary>测试结果。改任何一项设置都会清掉，免得旧的「连上了」挂在改过的表单上。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowTestResult))]
+    [NotifyPropertyChangedFor(nameof(TestBrush))]
+    private string? testResultText;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(TestBrush))]
+    private bool testOk;
+
+    public bool ShowTestResult => !string.IsNullOrWhiteSpace(TestResultText);
+
+    public IBrush TestBrush => IsTesting
+        ? new SolidColorBrush(Color.Parse("#6F6F69"))
+        : TestOk
+            ? new SolidColorBrush(Color.Parse("#2E7D32"))
+            : new SolidColorBrush(Color.Parse("#B3261E"));
+
+    /// <summary>用表单里这份（还没保存的）设置发一次最小请求，别让人保存完再靠发消息去试。</summary>
+    [RelayCommand]
+    private async Task TestConnectionAsync()
+    {
+        if (IsTesting || IsSaving)
+        {
+            return;
+        }
+
+        IsTesting = true;
+        TestOk = true;
+        TestResultText = "正在请求…";
+
+        try
+        {
+            var result = await _host.Runtime.TestConnectionAsync(Settings);
+            TestOk = result.Ok;
+            TestResultText = result.Summary;
+        }
+        catch (Exception ex)
+        {
+            TestOk = false;
+            TestResultText = "测试失败：" + ex.Message;
+        }
+        finally
+        {
+            IsTesting = false;
+        }
+    }
+
     private DispatcherTimer? _toastTimer;
 
     [RelayCommand]
@@ -200,6 +268,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         OnPropertyChanged(nameof(Model));
         NotifyProtocolChanged();
         Touch();
+        ClearTestResult();
     }
 
     [RelayCommand]
@@ -214,6 +283,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 
         NotifyProtocolChanged();
         Touch();
+        ClearTestResult();
     }
 
     private void NotifyProtocolChanged()
