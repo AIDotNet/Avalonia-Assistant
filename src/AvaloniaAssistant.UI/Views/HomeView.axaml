@@ -4,7 +4,8 @@
              xmlns:views="using:AvaloniaAssistant.UI.Views"
              xmlns:controls="using:AvaloniaAssistant.UI.Controls"
              x:Class="AvaloniaAssistant.UI.Views.HomeView">
-  <Grid RowDefinitions="Auto,*">
+  <!-- Background=Transparent：空白处也要能命中，拖文件到卡片之间才算落在这一页上 -->
+  <Grid RowDefinitions="Auto,*" Background="Transparent">
     <Grid Margin="28,16,28,0" ColumnDefinitions="*,Auto">
       <TextBlock Text="{Binding Greeting}"
                  Classes="caption"
@@ -58,6 +59,16 @@
             <TextBlock Text="设计" HorizontalAlignment="Center" VerticalAlignment="Center" />
           </Button>
         </StackPanel>
+
+        <TextBlock Text="{Binding ModeHint}"
+                   Classes="caption"
+                   FontSize="11"
+                   Foreground="{StaticResource TextSecondaryBrush}"
+                   HorizontalAlignment="Center"
+                   TextAlignment="Center"
+                   TextWrapping="Wrap"
+                   MaxWidth="520"
+                   Margin="0,8,0,0" />
 
         <Border IsVisible="{Binding ShowSetupBanner}"
                 Background="{StaticResource WarningSubtleBrush}"

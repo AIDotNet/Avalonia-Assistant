@@ -109,6 +109,15 @@ internal static class Program
                 case "--chat-dates":
                     AppLaunchOptions.ChatDates = true;
                     break;
+                case "--chat-empty":
+                    AppLaunchOptions.ChatEmpty = true;
+                    break;
+                case "--permission-pending":
+                    AppLaunchOptions.PermissionPending = true;
+                    break;
+                case "--model-flyout":
+                    AppLaunchOptions.ModelFlyout = true;
+                    break;
                 case "--scroll-bottom":
                     AppLaunchOptions.ScrollToEnd = true;
                     break;

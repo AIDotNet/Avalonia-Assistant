@@ -107,7 +107,6 @@ public partial class AssistantApp : Application
                 case "chat":
                     viewModel.LoadDemoSidebar();
                     viewModel.LoadDemoChat(AppLaunchOptions.ChatDates);
-
                     if (viewModel.CurrentPage is ChatViewModel demoChat)
                     {
                         if (!string.IsNullOrWhiteSpace(AppLaunchOptions.ChatQueued))
@@ -115,6 +114,13 @@ public partial class AssistantApp : Application
                             // 连"正在生成"一起摆出来：排队条只在生成期间出现，单摆一条会看不到真实版式
                             demoChat.Composer.IsBusy = true;
                             demoChat.Composer.QueuedHint = "已排队：" + AppLaunchOptions.ChatQueued;
+                        }
+
+                        if (AppLaunchOptions.PermissionPending)
+                        {
+                            // 生成中切了档位：本轮仍按旧档位跑，pill 上要标「下一轮生效」
+                            demoChat.Composer.IsBusy = true;
+                            demoChat.Composer.PermissionPendingNextRun = true;
                         }
 
                         if (!string.IsNullOrWhiteSpace(AppLaunchOptions.ChatSearch))
@@ -129,6 +135,10 @@ public partial class AssistantApp : Application
                         }
                     }
 
+                    break;
+                case "chat-empty":
+                    // 新任务还没说过话：看空状态里的上下文和三个入口提示
+                    _ = viewModel.StartNewChatAsync((string?)null);
                     break;
                 case "settings":
                     await viewModel.OpenSettingsAsync();
@@ -274,6 +284,23 @@ public partial class AssistantApp : Application
                 return;
             }
 
+            // 验收用：模型浮层同样是独立的 TopLevel，截主窗口看不到
+            if (AppLaunchOptions.ModelFlyout)
+            {
+                await Task.Delay(400);
+                var composer = window.GetVisualDescendants().OfType<ComposerView>().FirstOrDefault();
+                var flyout = composer?.ShowModelFlyout();
+
+                await Task.Delay(700);
+                if (flyout?.Content is Visual content && TopLevel.GetTopLevel(content) is Visual root)
+                {
+                    CaptureVisual(root, AppLaunchOptions.ScreenshotPath);
+                }
+
+                desktop.Shutdown();
+                return;
+            }
+
             // 验收用：工作区浮层挂在另一个 TopLevel 上，截主窗口看不到它，
             // 单独摆进一个无边框窗口再截，版式才是真实的。
             if (AppLaunchOptions.ShowWorkspacePicker)
@@ -381,18 +408,23 @@ public partial class AssistantApp : Application
 
     private static void Capture(Window window, string path)
     {
-        var directory = Path.GetDirectoryName(path);
-        if (!string.IsNullOrWhiteSpace(directory))
-        {
-            Directory.CreateDirectory(directory);
-        }
-
         // 渲染窗口的视觉根（带背景的那一层），而不是 Window 本身：
         // Window 会让 RenderTargetBitmap 漏掉合成层（按钮、图标），
         // 只渲染 Content 又会在右下留下透明边。视觉根两者都能兼顾。
         var root = window.GetVisualChildren().OfType<Visual>().FirstOrDefault()
                    ?? (Visual?)window.Content
                    ?? window;
+
+        CaptureVisual(root, path);
+    }
+
+    private static void CaptureVisual(Visual root, string path)
+    {
+        var directory = Path.GetDirectoryName(path);
+        if (!string.IsNullOrWhiteSpace(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
 
         var size = new PixelSize(
             Math.Max(1, (int)Math.Round(root.Bounds.Width)),

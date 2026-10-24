@@ -168,7 +168,11 @@ public sealed partial class ToolCallViewModel : ObservableObject
     private bool isRunning = true;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ExpandHint))]
     private bool isExpanded;
+
+    /// <summary>行尾的箭头只是提示，鼠标悬停时还要有一句话说明点开能看什么。</summary>
+    public string ExpandHint => IsExpanded ? "收起参数与结果" : "展开查看参数与结果";
 
     public string StatusText => IsRunning ? "运行中" : IsError ? "失败" : "完成";
 
@@ -329,7 +333,10 @@ public sealed partial class AssistantMessageViewModel : MessageViewModel
     private bool isStreaming = true;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasModel))]
     private string? model;
+
+    public bool HasModel => !string.IsNullOrWhiteSpace(Model);
 
     [ObservableProperty]
     private bool isReasoningOpen;
@@ -503,6 +510,16 @@ public sealed partial class ApprovalMessageViewModel : MessageViewModel
 
     public bool ShowActions => !IsResolved;
 
+    /// <summary>已经答过的卡片收成一行，点开才看完整的命令参数。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ExpandHint))]
+    private bool isExpanded;
+
+    public string ExpandHint => IsExpanded ? "收起命令详情" : "展开命令详情";
+
+    [RelayCommand]
+    private void ToggleExpanded() => IsExpanded = !IsExpanded;
+
     /// <summary>「本会话都允许 run_command」的按钮文案，带上工具名，别让人误以为是全局开关。</summary>
     public string AlwaysLabel => $"本会话都允许 {ToolName}";
 
@@ -521,7 +538,7 @@ public sealed partial class ApprovalMessageViewModel : MessageViewModel
         }
 
         IsResolved = true;
-        ResolutionText = $"本会话都允许 {ToolName}";
+        ResolutionText = "本会话已允许";
         AllowAlwaysRequested?.Invoke();
         _resolve(true);
     }

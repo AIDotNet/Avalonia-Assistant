@@ -18,11 +18,17 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
     /// <summary>「本会话都允许」记住的工具名。只在这次对话里有效，不写进设置。</summary>
     private readonly HashSet<string> _sessionAllowedTools = new(StringComparer.Ordinal);
 
-    /// <summary>生成期间按 Enter 排进来的那条，本轮结束后自动发出。只留一条，后到的替换先到的。</summary>
-    private PromptRequest? _queuedPrompt;
+    /// <summary>生成期间按 Enter 排进来的消息，按先后顺序发。以前只留一条，后到的会把先到的挤掉。</summary>
+    private readonly List<PromptRequest> _queuedPrompts = [];
 
     /// <summary>上一轮是不是失败结束的。失败时排队的消息不再往下发，先还回输入框。</summary>
     private bool _lastRunFailed;
+
+    /// <summary>这一轮开始时的权限。生成中切档位不改变本轮行为，只能下一轮生效。</summary>
+    private PermissionMode _runStartPermission;
+
+    /// <summary>生成中切过的档位。本轮结束后再补一条提示，不静默吞掉。</summary>
+    private PermissionMode? _pendingPermission;
 
     public ChatViewModel(MainWindowViewModel host, ChatSession? session, bool consumePendingDraft = true)
     {
@@ -135,19 +141,30 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
     {
         if (IsBusy)
         {
+            // 这一轮用的是开始时的权限快照，切档位只对下一轮生效。
+            // 先挂到 pill 上，本轮结束时再补一条提示；不能像以前那样直接 return。
+            _pendingPermission = permission;
+            Composer.PermissionPendingNextRun = permission != _runStartPermission;
             return;
         }
 
-        var text = permission switch
-        {
-            PermissionMode.FullAccess => "已切换为完全访问：执行命令、修改文件都不再逐次确认。",
-            PermissionMode.ReadOnly => "已切换为只读：不会修改文件，也不会执行命令。",
-            _ => "已切换为默认权限：执行命令、调用 MCP 工具前会先问你。",
-        };
+        _pendingPermission = null;
+        Composer.PermissionPendingNextRun = false;
+        AppendPermissionNotice(permission);
+    }
 
-        Messages.Add(new NoticeMessageViewModel(text));
+    private void AppendPermissionNotice(PermissionMode permission)
+    {
+        Messages.Add(new NoticeMessageViewModel(PermissionNoticeText(permission)));
         RequestScroll(true);
     }
+
+    private static string PermissionNoticeText(PermissionMode permission) => permission switch
+    {
+        PermissionMode.FullAccess => "已切换为完全访问：执行命令、修改文件都不再逐次确认。",
+        PermissionMode.ReadOnly => "已切换为只读：不会修改文件，也不会执行命令。",
+        _ => "已切换为默认权限：执行命令、调用 MCP 工具前会先问你。",
+    };
 
     public ObservableCollection<MessageViewModel> Messages { get; } = [];
 
@@ -167,6 +184,9 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
     }
 
     public bool HasMessages => Messages.Count > 0;
+
+    /// <summary>刚建、还没说过话：整块消息区显示上下文和三个入口提示，而不是一片空白。</summary>
+    public bool ShowEmptyState => Messages.Count == 0;
 
     /// <summary>用户当前是不是停在底部。由 ChatView 的滚动策略实时回写，审批和浮标都靠它判断。</summary>
     public bool IsAtBottom { get; set; } = true;
@@ -204,8 +224,13 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private string searchCounter = string.Empty;
 
-    /// <summary>每一处命中落在哪条消息上。同一条消息里命中两次就是两条记录。</summary>
+    /// <summary>
+    /// 命中的消息，按出现顺序排，同一条只算一次；右边记它在本条里出现了几次。
+    /// 以前同一条消息命中两次就进两次列表，指针数到 7、屏幕上却只有一条变色。
+    /// </summary>
     private readonly List<MessageViewModel> _searchHits = [];
+
+    private readonly Dictionary<MessageViewModel, int> _searchHitCounts = [];
 
     private int _searchHitIndex = -1;
 
@@ -229,6 +254,7 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
         SearchQuery = string.Empty;
         SearchCounter = string.Empty;
         _searchHits.Clear();
+        _searchHitCounts.Clear();
         _searchHitIndex = -1;
         ClearSearchMarks();
         Composer.RequestFocus();
@@ -244,6 +270,7 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
     {
         ClearSearchMarks();
         _searchHits.Clear();
+        _searchHitCounts.Clear();
         _searchHitIndex = -1;
 
         var keyword = (query ?? string.Empty).Trim();
@@ -255,21 +282,19 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
 
         foreach (var message in Messages)
         {
+            var count = 0;
             foreach (var text in SearchableTexts(message))
             {
-                var index = 0;
-                while (index < text.Length)
-                {
-                    index = text.IndexOf(keyword, index, StringComparison.OrdinalIgnoreCase);
-                    if (index < 0)
-                    {
-                        break;
-                    }
-
-                    _searchHits.Add(message);
-                    index += keyword.Length;
-                }
+                count += CountOccurrences(text, keyword);
             }
+
+            if (count == 0)
+            {
+                continue;
+            }
+
+            _searchHits.Add(message);
+            _searchHitCounts[message] = count;
         }
 
         if (_searchHits.Count == 0)
@@ -279,6 +304,25 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
         }
 
         MoveSearchHit(1);
+    }
+
+    private static int CountOccurrences(string text, string keyword)
+    {
+        var count = 0;
+        var index = 0;
+        while (index < text.Length)
+        {
+            index = text.IndexOf(keyword, index, StringComparison.OrdinalIgnoreCase);
+            if (index < 0)
+            {
+                break;
+            }
+
+            count++;
+            index += keyword.Length;
+        }
+
+        return count;
     }
 
     private void MoveSearchHit(int delta)
@@ -306,7 +350,10 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
             message.IsSearchHit = ReferenceEquals(message, target);
         }
 
-        SearchCounter = $"第 {next + 1} / {_searchHits.Count} 处";
+        var occurrences = _searchHitCounts.TryGetValue(target, out var value) ? value : 0;
+        SearchCounter = $"第 {next + 1} 条 / 共 {_searchHits.Count} 条"
+                        + (occurrences > 1 ? $" · 本条 {occurrences} 处" : string.Empty);
+
         ScrollToMessageRequested?.Invoke(this, target);
     }
 
@@ -373,41 +420,68 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
         _runtime.Abort(Session.Id);
         StatusText = "正在停止…";
 
-        // 停止是明确的"不要继续"，排在后面的那条也不该再自己发出去。
-        if (DropQueuedPrompt())
+        // 停止是明确的"不要继续"，排在后面的消息也不该再自己发出去。
+        var dropped = DropQueuedPrompts();
+        if (dropped > 0)
         {
-            Messages.Add(new NoticeMessageViewModel("已停止，排队的那条消息没有发送。"));
+            Messages.Add(new NoticeMessageViewModel($"已停止，排队的 {dropped} 条消息没有发送。"));
             RequestScroll(true);
         }
     }
 
-    /// <summary>生成期间按了发送：记下来，本轮结束后接着发。</summary>
+    /// <summary>生成期间按了发送：按先后顺序记下来，本轮结束后一条一条接着发。</summary>
     private void OnQueueRequested(object? sender, PromptRequest request)
     {
-        _queuedPrompt = request;
-
-        var preview = request.Text.ReplaceLineEndings(" ").Trim();
-        if (preview.Length > 28)
-        {
-            preview = preview[..28] + "…";
-        }
-
-        Composer.QueuedHint = $"已排队：{preview}";
+        _queuedPrompts.Add(request);
+        UpdateQueueHint();
     }
 
-    private void OnQueueCancelled(object? sender, EventArgs e) => _queuedPrompt = null;
-
-    /// <summary>丢掉排队内容，返回刚才是否有东西被丢掉。</summary>
-    private bool DropQueuedPrompt()
+    private void OnQueueCancelled(object? sender, EventArgs e)
     {
-        if (_queuedPrompt is null)
+        _queuedPrompts.Clear();
+        UpdateQueueHint();
+    }
+
+    /// <summary>提示条上写清楚排了几条、最后一条是什么；只有一条时保持原来的写法。</summary>
+    private void UpdateQueueHint()
+    {
+        Composer.QueuedCount = _queuedPrompts.Count;
+
+        if (_queuedPrompts.Count == 0)
         {
-            return false;
+            Composer.QueuedHint = null;
+            return;
         }
 
-        _queuedPrompt = null;
-        Composer.QueuedHint = null;
-        return true;
+        var preview = Preview(_queuedPrompts[^1].Text);
+        Composer.QueuedHint = _queuedPrompts.Count == 1
+            ? $"已排队：{preview}"
+            : $"已排队 {_queuedPrompts.Count} 条 · 最后一条：{preview}";
+    }
+
+    private static string Preview(string text)
+    {
+        var flat = (text ?? string.Empty).ReplaceLineEndings(" ").Trim();
+        if (flat.Length == 0)
+        {
+            return "（图片）";
+        }
+
+        return flat.Length <= 24 ? flat : flat[..24] + "…";
+    }
+
+    /// <summary>丢掉全部排队内容，返回丢掉几条。</summary>
+    private int DropQueuedPrompts()
+    {
+        var count = _queuedPrompts.Count;
+        if (count == 0)
+        {
+            return 0;
+        }
+
+        _queuedPrompts.Clear();
+        UpdateQueueHint();
+        return count;
     }
 
     public async Task SendPromptAsync(string text)
@@ -422,24 +496,37 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
 
         await RunPromptAsync(request with { Text = request.Text.Trim() }, addUserMessage: true);
 
-        // 这一轮结束，把排队的那条接着发。已经删掉的任务不再往下跑。
-        if (IsDiscarded || _queuedPrompt is not { } queued)
+        // 这一轮结束，按排队顺序接着发。已经删掉的任务不再往下跑。
+        if (IsDiscarded || _queuedPrompts.Count == 0)
         {
             return;
         }
 
-        _queuedPrompt = null;
-        Composer.QueuedHint = null;
+        var queued = _queuedPrompts[0];
+        _queuedPrompts.RemoveAt(0);
+        UpdateQueueHint();
 
         // 上一轮是失败结束的（401、断网），这时候再发也只会再失败一次，
-        // 反而把用户排队的那句话烧掉。先还回输入框，让他决定。
+        // 反而把用户排队的消息烧掉。全部还回输入框，让他决定。
         if (_lastRunFailed)
         {
-            Composer.Text = string.IsNullOrWhiteSpace(Composer.Text)
-                ? queued.Text
-                : Composer.Text.TrimEnd() + Environment.NewLine + Environment.NewLine + queued.Text;
+            var restored = new List<PromptRequest> { queued };
+            restored.AddRange(_queuedPrompts);
+            _queuedPrompts.Clear();
+            UpdateQueueHint();
 
-            Messages.Add(new NoticeMessageViewModel("上一轮没有跑完，排队的那条已放回输入框。"));
+            var text = string.Join(
+                Environment.NewLine + Environment.NewLine,
+                restored.Select(item => item.Text).Where(item => !string.IsNullOrWhiteSpace(item)));
+
+            if (!string.IsNullOrWhiteSpace(text))
+            {
+                Composer.Text = string.IsNullOrWhiteSpace(Composer.Text)
+                    ? text
+                    : Composer.Text.TrimEnd() + Environment.NewLine + Environment.NewLine + text;
+            }
+
+            Messages.Add(new NoticeMessageViewModel($"上一轮没有跑完，排队的 {restored.Count} 条已放回输入框。"));
             RequestScroll(true);
             Composer.RequestFocus();
             return;
@@ -552,6 +639,11 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
         IsBusy = true;
         Composer.IsBusy = true;
         StatusText = "正在准备…";
+
+        // 这一轮用开始时的权限快照。生成中再切档位，要等到下一轮。
+        _runStartPermission = _settings.Current.Permission;
+        _pendingPermission = null;
+        Composer.PermissionPendingNextRun = false;
 
         AssistantMessageViewModel? assistant = continuation;
         ChatEntry? assistantEntry = null;
@@ -783,9 +875,22 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
             }
 
             Session.UpdatedAt = DateTimeOffset.Now;
-            _lastRunFailed = failed;
+            _lastRunFailed = failed || !string.IsNullOrWhiteSpace(assistant?.Error);
             IsBusy = false;
             Composer.IsBusy = false;
+
+            // 生成中切过权限：这一轮按旧档位跑完了，现在把「已生效」补上。
+            Composer.PermissionPendingNextRun = false;
+            if (_pendingPermission is { } pending)
+            {
+                _pendingPermission = null;
+                if (pending != _runStartPermission)
+                {
+                    Messages.Add(new NoticeMessageViewModel(PermissionNoticeText(pending)));
+                    RequestScroll(true);
+                }
+            }
+
             StatusText = failed
                 ? "运行失败"
                 : stopReason == AgentStopReason.Aborted ? "已停止" : "完成";
@@ -944,6 +1049,7 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
     private void OnMessagesChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         OnPropertyChanged(nameof(HasMessages));
+        OnPropertyChanged(nameof(ShowEmptyState));
         RefreshContinueAvailability();
         RefreshDateHeaders();
 

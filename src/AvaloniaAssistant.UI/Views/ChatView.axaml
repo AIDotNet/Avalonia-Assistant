@@ -58,6 +58,28 @@
     <Style Selector="Button.attachment-chip:pointerover">
       <Setter Property="Background" Value="{StaticResource SurfaceMutedBrush}" />
     </Style>
+
+    <!-- 回复下面的操作项：以前和元信息同字号同灰度，分不清哪个能点 -->
+    <Style Selector="Button.msg-action">
+      <Setter Property="Transitions">
+        <Transitions>
+          <BrushTransition Property="Background" Duration="0:0:0.12" />
+        </Transitions>
+      </Setter>
+      <Setter Property="Height" Value="24" />
+      <Setter Property="Padding" Value="6,0" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.msg-action:pointerover">
+      <Setter Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+      <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+    </Style>
   </UserControl.Styles>
 
   <UserControl.DataTemplates>
@@ -222,8 +244,10 @@
             <ItemsControl.ItemTemplate>
               <DataTemplate>
                 <StackPanel>
-                  <Button Classes="tool-line" Command="{Binding ToggleCommand}">
-                    <Grid ColumnDefinitions="Auto,*,Auto,Auto" VerticalAlignment="Center">
+                  <Button Classes="tool-line"
+                          Command="{Binding ToggleCommand}"
+                          ToolTip.Tip="{Binding ExpandHint}">
+                    <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" VerticalAlignment="Center">
                       <arc:ArcGlyph Data="{Binding Icon}"
                                     Size="12"
                                     Foreground="{StaticResource TextMutedBrush}"
@@ -247,6 +271,21 @@
                                  FontSize="10"
                                  Margin="8,0,2,0"
                                  VerticalAlignment="Center" />
+                      <!-- 没有箭头时，这一行看起来就是一段灰字，没人知道能点开 -->
+                      <Panel Grid.Column="4"
+                             Width="12"
+                             Height="12"
+                             Margin="4,0,0,0"
+                             VerticalAlignment="Center">
+                        <arc:ArcGlyph Data="{x:Static arc:ArcIcons.ChevronDown}"
+                                      Size="11"
+                                      IsVisible="{Binding IsExpanded}"
+                                      Foreground="{StaticResource TextMutedBrush}" />
+                        <arc:ArcGlyph Data="{x:Static arc:ArcIcons.ChevronRight}"
+                                      Size="11"
+                                      IsVisible="{Binding !IsExpanded}"
+                                      Foreground="{StaticResource TextMutedBrush}" />
+                      </Panel>
                     </Grid>
                   </Button>
 
@@ -339,33 +378,57 @@
                      Margin="0,1,0,0" />
 
           <!-- 回复的操作菜单：复制要有内容才出现，重试只在这条回复真的结束（含失败/中断）后才出现 -->
-          <StackPanel IsVisible="{Binding ShowActions}" Orientation="Horizontal" Spacing="2" Margin="0,1,0,0">
-            <Button Classes="ghost-action"
-                    Command="{Binding CopyCommand}"
-                    IsVisible="{Binding HasText}"
-                    Content="{Binding CopyLabel}" />
-            <Button Classes="ghost-action"
-                    Command="{Binding RetryCommand}"
-                    ToolTip.Tip="重新生成这条回复（会丢弃它之后的内容）"
-                    Content="重试" />
-            <Button Classes="ghost-action"
-                    Command="{Binding ContinueCommand}"
-                    IsVisible="{Binding ShowContinue}"
-                    ToolTip.Tip="接着这条回复往下写，已写过的内容不重来"
-                    Content="继续" />
-            <TextBlock Text="{Binding TokenText}"
-                       IsVisible="{Binding HasTokens}"
-                       Classes="caption"
-                       FontSize="10"
-                       Margin="8,0,0,0"
-                       VerticalAlignment="Center" />
-            <TextBlock Text="{Binding TimeText}"
-                       ToolTip.Tip="{Binding FullTimeText}"
-                       Classes="caption"
-                       FontSize="9.5"
-                       Margin="8,0,0,0"
-                       VerticalAlignment="Center" />
-          </StackPanel>
+          <Grid IsVisible="{Binding ShowActions}"
+                ColumnDefinitions="Auto,*,Auto"
+                Margin="0,1,0,0">
+            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="1">
+              <Button Classes="msg-action"
+                      Command="{Binding CopyCommand}"
+                      IsVisible="{Binding HasText}">
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                  <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Copy}" Size="11" VerticalAlignment="Center" />
+                  <TextBlock Text="{Binding CopyLabel}" FontSize="11" VerticalAlignment="Center" />
+                </StackPanel>
+              </Button>
+              <Button Classes="msg-action"
+                      Command="{Binding RetryCommand}"
+                      ToolTip.Tip="重新生成这条回复（会丢弃它之后的内容）">
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                  <arc:ArcGlyph Data="{x:Static arc:ArcIcons.RefreshCw}" Size="11" VerticalAlignment="Center" />
+                  <TextBlock Text="重试" FontSize="11" VerticalAlignment="Center" />
+                </StackPanel>
+              </Button>
+              <Button Classes="msg-action"
+                      Command="{Binding ContinueCommand}"
+                      IsVisible="{Binding ShowContinue}"
+                      ToolTip.Tip="接着这条回复往下写，已写过的内容不重来">
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                  <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Play}" Size="11" VerticalAlignment="Center" />
+                  <TextBlock Text="继续" FontSize="11" VerticalAlignment="Center" />
+                </StackPanel>
+              </Button>
+            </StackPanel>
+
+            <!-- 元信息靠右，和操作分开；模型名也放进来，切换过模型后能回看哪条是谁答的 -->
+            <StackPanel Grid.Column="2"
+                        Orientation="Horizontal"
+                        Spacing="7"
+                        VerticalAlignment="Center">
+              <TextBlock Text="{Binding Model}"
+                         IsVisible="{Binding HasModel}"
+                         ToolTip.Tip="这条回复使用的模型"
+                         Classes="caption"
+                         FontSize="9.5" />
+              <TextBlock Text="{Binding TokenText}"
+                         IsVisible="{Binding HasTokens}"
+                         Classes="caption"
+                         FontSize="9.5" />
+              <TextBlock Text="{Binding TimeText}"
+                         ToolTip.Tip="{Binding FullTimeText}"
+                         Classes="caption"
+                         FontSize="9.5" />
+            </StackPanel>
+          </Grid>
         </StackPanel>
         </Grid>
       </Border>
@@ -385,7 +448,8 @@
               BorderThickness="1"
               CornerRadius="12"
               Padding="13"
-              Margin="38,6,0,10">
+              Margin="38,6,0,10"
+              IsVisible="{Binding ShowActions}">
         <StackPanel Spacing="8">
           <Grid ColumnDefinitions="Auto,*,Auto">
             <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Shield}"
@@ -441,11 +505,72 @@
                      Classes="caption"
                      FontSize="10"
                      HorizontalAlignment="Right" />
-          <TextBlock Text="{Binding ResolutionText}"
-                     IsVisible="{Binding !ShowActions}"
-                     Classes="caption"
-                     FontSize="11.5"
-                     Foreground="{StaticResource TextSecondaryBrush}" />
+        </StackPanel>
+      </Border>
+
+      <!-- 已经答过的审批：收成一行，别再用一整块黄色占着对话 -->
+      <Border IsVisible="{Binding !ShowActions}"
+              Background="{StaticResource SurfaceMutedBrush}"
+              BorderBrush="{StaticResource BorderBrush}"
+              BorderThickness="1"
+              CornerRadius="10"
+              Padding="7,4"
+              Margin="38,2,0,12">
+        <StackPanel Spacing="4">
+          <Button Classes="tool-line"
+                  Command="{Binding ToggleExpandedCommand}"
+                  ToolTip.Tip="{Binding ExpandHint}">
+            <Grid ColumnDefinitions="Auto,*,Auto,Auto" VerticalAlignment="Center">
+              <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Shield}"
+                            Size="12"
+                            Foreground="{StaticResource TextMutedBrush}"
+                            VerticalAlignment="Center" />
+              <TextBlock Grid.Column="1"
+                         Margin="8,0,8,0"
+                         Text="{Binding ResolutionText}"
+                         FontSize="11.5"
+                         Foreground="{StaticResource TextSecondaryBrush}"
+                         VerticalAlignment="Center" />
+              <Border Grid.Column="2"
+                      Background="{StaticResource SurfaceBrush}"
+                      CornerRadius="5"
+                      Padding="6,1"
+                      VerticalAlignment="Center">
+                <TextBlock Text="{Binding ToolName}"
+                           FontFamily="{StaticResource MonoFontFamily}"
+                           FontSize="9.5"
+                           Foreground="{StaticResource TextMutedBrush}" />
+              </Border>
+              <Panel Grid.Column="3"
+                     Width="12"
+                     Height="12"
+                     Margin="6,0,0,0"
+                     VerticalAlignment="Center">
+                <arc:ArcGlyph Data="{x:Static arc:ArcIcons.ChevronDown}"
+                              Size="11"
+                              IsVisible="{Binding IsExpanded}"
+                              Foreground="{StaticResource TextMutedBrush}" />
+                <arc:ArcGlyph Data="{x:Static arc:ArcIcons.ChevronRight}"
+                              Size="11"
+                              IsVisible="{Binding !IsExpanded}"
+                              Foreground="{StaticResource TextMutedBrush}" />
+              </Panel>
+            </Grid>
+          </Button>
+
+          <Border IsVisible="{Binding IsExpanded}"
+                  Background="{StaticResource SurfaceBrush}"
+                  CornerRadius="8"
+                  Padding="10,7"
+                  Margin="0,2,0,2">
+            <ScrollViewer MaxHeight="120" VerticalScrollBarVisibility="Auto">
+              <SelectableTextBlock Text="{Binding Arguments}"
+                                   FontFamily="{StaticResource MonoFontFamily}"
+                                   FontSize="10.5"
+                                   TextWrapping="Wrap"
+                                   Foreground="{StaticResource TextSecondaryBrush}" />
+            </ScrollViewer>
+          </Border>
         </StackPanel>
       </Border>
       </StackPanel>
@@ -471,7 +596,8 @@
     </DataTemplate>
   </UserControl.DataTemplates>
 
-  <Grid RowDefinitions="Auto,Auto,*,Auto">
+  <!-- Background=Transparent：空白处也要能命中，拖文件到消息区中间才算落在这一页上 -->
+  <Grid RowDefinitions="Auto,Auto,*,Auto" Background="Transparent">
     <Border Grid.Row="0"
             BorderBrush="{StaticResource BorderBrush}"
             BorderThickness="0,0,0,1"
@@ -564,6 +690,86 @@
                       Margin="26,22,26,10"
                       />
       </ScrollViewer>
+
+      <!-- 刚建的新任务：给上下文和三个入口，不留一块空白 -->
+      <StackPanel IsVisible="{Binding ShowEmptyState}"
+                  HorizontalAlignment="Center"
+                  VerticalAlignment="Center"
+                  MaxWidth="430"
+                  Spacing="9"
+                  Margin="26,0,26,30"
+                  IsHitTestVisible="False">
+        <Border Width="44"
+                Height="44"
+                CornerRadius="14"
+                Background="{StaticResource SurfaceMutedBrush}"
+                HorizontalAlignment="Center">
+          <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Sparkles}"
+                        Size="20"
+                        Foreground="{StaticResource TextSecondaryBrush}"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center" />
+        </Border>
+
+        <TextBlock Text="这个任务还没开始"
+                   FontSize="15"
+                   FontWeight="Medium"
+                   HorizontalAlignment="Center" />
+
+        <TextBlock Text="{Binding HeaderSubtitle}"
+                   Classes="caption"
+                   FontSize="11"
+                   HorizontalAlignment="Center"
+                   TextTrimming="CharacterEllipsis"
+                   MaxWidth="400" />
+
+        <Border Background="{StaticResource SurfaceMutedBrush}"
+                BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="1"
+                CornerRadius="12"
+                Padding="14,11"
+                Margin="0,3,0,0">
+          <StackPanel Spacing="7">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Paperclip}"
+                            Size="12"
+                            Foreground="{StaticResource TextMutedBrush}"
+                            VerticalAlignment="Center" />
+              <TextBlock Text="输入 @ 引用工作区里的文件，发送时才读正文"
+                         FontSize="11"
+                         Foreground="{StaticResource TextSecondaryBrush}"
+                         VerticalAlignment="Center" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Folder}"
+                            Size="12"
+                            Foreground="{StaticResource TextMutedBrush}"
+                            VerticalAlignment="Center" />
+              <TextBlock Text="把文件拖进窗口任意位置，松开即引用"
+                         FontSize="11"
+                         Foreground="{StaticResource TextSecondaryBrush}"
+                         VerticalAlignment="Center" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Copy}"
+                            Size="12"
+                            Foreground="{StaticResource TextMutedBrush}"
+                            VerticalAlignment="Center" />
+              <TextBlock Text="Ctrl+V 贴图，图片会和文字一起发"
+                         FontSize="11"
+                         Foreground="{StaticResource TextSecondaryBrush}"
+                         VerticalAlignment="Center" />
+            </StackPanel>
+          </StackPanel>
+        </Border>
+
+        <TextBlock Text="新任务默认是普通任务；要从某个目录开始，先在输入框下面选工作区。"
+                   Classes="caption"
+                   FontSize="10.5"
+                   TextWrapping="Wrap"
+                   TextAlignment="Center"
+                   MaxWidth="380" />
+      </StackPanel>
 
       <Button Classes="jump-latest"
               IsVisible="{Binding ShowFloatingHint}"

@@ -259,6 +259,15 @@ public static class AppLaunchOptions
     /// <summary>开发用：对话页摆一条"已排队"提示，检查排队状态条。</summary>
     public static string? ChatQueued { get; set; }
 
+    /// <summary>开发用：开一个还没说过话的新任务，检查空状态版式。</summary>
+    public static bool ChatEmpty { get; set; }
+
+    /// <summary>开发用：摆出「生成中切了权限」的状态，检查 pill 上的「下一轮生效」角标。</summary>
+    public static bool PermissionPending { get; set; }
+
+    /// <summary>开发用：真的打开模型浮层并出图，检查当前项勾选、分组和说明。</summary>
+    public static bool ModelFlyout { get; set; }
+
     /// <summary>开发用：给侧栏搜索框预置关键词，检查正文命中摘要。</summary>
     public static string? SessionQuery { get; set; }
 

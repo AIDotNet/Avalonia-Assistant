@@ -13,6 +13,8 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using AvaloniaAssistant.Abstractions;
 using AvaloniaAssistant.UI.ViewModels;
+using ArcGlyph = TKCode.Arc.ArcGlyph;
+using ArcIcons = TKCode.Arc.ArcIcons;
 
 namespace AvaloniaAssistant.UI.Views;
 
@@ -194,9 +196,9 @@ public partial class ComposerView : UserControl
         try
         {
             var bitmap = await clipboard.TryGetValueAsync(DataFormat.Bitmap);
-            if (bitmap is not null)
+            if (bitmap is not null && !viewModel.AddImage(bitmap))
             {
-                viewModel.AddImage(bitmap);
+                viewModel.NotifyImageError("这张图没能保存到数据目录，检查写入权限或磁盘空间。");
             }
         }
         catch
@@ -227,8 +229,9 @@ public partial class ComposerView : UserControl
         }
         else
         {
-            e.DragEffects = DragDropEffects.None;
+            // 拖的是文字：不接管，输入框自己的拖放还要用
             HideDropOverlay();
+            return;
         }
 
         e.Handled = true;
@@ -243,13 +246,22 @@ public partial class ComposerView : UserControl
     private void OnDrop(object? sender, DragEventArgs e)
     {
         HideDropOverlay();
-        e.Handled = true;
 
-        if (ViewModel is not { } viewModel)
+        if (!HasFiles(e) || ViewModel is not { } viewModel)
         {
             return;
         }
 
+        e.Handled = true;
+        if (AddDroppedFiles(e, viewModel))
+        {
+            e.DragEffects = DragDropEffects.Copy;
+        }
+    }
+
+    /// <summary>把拖进来的文件逐个变成引用，返回是否至少加进去一个。</summary>
+    private static bool AddDroppedFiles(DragEventArgs e, ComposerViewModel viewModel)
+    {
         IStorageItem[]? items;
         try
         {
@@ -258,12 +270,12 @@ public partial class ComposerView : UserControl
         catch
         {
             // 剪贴板 / 拖放里塞了不认识的格式，当没发生
-            return;
+            return false;
         }
 
         if (items is null)
         {
-            return;
+            return false;
         }
 
         var added = 0;
@@ -281,9 +293,94 @@ public partial class ComposerView : UserControl
             }
         }
 
-        if (added > 0)
+        return added > 0;
+    }
+
+    /// <summary>
+    /// 把整个页面也变成落点：拖到消息区中间时，用户不会先去找输入框在哪。
+    /// 落在输入框上仍由 ComposerView 自己处理（它先拿到事件并标记 Handled），这里兜外面的区域。
+    /// </summary>
+    public void AttachDropSurface(Control surface)
+    {
+        if (_dropSurface is not null || ReferenceEquals(surface, this))
+        {
+            return;
+        }
+
+        _dropSurface = surface;
+        DragDrop.SetAllowDrop(surface, true);
+        surface.AddHandler(DragDrop.DragEnterEvent, OnSurfaceDragOver);
+        surface.AddHandler(DragDrop.DragOverEvent, OnSurfaceDragOver);
+        surface.AddHandler(DragDrop.DragLeaveEvent, OnSurfaceDragLeave);
+        surface.AddHandler(DragDrop.DropEvent, OnSurfaceDrop);
+    }
+
+    private Control? _dropSurface;
+
+    private void OnSurfaceDragOver(object? sender, DragEventArgs e)
+    {
+        var (files, folders) = CountDropItems(e);
+
+        // 拖的是文字或别的东西：不接管，交给控件自己处理
+        if (files == 0 && folders == 0)
+        {
+            HideDropOverlay();
+            return;
+        }
+
+        if (files > 0)
         {
             e.DragEffects = DragDropEffects.Copy;
+            ShowDropOverlay(
+                files == 1 ? "松开即引用这个文件" : $"松开即引用这 {files} 个文件",
+                "会挂在输入框上方，发送时才读正文");
+        }
+        else
+        {
+            e.DragEffects = DragDropEffects.None;
+            ShowDropOverlay("文件夹不能直接拖进来", "把工作区切到那个目录，再用 @ 引用里面的文件");
+        }
+
+        e.Handled = true;
+    }
+
+    private void OnSurfaceDragLeave(object? sender, DragEventArgs e)
+    {
+        HideDropOverlay();
+        e.Handled = true;
+    }
+
+    private void OnSurfaceDrop(object? sender, DragEventArgs e)
+    {
+        HideDropOverlay();
+
+        if (ViewModel is not { } viewModel)
+        {
+            return;
+        }
+
+        // 不是文件就别拦：拖选中的文字回正文区时，那是控件自己的拖放
+        if (!HasFiles(e))
+        {
+            return;
+        }
+
+        e.Handled = true;
+        if (AddDroppedFiles(e, viewModel))
+        {
+            e.DragEffects = DragDropEffects.Copy;
+        }
+    }
+
+    private static bool HasFiles(DragEventArgs e)
+    {
+        try
+        {
+            return e.DataTransfer.TryGetFiles() is { Length: > 0 };
+        }
+        catch
+        {
+            return false;
         }
     }
 
@@ -357,20 +454,199 @@ public partial class ComposerView : UserControl
             return;
         }
 
-        var flyout = new MenuFlyout();
-        foreach (var model in viewModel.Models)
+        // 再点一次收起，别在原地叠第二层
+        if (_modelFlyout is { IsOpen: true })
         {
-            var item = new MenuItem { Header = model.Name };
-            item.Click += async (_, _) => await viewModel.SetModelAsync(model.Id);
-            flyout.Items.Add(item);
+            _modelFlyout.Hide();
+            return;
         }
 
-        if (flyout.Items.Count == 0)
+        _modelFlyout?.Hide();
+        _modelFlyout = BuildModelFlyout(viewModel);
+        _modelFlyout.ShowAt(target);
+    }
+
+    private Flyout? _modelFlyout;
+
+    /// <summary>开发用：真的打开模型浮层并把弹层交出去，供 --screenshot 截真实版式。</summary>
+    public Flyout? ShowModelFlyout()
+    {
+        if (ViewModel is null || this.FindControl<Button>("ModelButton") is not { } target)
         {
-            flyout.Items.Add(new MenuItem { Header = "先在设置中配置模型", IsEnabled = false });
+            return null;
         }
 
-        flyout.ShowAt(target);
+        _modelFlyout?.Hide();
+        _modelFlyout = BuildModelFlyout(ViewModel);
+        _modelFlyout.ShowAt(target);
+        return _modelFlyout;
+    }
+
+    /// <summary>
+    /// 模型浮层。以前用原生 MenuFlyout，只有一串名字：看不到当前选的是哪个，
+    /// 也看不到服务商和说明；而侧栏早就因为原生菜单在当前主题量出 0×0 改成了自绘。
+    /// 这里统一成同一套自绘浮层。
+    /// </summary>
+    private Flyout BuildModelFlyout(ComposerViewModel viewModel)
+    {
+        var list = new StackPanel { Spacing = 1 };
+
+        var groups = viewModel.Models
+            .GroupBy(model => string.IsNullOrWhiteSpace(model.ProviderName) ? "模型" : model.ProviderName)
+            .ToList();
+
+        if (groups.Count == 0)
+        {
+            list.Children.Add(new TextBlock
+            {
+                Text = "还没配模型服务：先去设置里填 API Key 和模型名。",
+                FontSize = 11.5,
+                LineHeight = 17,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(9, 8, 9, 9),
+                Foreground = ThemeBrush("TextSecondaryBrush", Brushes.Gray),
+            });
+        }
+        else
+        {
+            foreach (var group in groups)
+            {
+                list.Children.Add(new TextBlock
+                {
+                    Text = group.Key,
+                    FontSize = 10.5,
+                    Margin = new Thickness(9, 8, 9, 3),
+                    Foreground = ThemeBrush("TextMutedBrush", Brushes.Gray),
+                });
+
+                foreach (var model in group)
+                {
+                    list.Children.Add(BuildModelRow(viewModel, model));
+                }
+            }
+        }
+
+        var content = new StackPanel
+        {
+            Spacing = 2,
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = "模型",
+                    FontSize = 12.5,
+                    FontWeight = FontWeight.SemiBold,
+                    Margin = new Thickness(9, 3, 0, 3),
+                    Foreground = ThemeBrush("TextPrimaryBrush", Brushes.Black),
+                },
+                new ScrollViewer
+                {
+                    MaxHeight = 340,
+                    VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                    HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                    Content = list,
+                },
+            },
+        };
+
+        return new Flyout
+        {
+            Placement = PlacementMode.TopEdgeAlignedRight,
+            Content = new Border
+            {
+                Width = 330,
+                Padding = new Thickness(8, 7, 8, 8),
+                CornerRadius = new CornerRadius(14),
+                Background = ThemeBrush("SurfaceBrush", Brushes.White),
+                BorderBrush = ThemeBrush("BorderStrongBrush", Brushes.Gainsboro),
+                BorderThickness = new Thickness(1),
+                BoxShadow = ThemeShadow("ComposerShadow"),
+                Child = content,
+            },
+        };
+    }
+
+    private Button BuildModelRow(ComposerViewModel viewModel, ModelOption model)
+    {
+        var isCurrent = string.Equals(model.Id, viewModel.CurrentModelId, StringComparison.Ordinal);
+
+        var grid = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("18,*,Auto"),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
+        grid.Children.Add(new ArcGlyph
+        {
+            Data = ArcIcons.Check,
+            Size = 12,
+            IsVisible = isCurrent,
+            VerticalAlignment = VerticalAlignment.Center,
+            Foreground = ThemeBrush("AccentBrush", Brushes.Black),
+        });
+
+        var texts = new StackPanel { Spacing = 1 };
+        texts.Children.Add(new TextBlock
+        {
+            Text = model.Name,
+            FontSize = 12.5,
+            FontWeight = isCurrent ? FontWeight.SemiBold : FontWeight.Normal,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            Foreground = ThemeBrush("TextPrimaryBrush", Brushes.Black),
+        });
+
+        if (!string.IsNullOrWhiteSpace(model.Description))
+        {
+            texts.Children.Add(new TextBlock
+            {
+                Text = model.Description,
+                FontSize = 10.5,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                Foreground = ThemeBrush("TextMutedBrush", Brushes.Gray),
+            });
+        }
+
+        Grid.SetColumn(texts, 1);
+        grid.Children.Add(texts);
+
+        if (isCurrent)
+        {
+            var tag = new Border
+            {
+                Background = ThemeBrush("SurfaceMutedBrush", Brushes.Gainsboro),
+                CornerRadius = new CornerRadius(5),
+                Padding = new Thickness(5, 1),
+                VerticalAlignment = VerticalAlignment.Center,
+                Child = new TextBlock
+                {
+                    Text = "使用中",
+                    FontSize = 9.5,
+                    Foreground = ThemeBrush("TextMutedBrush", Brushes.Gray),
+                },
+            };
+            Grid.SetColumn(tag, 2);
+            grid.Children.Add(tag);
+        }
+
+        var button = new Button
+        {
+            Classes = { "model-row" },
+            Content = grid,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            VerticalContentAlignment = VerticalAlignment.Center,
+            Padding = new Thickness(9, 6),
+            CornerRadius = new CornerRadius(9),
+            Background = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+        };
+
+        button.Click += async (_, _) =>
+        {
+            _modelFlyout?.Hide();
+            await viewModel.SetModelAsync(model.Id);
+        };
+
+        return button;
     }
 
     private void OnPermissionClick(object? sender, RoutedEventArgs e)

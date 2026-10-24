@@ -113,7 +113,14 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
     [NotifyPropertyChangedFor(nameof(HasQueued))]
     private string? queuedHint;
 
+    /// <summary>排队几条。超过一条时取消按钮要写明「全部取消」，别让人以为只丢最后一条。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(QueuedCancelLabel))]
+    private int queuedCount;
+
     public bool HasQueued => !string.IsNullOrWhiteSpace(QueuedHint);
+
+    public string QueuedCancelLabel => QueuedCount > 1 ? "全部取消" : "取消";
 
     /// <summary>
     /// 生成期间按 Enter 不是"没反应"，是排队。把这件事写在原来那行提示里，
@@ -163,6 +170,14 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
 
     public string SessionAllowedBadge => $"已放行 {SessionAllowedCount}";
 
+    /// <summary>
+    /// 生成中切了权限：这一轮仍按开始时的档位执行，pill 上要标明「下一轮生效」。
+    /// 否则界面写着只读，正在跑的这一轮还在改文件，用户会以为权限没生效。
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PermissionTooltip))]
+    private bool permissionPendingNextRun;
+
     /// <summary>权限浮层里的「恢复逐次确认」，由对话页负责真正清空放行记录。</summary>
     public event EventHandler? ResetSessionAllowedRequested;
 
@@ -171,7 +186,36 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
 
     public bool HasVoiceError => !string.IsNullOrWhiteSpace(VoiceError);
 
-    public string MicTooltip => IsRecording ? "停止并转写" : "语音输入";
+    /// <summary>贴图存盘失败时的提示。以前吞掉异常，用户只看到「粘了没反应」。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasImageError))]
+    private string? imageError;
+
+    public bool HasImageError => !string.IsNullOrWhiteSpace(ImageError);
+
+    private DispatcherTimer? _imageErrorTimer;
+
+    /// <summary>图片没能落盘：写在输入框下面，几秒后自己消失，不长期占位置。</summary>
+    public void NotifyImageError(string message)
+    {
+        ImageError = message;
+
+        _imageErrorTimer?.Stop();
+        _imageErrorTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(6) };
+        _imageErrorTimer.Tick += (_, _) =>
+        {
+            _imageErrorTimer?.Stop();
+            _imageErrorTimer = null;
+            ImageError = null;
+        };
+        _imageErrorTimer.Start();
+    }
+
+    public bool CanUseVoice => !IsBusy;
+
+    public string MicTooltip => IsBusy
+        ? "正在生成，本轮结束后可用"
+        : IsRecording ? "停止并转写" : "语音输入";
 
     public IBrush MicBrush => IsRecording
         ? new SolidColorBrush(Color.Parse("#B3261E"))
@@ -183,6 +227,9 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
 
     public string ModelLabel => _settings.Current.Model;
 
+    /// <summary>模型浮层用它给当前项打勾。</summary>
+    public string CurrentModelId => _settings.Current.Model;
+
     public string PermissionLabel => PermissionModeText.Describe(_settings.Current.Permission);
 
     /// <summary>当前档位，权限浮层据此画选中态。</summary>
@@ -191,9 +238,16 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
     /// <summary>权限说明，展示在权限浮层顶部。</summary>
     public string PermissionDetail => PermissionModeText.Detail(_settings.Current.Permission);
 
-    public string PermissionTooltip => HasSessionAllowedTools
-        ? $"工具权限：{PermissionLabel}（本次已放行 {SessionAllowedCount} 个工具）"
-        : $"工具权限：{PermissionLabel}";
+    public string PermissionTooltip
+    {
+        get
+        {
+            var scope = PermissionPendingNextRun ? "，下一轮生效" : string.Empty;
+            return HasSessionAllowedTools
+                ? $"工具权限：{PermissionLabel}{scope}（本次已放行 {SessionAllowedCount} 个工具）"
+                : $"工具权限：{PermissionLabel}{scope}";
+        }
+    }
 
     /// <summary>是否处于完全访问。开关直接绑定这个属性，读写都走 <see cref="SetPermissionAsync"/>。</summary>
     public bool IsFullAccess
@@ -605,6 +659,7 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
             Images.Add(new PendingImageViewModel(image, bitmap, RemoveImage));
             OnPropertyChanged(nameof(HasImages));
             SendCommand.NotifyCanExecuteChanged();
+            ImageError = null;
             return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -797,9 +852,17 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
     {
         _settings.Changed -= _settingsChanged;
         StopRecordingTicker();
+        _imageErrorTimer?.Stop();
+        _imageErrorTimer = null;
     }
 
     partial void OnIsSendingChanged(bool value) => UpdateActivity();
+
+    partial void OnIsBusyChanged(bool value)
+    {
+        OnPropertyChanged(nameof(CanUseVoice));
+        OnPropertyChanged(nameof(MicTooltip));
+    }
 
     partial void OnIsRecordingChanged(bool value)
     {
@@ -875,6 +938,7 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
         }
 
         OnPropertyChanged(nameof(ModelLabel));
+        OnPropertyChanged(nameof(CurrentModelId));
         OnPropertyChanged(nameof(PermissionLabel));
         OnPropertyChanged(nameof(Permission));
         OnPropertyChanged(nameof(PermissionDetail));
