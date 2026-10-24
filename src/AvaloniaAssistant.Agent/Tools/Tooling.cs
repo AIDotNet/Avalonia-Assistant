@@ -93,9 +93,9 @@ internal static class ToolPaths
             throw new InvalidOperationException("路径不能为空。");
         }
 
-        var root = string.IsNullOrWhiteSpace(invocation.WorkspacePath)
-            ? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
-            : invocation.WorkspacePath!;
+        // 普通任务的根是 ~/.avaloniaassistant，不是整个用户目录：
+        // 以前空工作区回落到 C:\Users\xxx，工作区权限等于把家目录全放开。
+        var root = PlainWorkspace.Resolve(invocation.WorkspacePath);
 
         var full = Path.GetFullPath(
             Path.IsPathRooted(path)

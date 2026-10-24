@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using AvaloniaAssistant.Abstractions;
 using AvaloniaAssistant.UI.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -59,6 +60,12 @@ public sealed partial class WorkspacePickerViewModel : ObservableObject
     public ObservableCollection<WorkspaceChoiceViewModel> Items { get; } = [];
 
     public bool HasItems => Items.Count > 0;
+
+    /// <summary>当前是「普通任务」：工作区那条是空的，浮层最下面那行打勾。</summary>
+    public bool IsPlainTask => string.IsNullOrWhiteSpace(_host.Settings.WorkspacePath);
+
+    /// <summary>不选空间时文件落在哪，挂在那一行的悬停提示上——省得事后问「我刚写的东西哪去了」。</summary>
+    public string PlainPathHint => $"不选空间时，文件落在 {PlainWorkspace.Root}";
 
     public string EmptyText => string.IsNullOrWhiteSpace(SearchText)
         ? "还没有工作空间。选一个文件夹，任务就在里面读写文件。"

@@ -107,8 +107,25 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
         RequestScroll(true);
     }
 
+    /// <summary>设置保存是在线程池上抛事件的，标题栏那行字得回 UI 线程再改。</summary>
     private void OnSettingsChanged(object? sender, EventArgs e)
-        => OnPropertyChanged(nameof(HeaderSubtitle));
+        => Ui.Post(ApplyWorkspaceChange);
+
+    /// <summary>
+    /// 还没开口的任务跟着当前选择走：输入框下面那一下挑的工作区，
+    /// 必须在发第一条之前落到这条任务上，否则界面显示 A、跑起来却是空目录。
+    /// 一旦发过话就钉住——中途换目录，前面引用过的文件就对不上了。
+    /// </summary>
+    private void ApplyWorkspaceChange()
+    {
+        if (Session.Entries.Count == 0
+            && !MainWindowViewModel.SamePath(Session.WorkspacePath, _settings.Current.WorkspacePath))
+        {
+            Session.WorkspacePath = _settings.Current.WorkspacePath;
+        }
+
+        OnPropertyChanged(nameof(HeaderSubtitle));
+    }
 
     /// <summary>
     /// 权限档位变了就在对话里留一条提示：用户得清楚接下来的命令还会不会问自己。
@@ -882,7 +899,7 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
 
             var candidate = Path.IsPathRooted(attachment.Path)
                 ? attachment.Path
-                : Path.Combine(Session.WorkspacePath ?? string.Empty, attachment.Path);
+                : Path.Combine(PlainWorkspace.Resolve(Session.WorkspacePath), attachment.Path);
 
             if (File.Exists(candidate))
             {

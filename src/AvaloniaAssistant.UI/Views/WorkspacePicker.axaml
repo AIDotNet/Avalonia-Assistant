@@ -139,13 +139,26 @@
           </StackPanel>
         </Button>
 
-        <Button Classes="ws-action" Command="{Binding ClearWorkspaceCommand}">
-          <StackPanel Orientation="Horizontal" Spacing="9">
+        <Button Classes="ws-action"
+                HorizontalContentAlignment="Stretch"
+                ToolTip.Tip="{Binding PlainPathHint}"
+                Command="{Binding ClearWorkspaceCommand}">
+          <Grid ColumnDefinitions="Auto,*,Auto">
             <arc:ArcGlyph Data="{x:Static arc:ArcIcons.CircleX}"
                           Size="14"
-                          Foreground="{StaticResource TextSecondaryBrush}" />
-            <TextBlock Text="不使用工作空间" VerticalAlignment="Center" />
-          </StackPanel>
+                          Foreground="{StaticResource TextSecondaryBrush}"
+                          VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1"
+                       Text="不使用工作空间"
+                       Margin="9,0,6,0"
+                       VerticalAlignment="Center" />
+            <arc:ArcGlyph Grid.Column="2"
+                          Data="{x:Static arc:ArcIcons.Check}"
+                          IsVisible="{Binding IsPlainTask}"
+                          Size="13"
+                          Foreground="{StaticResource AccentBrush}"
+                          VerticalAlignment="Center" />
+          </Grid>
         </Button>
       </StackPanel>
 

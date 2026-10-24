@@ -70,5 +70,9 @@ public interface ISettingsProvider
 
     Task SaveAsync(AssistantSettings settings, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// 保存成功后触发。<b>不保证在 UI 线程上</b>：实现里全程 ConfigureAwait(false)，
+    /// 事件往往从线程池上抛出来，订阅方要自己回 UI 线程再改绑定源。
+    /// </summary>
     event EventHandler? Changed;
 }

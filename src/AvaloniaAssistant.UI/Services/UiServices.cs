@@ -268,6 +268,12 @@ public static class AppLaunchOptions
     /// <summary>开发用：把输入框的拖放提示层摆出来，检查它盖住的区域和文案。</summary>
     public static bool ComposerDrop { get; set; }
 
+    /// <summary>
+    /// 开发用：把「换工作区 → 不使用工作空间 → 新建任务」这条链路真跑一遍。
+    /// 走的是界面上那两个命令（ClearWorkspaceCommand / NewTaskCommand），不是直接改设置。
+    /// </summary>
+    public static bool VerifyWorkspaceFlow { get; set; }
+
     /// <summary>开发用：单独摆出快捷键总览，配合 --screenshot 检查版式。</summary>
     public static bool ShowShortcuts { get; set; }
 

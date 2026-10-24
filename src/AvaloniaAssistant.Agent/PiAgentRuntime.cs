@@ -370,16 +370,8 @@ public sealed class PiAgentRuntime : IAssistantRuntime
         return true;
     }
 
-    private static string ResolveWorkspace(string? workspacePath)
-    {
-        if (!string.IsNullOrWhiteSpace(workspacePath) && Directory.Exists(workspacePath))
-        {
-            return Path.GetFullPath(workspacePath);
-        }
-
-        var fallback = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        return Directory.Exists(fallback) ? fallback : Environment.CurrentDirectory;
-    }
+    /// <summary>没选工作区的任务落在 ~/.avaloniaassistant，不再拿整个用户目录当工作区。</summary>
+    private static string ResolveWorkspace(string? workspacePath) => PlainWorkspace.Resolve(workspacePath);
 
     private static IReadOnlyList<ModelOption> BuildModels(AssistantSettings settings)
     {

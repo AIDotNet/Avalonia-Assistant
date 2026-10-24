@@ -150,6 +150,9 @@ internal static class Program
                 case "--composer-drop":
                     AppLaunchOptions.ComposerDrop = true;
                     break;
+                case "--workspace-flow":
+                    AppLaunchOptions.VerifyWorkspaceFlow = true;
+                    break;
                 case "--data-dir" when index + 1 < args.Length:
                     AppPaths.UseRoot(args[++index]);
                     break;

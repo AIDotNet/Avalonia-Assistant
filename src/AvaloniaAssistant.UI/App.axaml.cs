@@ -157,6 +157,12 @@ public partial class AssistantApp : Application
                 await viewModel.StartNewChatAsync(AppLaunchOptions.RunPrompt);
             }
 
+            // 验收用：真点一遍「换工作区 → 不使用工作空间 → 新建任务」。
+            if (AppLaunchOptions.VerifyWorkspaceFlow)
+            {
+                await RunWorkspaceFlowAsync(viewModel);
+            }
+
             if (!string.IsNullOrWhiteSpace(AppLaunchOptions.ComposerText))
             {
                 viewModel.Home.Composer.Text = AppLaunchOptions.ComposerText;
@@ -303,6 +309,43 @@ public partial class AssistantApp : Application
                 desktop.Shutdown(-1);
             }
         }
+    }
+
+    /// <summary>
+    /// 验收「不使用工作空间」和「新建任务默认不带工作区」：走界面上的命令，不直接改设置。
+    /// 最后故意从后台线程存一次设置——SaveAsync 内部全是 ConfigureAwait(false)，
+    /// Changed 就是从那个线程上抛出来的，界面上崩的正是这一下。
+    /// </summary>
+    private static async Task RunWorkspaceFlowAsync(MainWindowViewModel viewModel)
+    {
+        var workspace = Path.Combine(AppPaths.Root, "verify-workspace");
+        Directory.CreateDirectory(workspace);
+
+        await viewModel.SelectWorkspaceAsync(workspace);
+        Console.WriteLine($"[verify] 选好工作区：'{viewModel.Settings.WorkspacePath}'");
+        Console.WriteLine($"[verify] 输入框显示：'{viewModel.Home.Composer.WorkspaceLabel}'");
+
+        await viewModel.NewTaskCommand.ExecuteAsync(null);
+        var chat = viewModel.CurrentPage as ChatViewModel;
+        Console.WriteLine($"[verify] 新建任务带的工作区：'{chat?.Session.WorkspacePath}'");
+        Console.WriteLine($"[verify] 新任务输入框显示：'{chat?.Composer.WorkspaceLabel}'");
+
+        // 新任务还没开口就挑一个空间：这条任务得当场用上，不能等下一次新建
+        await viewModel.SelectWorkspaceAsync(workspace);
+        await Task.Delay(200);
+        Console.WriteLine($"[verify] 挑完空间，任务用的目录：'{chat?.Session.WorkspacePath}'");
+
+        var picker = new WorkspacePickerViewModel(viewModel);
+        await picker.ClearWorkspaceCommand.ExecuteAsync(null);
+        await Task.Delay(200);
+        Console.WriteLine($"[verify] 不使用工作空间后：设置='{viewModel.Settings.WorkspacePath}' 任务='{chat?.Session.WorkspacePath}'");
+        Console.WriteLine($"[verify] 输入框显示：'{chat?.Composer.WorkspaceLabel}' / 标题栏：'{chat?.HeaderSubtitle}'");
+
+        // 设置变更事件是从保存所在的线程上抛的。从后台线程再存一次设置，
+        // 界面（Models、SendCommand 的 CanExecuteChanged）能不能扛住，就看这一下。
+        await Task.Run(() => viewModel.SettingsProvider.SaveAsync(viewModel.Settings));
+        await Task.Delay(300);
+        Console.WriteLine("[verify] 后台线程存设置：没抛异常");
     }
 
     private static async Task CaptureWorkspacePickerAsync(MainWindowViewModel viewModel, string path)

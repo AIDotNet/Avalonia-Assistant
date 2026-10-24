@@ -21,9 +21,10 @@ public sealed class JsonSettingsProvider : ISettingsProvider
 
     public static AssistantSettings CreateDefault()
     {
-        var settings = new AssistantSettings();
-        settings.WorkspacePath = AppPaths.DefaultWorkspace;
-        return settings;
+        // 首装默认是「普通任务」：工作区得用户自己挑一次。
+        // 早先这里塞了 ~/AvaloniaAssistant/Workspace，等于替人做了决定——
+        // 一打开就在某个目录里读写文件，而这个目录人根本没选过。
+        return new AssistantSettings();
     }
 
     public async Task LoadAsync(CancellationToken cancellationToken = default)

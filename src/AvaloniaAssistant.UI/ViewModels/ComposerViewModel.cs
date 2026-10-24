@@ -231,6 +231,14 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
 
     public string WorkspacePath => _settings.Current.WorkspacePath;
 
+    /// <summary>
+    /// 胶囊的悬停提示。普通任务也有落点（用户目录下的 .avaloniaassistant），
+    /// 得说出来——不然让它写的报告到底存哪了，只能靠猜。
+    /// </summary>
+    public string WorkspacePathHint => string.IsNullOrWhiteSpace(WorkspacePath)
+        ? $"文件落在 {Ui.ShortenPath(PlainWorkspace.Root)}"
+        : WorkspacePath;
+
     public bool IsConfigured => !string.IsNullOrWhiteSpace(_settings.Current.ApiKey);
 
     [RelayCommand(CanExecute = nameof(CanSend))]
@@ -384,7 +392,7 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
         }
 
         var query = MentionQuery;
-        var workspace = _settings.Current.WorkspacePath ?? string.Empty;
+        var workspace = SearchRoot;
 
         // 扫盘丢线程池，别让输入卡住
         var files = await Task.Run(() => _fileSearch.Search(workspace, query, 12));
@@ -425,31 +433,34 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(HasMentionItems));
     }
 
+    /// <summary>
+    /// @ 和引用要找的目录。没选工作区的任务也有地方读写：用户目录下那格 .avaloniaassistant，
+    /// 所以这里用「真正会用的目录」，而不是设置里那个可能为空的字符串。
+    /// </summary>
+    private string SearchRoot => PlainWorkspace.Resolve(_settings.Current.WorkspacePath);
+
     private string BuildMentionEmptyText(string workspace, string query)
     {
-        if (string.IsNullOrWhiteSpace(workspace) || !Directory.Exists(workspace))
-        {
-            return "还没有工作区。选一个文件夹，@ 才能在工作区里找文件。";
-        }
+        // 没选工作区时这里是普通任务目录：说清楚找的是哪儿，别让人以为 @ 坏了
+        var scope = string.IsNullOrWhiteSpace(_settings.Current.WorkspacePath)
+            ? $"普通任务目录（{Ui.ShortenPath(workspace)}）"
+            : "工作区";
 
         return query.Length > 0
-            ? $"工作区里没有带「{query}」的文件。"
-            : "工作区里还没有可引用的文件。";
+            ? $"{scope}里没有带「{query}」的文件。"
+            : $"{scope}里还没有可引用的文件。";
     }
 
     private async Task EnsureWorkspaceIndexAsync()
     {
-        var workspace = _settings.Current.WorkspacePath ?? string.Empty;
+        var workspace = SearchRoot;
         if (_indexed && string.Equals(_indexedWorkspace, workspace, StringComparison.OrdinalIgnoreCase))
         {
             return;
         }
 
         // 预热一遍文件索引，别让用户第一次按 @ 时等扫盘
-        if (!string.IsNullOrWhiteSpace(workspace) && Directory.Exists(workspace))
-        {
-            await Task.Run(() => _fileSearch.List(workspace));
-        }
+        await Task.Run(() => _fileSearch.List(workspace));
 
         _indexedWorkspace = workspace;
         _indexed = true;
@@ -463,7 +474,7 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
     {
         await EnsureWorkspaceIndexAsync();
 
-        var workspace = _settings.Current.WorkspacePath ?? string.Empty;
+        var workspace = SearchRoot;
         var file = _fileSearch
             .Search(workspace, name, 8)
             .FirstOrDefault(entry => entry.RelativePath.Contains(name, StringComparison.OrdinalIgnoreCase));
@@ -844,6 +855,15 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
 
     public void Refresh()
     {
+        // 设置保存的 Changed 是从保存所在的线程上抛出来的（SaveAsync 内部全程 ConfigureAwait(false)），
+        // 这里直接往下走就会用后台线程清 Models、触发命令的 CanExecuteChanged，
+        // 绑定的按钮一读 Command 属性就是「该对象归另一个线程所有」。统一回 UI 线程再刷。
+        if (!Dispatcher.UIThread.CheckAccess())
+        {
+            Ui.Post(Refresh);
+            return;
+        }
+
         // 工作区或设置变了，下次 @ 要重新扫盘，别拿上一个工作区的文件
         _indexed = false;
         RefreshModels();
@@ -865,6 +885,7 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(ShowFullAccessNotice));
         OnPropertyChanged(nameof(WorkspaceLabel));
         OnPropertyChanged(nameof(WorkspacePath));
+        OnPropertyChanged(nameof(WorkspacePathHint));
         OnPropertyChanged(nameof(IsConfigured));
         SendCommand.NotifyCanExecuteChanged();
     }

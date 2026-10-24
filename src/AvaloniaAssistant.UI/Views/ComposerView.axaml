@@ -471,7 +471,7 @@
 
     <Grid ColumnDefinitions="*,Auto" Margin="4,7,4,0">
       <StackPanel Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
-        <Button x:Name="WorkspaceButton" Classes="pill" Click="OnWorkspaceClick" ToolTip.Tip="{Binding WorkspacePath}">
+        <Button x:Name="WorkspaceButton" Classes="pill" Click="OnWorkspaceClick" ToolTip.Tip="{Binding WorkspacePathHint}">
           <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
             <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Folder}" Size="12" />
             <TextBlock Text="{Binding WorkspaceLabel}" FontSize="11.5" />

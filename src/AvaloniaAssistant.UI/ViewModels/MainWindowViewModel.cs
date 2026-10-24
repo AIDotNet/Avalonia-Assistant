@@ -236,6 +236,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private async Task NewTaskAsync()
     {
+        // 新建任务默认是普通任务：上一次选的工作区不跟过来。
+        // 想在某个空间里干活，就在输入框下面重新挑一个，或者点空间那一行的「+」。
+        await ClearWorkspaceAsync();
+
         var chat = CreateChat(null);
         CurrentPage = chat;
         await SetActiveSessionAsync(null);
