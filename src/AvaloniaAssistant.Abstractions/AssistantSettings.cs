@@ -15,7 +15,7 @@ public enum AgentProtocol
     AnthropicMessages,
 }
 
-/// <summary>桌面端可选的模型服务预设。</summary>
+/// <summary>桌面端可选的模型服务预设。只影响新建模型时的默认值和协议推荐，不限制你能填什么。</summary>
 public sealed record ProviderPreset(
     AgentProviderKind Kind,
     string Name,
@@ -51,7 +51,7 @@ public sealed record ProviderPreset(
     public static readonly ProviderPreset Custom = new(
         AgentProviderKind.Custom,
         "自定义",
-        "任意 OpenAI 兼容端点（vLLM / Ollama / One-API…）",
+        "任意 OpenAI 兼容端点（vLLM / Ollama / One-API / 公司网关…）",
         "http://localhost:11434/v1",
         "qwen3.8:27b",
         AgentProtocol.OpenAiCompatible);
@@ -68,6 +68,154 @@ public enum AgentProviderKind
     OpenAI,
     Anthropic,
     Custom,
+}
+
+/// <summary>
+/// 一套模型配置：渠道（BaseUrl + Key）、模型名和协议各自独立。
+/// <para>
+/// 以前这些东西是全局单份的，界面还要靠一张写死的「服务商 → 模型」对照表来猜有哪些模型，
+/// 于是连着公司网关、只配了 deepseek-flash，列表里却能列出三个根本不存在于该端点的 GPT 模型。
+/// 现在一个模型就是一条配置，列表直接来自这里。
+/// </para>
+/// </summary>
+public sealed class ModelProfile
+{
+    /// <summary>稳定标识。界面的选中态、会话的「当前模型」都认它，改名字不会丢选中。</summary>
+    public string Id { get; set; } = string.Empty;
+
+    /// <summary>显示名。留空就显示模型名，多个同模型不同渠道时才需要另起名字。</summary>
+    public string Name { get; set; } = string.Empty;
+
+    public AgentProviderKind Provider { get; set; } = AgentProviderKind.DeepSeek;
+
+    public string BaseUrl { get; set; } = string.Empty;
+
+    public string ApiKey { get; set; } = string.Empty;
+
+    public string Model { get; set; } = string.Empty;
+
+    /// <summary>null 表示跟随服务商预设：Anthropic 走 Messages，其余走 Chat Completions。</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public AgentProtocol? Protocol { get; set; }
+
+    /// <summary>上下文窗口覆盖。null 表示按本地模型目录查，查不到再用保守值。</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public long? ContextWindow { get; set; }
+
+    [JsonIgnore]
+    public AgentProtocol EffectiveProtocol => Protocol ?? ProviderPreset.For(Provider).Protocol;
+
+    [JsonIgnore]
+    public string ProviderName => ProviderPreset.For(Provider).Name;
+
+    /// <summary>界面上那个名字：没起名就用模型名。</summary>
+    [JsonIgnore]
+    public string DisplayName
+    {
+        get
+        {
+            if (!string.IsNullOrWhiteSpace(Name))
+            {
+                return Name.Trim();
+            }
+
+            return string.IsNullOrWhiteSpace(Model) ? "未命名模型" : Model.Trim();
+        }
+    }
+
+    public static string NewId() => "m" + Guid.NewGuid().ToString("n")[..8];
+
+    /// <summary>按预设新建一套配置。model / baseUrl 留空时由 <see cref="AssistantSettings.NormalizeModels"/> 填默认值。</summary>
+    public static ModelProfile Create(AgentProviderKind kind, string? name = null, bool usePresetDefaults = false)
+    {
+        var preset = ProviderPreset.For(kind);
+        return new ModelProfile
+        {
+            Id = NewId(),
+            Name = name ?? string.Empty,
+            Provider = kind,
+            BaseUrl = usePresetDefaults ? preset.BaseUrl : string.Empty,
+            Model = usePresetDefaults ? preset.Model : string.Empty,
+            Protocol = null,
+        };
+    }
+
+    /// <summary>
+    /// 从旧版 settings.json 的扁平字段还原一套配置。
+    /// <para>
+    /// 地址和预设对不上时标成「自定义」：那种情况实际连的是自建网关或代理，
+    /// 界面上继续写着「OpenAI」只会让人以为列表里的 GPT 模型真能用。
+    /// </para>
+    /// </summary>
+    public static ModelProfile FromLegacy(
+        string? provider,
+        string? baseUrl,
+        string? apiKey,
+        string? model,
+        string? protocol)
+    {
+        var kind = Enum.TryParse<AgentProviderKind>(provider, ignoreCase: true, out var parsedKind)
+            ? parsedKind
+            : AgentProviderKind.DeepSeek;
+        var preset = ProviderPreset.For(kind);
+        var url = (baseUrl ?? string.Empty).Trim();
+        var name = (model ?? string.Empty).Trim();
+
+        // 协议先认旧文件里写过的；没写过就跟随原服务商推荐——地址换了不代表协议换了
+        var hasExplicitProtocol = Enum.TryParse<AgentProtocol>(protocol, ignoreCase: true, out var parsedProtocol);
+
+        var isForeignEndpoint = url.Length > 0 && !SameEndpoint(url, preset.BaseUrl);
+        if (isForeignEndpoint)
+        {
+            kind = AgentProviderKind.Custom;
+        }
+
+        var resolvedProtocol = hasExplicitProtocol
+            ? parsedProtocol
+            : kind == AgentProviderKind.Custom && preset.Kind != kind
+                ? preset.Protocol
+                : (AgentProtocol?)null;
+
+        return new ModelProfile
+        {
+            Id = NewId(),
+            Name = name,
+            Provider = kind,
+            BaseUrl = url,
+            ApiKey = (apiKey ?? string.Empty).Trim(),
+            Model = name,
+            Protocol = resolvedProtocol,
+        };
+    }
+
+    public ModelProfile Clone() => new()
+    {
+        Id = Id,
+        Name = Name,
+        Provider = Provider,
+        BaseUrl = BaseUrl,
+        ApiKey = ApiKey,
+        Model = Model,
+        Protocol = Protocol,
+        ContextWindow = ContextWindow,
+    };
+
+    /// <summary>逐字段比较。设置页靠它判断「改过没有」，所以 Key 也要比。</summary>
+    public bool SameAs(ModelProfile other)
+        => Id == other.Id
+           && string.Equals(Name, other.Name, StringComparison.Ordinal)
+           && Provider == other.Provider
+           && string.Equals(BaseUrl, other.BaseUrl, StringComparison.Ordinal)
+           && string.Equals(ApiKey, other.ApiKey, StringComparison.Ordinal)
+           && string.Equals(Model, other.Model, StringComparison.Ordinal)
+           && Protocol == other.Protocol
+           && ContextWindow == other.ContextWindow;
+
+    private static bool SameEndpoint(string left, string right)
+        => string.Equals(
+            left.Trim().TrimEnd('/'),
+            right.Trim().TrimEnd('/'),
+            StringComparison.OrdinalIgnoreCase);
 }
 
 public enum PermissionMode
@@ -105,13 +253,81 @@ public static class PermissionModeText
 /// <summary>本地设置。持久化在 %APPDATA%/AvaloniaAssistant/settings.json。</summary>
 public sealed class AssistantSettings
 {
-    public AgentProviderKind Provider { get; set; } = AgentProviderKind.DeepSeek;
+    /// <summary>
+    /// 配好的模型。一个文件里可以有很多套，各走各的端点、Key 和协议。
+    /// 旧版 settings.json 里的单套配置由 <see cref="ModelProfile.FromLegacy"/> 搬进来。
+    /// </summary>
+    public List<ModelProfile> Models { get; set; } = [];
 
-    public string ApiKey { get; set; } = string.Empty;
+    /// <summary>当前生效的模型 id。找不到时回落到第一个，不让界面出现「一个都没选」的空档。</summary>
+    public string? ActiveModelId { get; set; }
 
-    public string BaseUrl { get; set; } = ProviderPreset.DeepSeek.BaseUrl;
+    /// <summary>当前生效的那套配置。没有配置时为 null。</summary>
+    [JsonIgnore]
+    public ModelProfile? ActiveModel
+    {
+        get
+        {
+            var models = Models;
+            if (models.Count == 0)
+            {
+                return null;
+            }
 
-    public string Model { get; set; } = ProviderPreset.DeepSeek.Model;
+            var active = models.FirstOrDefault(item => string.Equals(item.Id, ActiveModelId, StringComparison.Ordinal));
+            if (active is null)
+            {
+                active = models[0];
+                ActiveModelId = active.Id;
+            }
+
+            return active;
+        }
+    }
+
+    /// <summary>当前模型的协议，已经算上「跟随预设」。</summary>
+    [JsonIgnore]
+    public AgentProtocol EffectiveProtocol => ActiveModel?.EffectiveProtocol ?? ProviderPreset.DeepSeek.Protocol;
+
+    [JsonIgnore]
+    public ProtocolOption ProtocolInfo => ProtocolCatalog.For(EffectiveProtocol);
+
+    // ---- 兼容旧调用点：这些属性都指向「当前生效的那套配置」 ----
+
+    [JsonIgnore]
+    public AgentProviderKind Provider
+    {
+        get => ActiveModel?.Provider ?? AgentProviderKind.DeepSeek;
+        set => EnsureActive().Provider = value;
+    }
+
+    [JsonIgnore]
+    public string ApiKey
+    {
+        get => ActiveModel?.ApiKey ?? string.Empty;
+        set => EnsureActive().ApiKey = value ?? string.Empty;
+    }
+
+    [JsonIgnore]
+    public string BaseUrl
+    {
+        get => ActiveModel?.BaseUrl ?? string.Empty;
+        set => EnsureActive().BaseUrl = value ?? string.Empty;
+    }
+
+    [JsonIgnore]
+    public string Model
+    {
+        get => ActiveModel?.Model ?? string.Empty;
+        set => EnsureActive().Model = value ?? string.Empty;
+    }
+
+    [JsonIgnore]
+    public AgentProtocol? Protocol
+    {
+        get => ActiveModel?.Protocol;
+        set => EnsureActive().Protocol = value;
+    }
 
     public double Temperature { get; set; } = 0.7;
 
@@ -174,24 +390,80 @@ public sealed class AssistantSettings
     public bool WindowMaximized { get; set; }
 
     /// <summary>
-    /// 界面上显式选择的协议；null 表示跟随服务商预设。
-    /// 旧版 settings.json 没有这个字段，读出来仍是 null，不会把 Anthropic 预设误降级成 Chat。
+    /// 把当前生效的模型切到 <paramref name="profileId"/>。找不到就什么也不做，
+    /// 返回 false 让调用方知道没切成功（比如那条配置刚在设置页被删掉）。
     /// </summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public AgentProtocol? Protocol { get; set; }
+    public bool ActivateModel(string? profileId)
+    {
+        if (string.IsNullOrWhiteSpace(profileId))
+        {
+            return false;
+        }
 
-    [JsonIgnore]
-    public AgentProtocol EffectiveProtocol => Protocol ?? ProviderPreset.For(Provider).Protocol;
+        if (!Models.Any(item => string.Equals(item.Id, profileId, StringComparison.Ordinal)))
+        {
+            return false;
+        }
 
-    [JsonIgnore]
-    public ProtocolOption ProtocolInfo => ProtocolCatalog.For(EffectiveProtocol);
+        ActiveModelId = profileId;
+        return true;
+    }
+
+    /// <summary>
+    /// 收口所有「这套配置是否完整」的默认值：空模型名 / 空地址按预设补、丢掉空 id、保证至少一套。
+    /// 每次落盘和读盘都调，保证运行时不面对半套配置。
+    /// </summary>
+    public void NormalizeModels()
+    {
+        var models = Models;
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var profile in models)
+        {
+            if (string.IsNullOrWhiteSpace(profile.Id) || !seen.Add(profile.Id))
+            {
+                profile.Id = ModelProfile.NewId();
+                seen.Add(profile.Id);
+            }
+
+            profile.Name = (profile.Name ?? string.Empty).Trim();
+            profile.ApiKey = (profile.ApiKey ?? string.Empty).Trim();
+            profile.BaseUrl = (profile.BaseUrl ?? string.Empty).Trim();
+            profile.Model = (profile.Model ?? string.Empty).Trim();
+
+            var preset = ProviderPreset.For(profile.Provider);
+            if (profile.Model.Length == 0)
+            {
+                profile.Model = preset.Model;
+            }
+
+            if (profile.BaseUrl.Length == 0)
+            {
+                profile.BaseUrl = preset.BaseUrl;
+            }
+
+            if (profile.ContextWindow is <= 0)
+            {
+                profile.ContextWindow = null;
+            }
+        }
+
+        if (models.Count == 0)
+        {
+            models.Add(ModelProfile.Create(AgentProviderKind.DeepSeek, usePresetDefaults: true));
+        }
+
+        if (string.IsNullOrWhiteSpace(ActiveModelId)
+            || !models.Any(item => string.Equals(item.Id, ActiveModelId, StringComparison.Ordinal)))
+        {
+            ActiveModelId = models[0].Id;
+        }
+    }
 
     public AssistantSettings Clone() => new()
     {
-        Provider = Provider,
-        ApiKey = ApiKey,
-        BaseUrl = BaseUrl,
-        Model = Model,
+        Models = Models.Select(profile => profile.Clone()).ToList(),
+        ActiveModelId = ActiveModelId,
         Temperature = Temperature,
         MaxTokens = MaxTokens,
         SpeechModel = SpeechModel,
@@ -214,6 +486,19 @@ public sealed class AssistantSettings
         WindowLeft = WindowLeft,
         WindowTop = WindowTop,
         WindowMaximized = WindowMaximized,
-        Protocol = Protocol,
     };
+
+    private ModelProfile EnsureActive()
+    {
+        if (ActiveModel is { } active)
+        {
+            return active;
+        }
+
+        var created = ModelProfile.Create(AgentProviderKind.DeepSeek, usePresetDefaults: true);
+        Models.Add(created);
+        ActiveModelId = created.Id;
+        return created;
+    }
+
 }

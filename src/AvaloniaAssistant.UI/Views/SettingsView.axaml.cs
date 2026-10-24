@@ -12,17 +12,6 @@ public partial class SettingsView : UserControl
         AvaloniaXamlLoader.Load(this);
     }
 
-    private void OnRevealKeyClick(object? sender, RoutedEventArgs e)
-    {
-        var box = this.FindControl<TextBox>("KeyBox");
-        if (box is null)
-        {
-            return;
-        }
-
-        box.PasswordChar = box.PasswordChar == '\0' ? '●' : '\0';
-    }
-
     /// <summary>切到完全访问要先过一次风险确认，和其它入口保持一致。</summary>
     private async void OnFullAccessClick(object? sender, RoutedEventArgs e)
     {

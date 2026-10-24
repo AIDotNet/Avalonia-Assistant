@@ -265,10 +265,25 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
 
     public string Placeholder => "描述你要做的事，越具体越好";
 
-    public string ModelLabel => _settings.Current.Model;
+    /// <summary>输入框下方那颗胶囊上的字。起了名字就显示名字，否则显示模型名。</summary>
+    public string ModelLabel => _settings.Current.ActiveModel?.DisplayName ?? _settings.Current.Model;
 
-    /// <summary>模型浮层用它给当前项打勾。</summary>
-    public string CurrentModelId => _settings.Current.Model;
+    /// <summary>模型浮层用它给当前项打勾——比的是配置 id，不是模型名：两套配置可以指向同一个模型。</summary>
+    public string CurrentProfileId => _settings.Current.ActiveModelId ?? string.Empty;
+
+    /// <summary>胶囊的悬停说明。三行说清「现在到底在用什么」：名字、模型与协议、端点。</summary>
+    public string ModelTooltip
+    {
+        get
+        {
+            if (_settings.Current.ActiveModel is not { } active)
+            {
+                return "还没有配置模型：去设置里添加一套";
+            }
+
+            return $"当前模型：{active.DisplayName}\n{active.Model} · {ProtocolCatalog.For(active.EffectiveProtocol).Name}\n{active.BaseUrl}\n点击切换";
+        }
+    }
 
     public string PermissionLabel => PermissionModeText.Describe(_settings.Current.Permission);
 
@@ -1089,16 +1104,25 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
 
     public void RequestFocus() => FocusRequested?.Invoke(this, EventArgs.Empty);
 
-    public async Task SetModelAsync(string modelId)
+    /// <summary>
+    /// 切到另一套模型配置。切的是一整套：地址、Key、协议跟着一起换，
+    /// 所以下一轮会自动重建会话（见 PiAgentRuntime 里 SessionHolder 的复用条件）。
+    /// </summary>
+    public async Task SetModelAsync(string profileId)
     {
-        if (string.IsNullOrWhiteSpace(modelId))
+        if (string.IsNullOrWhiteSpace(profileId))
         {
             return;
         }
 
-        _settings.Current.Model = modelId;
+        var settings = _settings.Current;
+        if (!settings.ActivateModel(profileId))
+        {
+            return;
+        }
+
         Refresh();
-        await _settings.SaveAsync(_settings.Current);
+        await _settings.SaveAsync(settings);
         RequestFocus();
     }
 
@@ -1244,7 +1268,8 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
         }
 
         OnPropertyChanged(nameof(ModelLabel));
-        OnPropertyChanged(nameof(CurrentModelId));
+        OnPropertyChanged(nameof(CurrentProfileId));
+        OnPropertyChanged(nameof(ModelTooltip));
         OnPropertyChanged(nameof(PermissionLabel));
         OnPropertyChanged(nameof(Permission));
         OnPropertyChanged(nameof(PermissionDetail));
@@ -1260,18 +1285,16 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
         SendCommand.NotifyCanExecuteChanged();
     }
 
+    /// <summary>
+    /// 列表只来自设置里配的那几套。以前这里会给「当前模型不在列表里」补一条「当前配置」，
+    /// 现在当前模型本身就是列表里的一项，补出来的那条只会是重复项。
+    /// </summary>
     private void RefreshModels()
     {
-        var current = _settings.Current.Model;
         Models.Clear();
         foreach (var model in _runtime.Models)
         {
             Models.Add(model);
-        }
-
-        if (!Models.Any(model => model.Id == current))
-        {
-            Models.Insert(0, new ModelOption(current, current, "当前配置", string.Empty, 128_000, true));
         }
     }
 }

@@ -375,10 +375,14 @@
                      VerticalAlignment="Center" />
 
           <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
-            <Button x:Name="ModelButton" Classes="pill" Click="OnModelClick" ToolTip.Tip="切换模型">
+            <Button x:Name="ModelButton" Classes="pill" Click="OnModelClick" ToolTip.Tip="{Binding ModelTooltip}">
               <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
                 <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Monitor}" Size="13" />
-                <TextBlock Text="{Binding ModelLabel}" FontSize="12" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding ModelLabel}"
+                           FontSize="12"
+                           MaxWidth="180"
+                           TextTrimming="CharacterEllipsis"
+                           VerticalAlignment="Center" />
                 <arc:ArcGlyph Data="{x:Static arc:ArcIcons.ChevronDown}" Size="12" />
               </StackPanel>
             </Button>

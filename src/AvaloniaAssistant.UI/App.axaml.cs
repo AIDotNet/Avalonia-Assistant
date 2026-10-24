@@ -480,6 +480,12 @@ public partial class AssistantApp : Application
                 await RunWorkspaceFlowAsync(viewModel);
             }
 
+            // 验收用：真点一遍「加一套模型 → 设为当前 → 保存 → 重新读盘 → 切换 → 删除」
+            if (AppLaunchOptions.VerifyModels)
+            {
+                await RunModelsFlowAsync(viewModel);
+            }
+
             if (!string.IsNullOrWhiteSpace(AppLaunchOptions.ComposerText))
             {
                 viewModel.Home.Composer.Text = AppLaunchOptions.ComposerText;
@@ -684,6 +690,75 @@ public partial class AssistantApp : Application
         await Task.Run(() => viewModel.SettingsProvider.SaveAsync(viewModel.Settings));
         await Task.Delay(300);
         Console.WriteLine("[verify] 后台线程存设置：没抛异常");
+    }
+
+    /// <summary>
+    /// 多模型配置的端到端验收：全部走设置页和输入框上的命令，最后重新建一个
+    /// <see cref="JsonSettingsProvider"/> 从磁盘读回来，确认存进去的真是刚才那份。
+    /// </summary>
+    private static async Task RunModelsFlowAsync(MainWindowViewModel viewModel)
+    {
+        if (viewModel.CurrentPage is not SettingsViewModel settings)
+        {
+            await viewModel.OpenSettingsAsync();
+            settings = (SettingsViewModel)viewModel.CurrentPage!;
+        }
+
+        Console.WriteLine(
+            $"[verify-models] 进来 {settings.Profiles.Count} 套，当前='{settings.SelectedProfile?.DisplayName}'"
+            + $" active={settings.Settings.ActiveModelId}");
+
+        settings.AddProfileCommand.Execute(null);
+        var added = settings.SelectedProfile!;
+        added.Name = "本地 Ollama";
+        added.BaseUrl = "http://localhost:11434/v1";
+        added.ApiKey = "ollama";
+        added.ModelId = "qwen3.8:27b";
+        added.SetProtocolCommand.Execute("chat");
+        settings.UseSelectedProfileCommand.Execute(null);
+
+        Console.WriteLine(
+            $"[verify-models] 加完：{string.Join(" / ", settings.Profiles.Select(item => item.DisplayName))}"
+            + $"，当前='{added.DisplayName}'，未保存={settings.HasUnsavedChanges}");
+
+        await settings.SaveCommand.ExecuteAsync(null);
+        Console.WriteLine($"[verify-models] 保存完成，提示='{settings.SavedText}'");
+
+        // 重新读盘：界面上的列表不算数，磁盘上那份才算
+        var reloaded = new JsonSettingsProvider();
+        await reloaded.LoadAsync();
+        var current = reloaded.Current;
+        Console.WriteLine(
+            $"[verify-models] 读盘 {current.Models.Count} 套，当前='{current.ActiveModel?.DisplayName}'"
+            + $" model={current.Model} url={current.BaseUrl} key={(current.ApiKey.Length > 0 ? "有" : "空")}");
+        Console.WriteLine(
+            $"[verify-models] 输入框可选：{string.Join(" / ", viewModel.Runtime.Models.Select(item => item.Name))}");
+        Console.WriteLine($"[verify-models] 胶囊：'{viewModel.Home.Composer.ModelLabel}'");
+
+        // 从输入框切回第一套：切换要连带地址/Key/协议一起换
+        var first = current.Models[0];
+        await viewModel.Home.Composer.SetModelAsync(first.Id);
+        Console.WriteLine(
+            $"[verify-models] 切回 '{first.DisplayName}'：胶囊='{viewModel.Home.Composer.ModelLabel}'"
+            + $" model={viewModel.Settings.Model} url={viewModel.Settings.BaseUrl}"
+            + $" protocol={viewModel.Settings.EffectiveProtocol}");
+
+        // 删掉刚加的那套，再存一次
+        await viewModel.OpenSettingsAsync();
+        settings = (SettingsViewModel)viewModel.CurrentPage!;
+        var target = settings.Profiles.FirstOrDefault(item => item.DisplayName == "本地 Ollama");
+        if (target is not null)
+        {
+            settings.SelectedProfile = target;
+            settings.DeleteSelectedProfileCommand.Execute(null);
+            await settings.SaveCommand.ExecuteAsync(null);
+        }
+
+        var afterDelete = new JsonSettingsProvider();
+        await afterDelete.LoadAsync();
+        Console.WriteLine(
+            $"[verify-models] 删完读盘 {afterDelete.Current.Models.Count} 套，当前='{afterDelete.Current.ActiveModel?.DisplayName}'"
+            + $"，输入框={string.Join(" / ", viewModel.Runtime.Models.Select(item => item.Name))}");
     }
 
     private static async Task CaptureWorkspacePickerAsync(MainWindowViewModel viewModel, string path)

@@ -526,7 +526,7 @@ public partial class ComposerView : UserControl
         {
             list.Children.Add(new TextBlock
             {
-                Text = "还没配模型服务：先去设置里填 API Key 和模型名。",
+                Text = "还没配模型：去设置里添加一套（地址、Key、模型名），保存后这里就能选。",
                 FontSize = 11.5,
                 LineHeight = 17,
                 TextWrapping = TextWrapping.Wrap,
@@ -595,7 +595,7 @@ public partial class ComposerView : UserControl
 
     private Button BuildModelRow(ComposerViewModel viewModel, ModelOption model)
     {
-        var isCurrent = string.Equals(model.Id, viewModel.CurrentModelId, StringComparison.Ordinal);
+        var isCurrent = string.Equals(model.Id, viewModel.CurrentProfileId, StringComparison.Ordinal);
 
         var grid = new Grid
         {

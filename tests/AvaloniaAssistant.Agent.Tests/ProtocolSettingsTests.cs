@@ -40,7 +40,7 @@ public sealed class ProtocolSettingsTests
             }
             """;
 
-        var settings = JsonSerializer.Deserialize<AssistantSettings>(json, AssistantJson.Options)!;
+        var settings = JsonSettingsProvider.LoadFromJson(json);
 
         Assert.Null(settings.Protocol);
         Assert.Equal(AgentProtocol.AnthropicMessages, settings.EffectiveProtocol);
@@ -59,7 +59,7 @@ public sealed class ProtocolSettingsTests
             }
             """;
 
-        var settings = JsonSerializer.Deserialize<AssistantSettings>(json, AssistantJson.Options)!;
+        var settings = JsonSettingsProvider.LoadFromJson(json);
 
         Assert.Equal(AgentProtocol.OpenAiResponses, settings.Protocol);
         Assert.Equal(AgentProtocol.OpenAiResponses, settings.EffectiveProtocol);

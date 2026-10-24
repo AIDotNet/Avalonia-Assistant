@@ -384,8 +384,11 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
     /// <summary>模型切换会让窗口跟着变：换完模型，水位条的分母和 70% 那条线都得重算。</summary>
     private void RefreshContextWindow()
     {
+        // 列表里的 Id 是「模型配置」的 id，不是模型名——两套配置可以指向同一个模型，
+        // 但上下文窗口的覆盖值各自不同，所以必须按当前配置找。
+        var activeId = _settings.Current.ActiveModelId;
         var model = _runtime.Models.FirstOrDefault(
-            item => string.Equals(item.Id, _settings.Current.Model, StringComparison.Ordinal));
+            item => string.Equals(item.Id, activeId, StringComparison.Ordinal));
 
         _contextWindow = model?.ContextWindow is > 0 ? model.ContextWindow : 128_000;
         _contextWindowEstimated = model?.ContextWindowEstimated ?? true;

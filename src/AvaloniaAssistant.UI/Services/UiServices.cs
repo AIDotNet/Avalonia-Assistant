@@ -308,6 +308,12 @@ public static class AppLaunchOptions
     /// </summary>
     public static bool VerifyWorkspaceFlow { get; set; }
 
+    /// <summary>
+    /// 开发用：把「加一套模型 → 设为当前 → 保存 → 重新读盘 → 输入框切换 → 删一套」真跑一遍。
+    /// 走的是设置页上的命令，不是直接改 JSON。
+    /// </summary>
+    public static bool VerifyModels { get; set; }
+
     /// <summary>开发用：单独摆出快捷键总览，配合 --screenshot 检查版式。</summary>
     public static bool ShowShortcuts { get; set; }
 

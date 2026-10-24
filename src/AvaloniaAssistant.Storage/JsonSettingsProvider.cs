@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using AvaloniaAssistant.Abstractions;
 
 namespace AvaloniaAssistant.Storage;
@@ -24,7 +25,11 @@ public sealed class JsonSettingsProvider : ISettingsProvider
         // 首装默认是「普通任务」：工作区得用户自己挑一次。
         // 早先这里塞了 ~/AvaloniaAssistant/Workspace，等于替人做了决定——
         // 一打开就在某个目录里读写文件，而这个目录人根本没选过。
-        return new AssistantSettings();
+        var settings = new AssistantSettings();
+
+        // 至少摆一套空配置：界面上要能看到「当前模型」，而不是一片空白。
+        settings.NormalizeModels();
+        return settings;
     }
 
     public async Task LoadAsync(CancellationToken cancellationToken = default)
@@ -38,17 +43,8 @@ public sealed class JsonSettingsProvider : ISettingsProvider
                 return;
             }
 
-            // 释放同样不能回到被阻塞的 UI 线程：启动时这里是同步等待加载完成。
-            var stream = File.OpenRead(_file);
-            await using (stream.ConfigureAwait(false))
-            {
-                var loaded = await JsonSerializer
-                    .DeserializeAsync<AssistantSettings>(stream, AssistantJson.Options, cancellationToken)
-                    .ConfigureAwait(false);
-
-                _settings = loaded ?? CreateDefault();
-                Normalize(_settings);
-            }
+            var text = await File.ReadAllTextAsync(_file, cancellationToken).ConfigureAwait(false);
+            _settings = LoadFromJson(text);
         }
         catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
         {
@@ -59,6 +55,52 @@ public sealed class JsonSettingsProvider : ISettingsProvider
             _gate.Release();
         }
     }
+
+    /// <summary>
+    /// 解析一份 settings.json。
+    /// <para>
+    /// 旧格式是「一套扁平配置」（provider / apiKey / baseUrl / model / protocol），
+    /// 这里把它搬成 models 里的第一套，并设为当前模型；新格式直接用。
+    /// 迁移放在读取这一层，是因为那几个键和 <see cref="AssistantSettings"/> 上同名的
+    /// 只读代理属性撞名，走 <c>JsonExtensionData</c> 会被直接吞掉。
+    /// </para>
+    /// </summary>
+    public static AssistantSettings LoadFromJson(string json)
+    {
+        AssistantSettings? settings = null;
+
+        if (JsonNode.Parse(json) is JsonObject root)
+        {
+            var hasModels = root.ContainsKey("models");
+            settings = root.Deserialize<AssistantSettings>(AssistantJson.Options);
+
+            if (settings is not null && !hasModels)
+            {
+                var profile = ModelProfile.FromLegacy(
+                    ReadString(root, "provider"),
+                    ReadString(root, "baseUrl"),
+                    ReadString(root, "apiKey"),
+                    ReadString(root, "model"),
+                    ReadString(root, "protocol"));
+
+                if (profile.Model.Length > 0 || profile.BaseUrl.Length > 0 || profile.ApiKey.Length > 0)
+                {
+                    settings.Models.Insert(0, profile);
+                    settings.ActiveModelId = profile.Id;
+                }
+            }
+        }
+
+        settings ??= new AssistantSettings();
+        settings.NormalizeModels();
+        return settings;
+    }
+
+    private static string ReadString(JsonObject root, string key)
+        => root.TryGetPropertyValue(key, out var node) && node is JsonValue value
+           && value.TryGetValue<string>(out var text)
+            ? (text ?? string.Empty).Trim()
+            : string.Empty;
 
     public async Task SaveAsync(AssistantSettings settings, CancellationToken cancellationToken = default)
     {
@@ -96,15 +138,10 @@ public sealed class JsonSettingsProvider : ISettingsProvider
     {
         // 工作区允许为空：用户把「空间」里的记录删干净后，任务就是普通对话。
         // 空值不能再回落到默认工作区，否则删了下次启动又冒出来。
-        if (string.IsNullOrWhiteSpace(settings.Model))
-        {
-            settings.Model = ProviderPreset.For(settings.Provider).Model;
-        }
-
-        if (string.IsNullOrWhiteSpace(settings.BaseUrl))
-        {
-            settings.BaseUrl = ProviderPreset.For(settings.Provider).BaseUrl;
-        }
+        //
+        // 模型配置：旧文件会被搬成一套模型；新文件在这里补齐空模型名 / 空地址、
+        // 去重 id、校正「当前模型」指向，保证运行时不面对半套配置。
+        settings.NormalizeModels();
 
         settings.MaxTokens = Math.Clamp(settings.MaxTokens, 256, 128_000);
         settings.Temperature = Math.Clamp(settings.Temperature, 0, 2);

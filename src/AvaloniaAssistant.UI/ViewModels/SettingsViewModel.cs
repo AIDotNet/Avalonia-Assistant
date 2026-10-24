@@ -32,6 +32,249 @@ public sealed partial class ProviderOptionViewModel : ObservableObject
     private void Select() => _select(this);
 }
 
+/// <summary>
+/// 设置页里的一套模型配置。字段直接读写 <see cref="ModelProfile"/>，
+/// 每次改动都回叫设置页，用来重算「有改动」和列表里的那两行摘要。
+/// </summary>
+public sealed partial class ModelProfileViewModel : ObservableObject
+{
+    private readonly Action<ModelProfileViewModel> _select;
+    private readonly Action _changed;
+    private string _contextWindowText;
+
+    public ModelProfileViewModel(ModelProfile profile, Action<ModelProfileViewModel> select, Action changed)
+    {
+        Profile = profile;
+        _select = select;
+        _changed = changed;
+        _contextWindowText = profile.ContextWindow?.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
+    }
+
+    public ModelProfile Profile { get; }
+
+    public string Id => Profile.Id;
+
+    public string Name
+    {
+        get => Profile.Name;
+        set
+        {
+            var text = value ?? string.Empty;
+            if (string.Equals(Profile.Name, text, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            Profile.Name = text;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(DisplayName));
+            Touch();
+        }
+    }
+
+    public string DisplayName => Profile.DisplayName;
+
+    /// <summary>列表里第二行：服务商 · 协议 · 主机。三样都对得上才分得清两个同名模型。</summary>
+    public string Summary
+        => string.Join(
+            " · ",
+            new[]
+            {
+                Profile.ProviderName,
+                Profile.EffectiveProtocol switch
+                {
+                    AgentProtocol.AnthropicMessages => "Messages",
+                    AgentProtocol.OpenAiResponses => "Responses",
+                    _ => "Chat",
+                },
+                EndpointHost,
+            }.Where(part => !string.IsNullOrWhiteSpace(part)));
+
+    public string EndpointHint => string.IsNullOrWhiteSpace(Profile.BaseUrl) ? "还没填 Base URL" : Profile.BaseUrl;
+
+    public string BaseUrl
+    {
+        get => Profile.BaseUrl;
+        set
+        {
+            if (string.Equals(Profile.BaseUrl, value, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            Profile.BaseUrl = value ?? string.Empty;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(EndpointHint));
+            OnPropertyChanged(nameof(Summary));
+            Touch();
+        }
+    }
+
+    public string ApiKey
+    {
+        get => Profile.ApiKey;
+        set
+        {
+            if (string.Equals(Profile.ApiKey, value, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            Profile.ApiKey = value ?? string.Empty;
+            OnPropertyChanged();
+            Touch();
+        }
+    }
+
+    public string ModelId
+    {
+        get => Profile.Model;
+        set
+        {
+            var text = value ?? string.Empty;
+            if (string.Equals(Profile.Model, text, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            Profile.Model = text;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(DisplayName));
+            Touch();
+        }
+    }
+
+    /// <summary>
+    /// 上下文窗口覆盖值。留空＝按本地模型目录查；填了就必须是正整数，
+    /// 填错时保存会被拦下来，而不是悄悄按「没填」处理。
+    /// </summary>
+    public string ContextWindowText
+    {
+        get => _contextWindowText;
+        set
+        {
+            if (!SetProperty(ref _contextWindowText, value ?? string.Empty))
+            {
+                return;
+            }
+
+            ValidateContextWindow(_contextWindowText);
+            Touch();
+        }
+    }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasContextWindowError))]
+    private string? contextWindowError;
+
+    public bool HasContextWindowError => !string.IsNullOrWhiteSpace(ContextWindowError);
+
+    public string ContextWindowHint => Profile.ContextWindow is { } window
+        ? $"按 {window / 1000d:0.#}k 计算水位与压缩阈值"
+        : "留空则按本地模型目录估算";
+
+    private void ValidateContextWindow(string text)
+    {
+        var trimmed = text.Trim();
+        if (trimmed.Length == 0)
+        {
+            ContextWindowError = null;
+            Profile.ContextWindow = null;
+            OnPropertyChanged(nameof(ContextWindowHint));
+            return;
+        }
+
+        if (!long.TryParse(trimmed, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) || value <= 0)
+        {
+            ContextWindowError = "填正整数，例如 128000；不确定就留空";
+            OnPropertyChanged(nameof(ContextWindowHint));
+            return;
+        }
+
+        ContextWindowError = null;
+        Profile.ContextWindow = value;
+        OnPropertyChanged(nameof(ContextWindowHint));
+    }
+
+    public bool IsChatProtocolSelected => Profile.EffectiveProtocol == AgentProtocol.OpenAiCompatible;
+
+    public bool IsResponsesProtocolSelected => Profile.EffectiveProtocol == AgentProtocol.OpenAiResponses;
+
+    public bool IsMessagesProtocolSelected => Profile.EffectiveProtocol == AgentProtocol.AnthropicMessages;
+
+    /// <summary>没手动选过协议时补一句「跟随服务商推荐」，避免以为是写死的。</summary>
+    public string ProtocolHint => Profile.Protocol is null
+        ? ProtocolCatalog.For(Profile.EffectiveProtocol).Description + "（当前跟随服务商推荐）"
+        : ProtocolCatalog.For(Profile.EffectiveProtocol).Description;
+
+    [ObservableProperty]
+    private bool isSelected;
+
+    /// <summary>是不是输入框那里正在用的那一套。</summary>
+    [ObservableProperty]
+    private bool isActive;
+
+    [ObservableProperty]
+    private bool canDelete;
+
+    [RelayCommand]
+    private void Select() => _select(this);
+
+    [RelayCommand]
+    private void SetProtocol(string protocol)
+    {
+        Profile.Protocol = protocol switch
+        {
+            "responses" => AgentProtocol.OpenAiResponses,
+            "messages" => AgentProtocol.AnthropicMessages,
+            _ => AgentProtocol.OpenAiCompatible,
+        };
+
+        NotifyProtocolChanged();
+        Touch();
+    }
+
+    /// <summary>服务商只是预设来源：换它时把地址、模型、协议一起换成该预设的默认值。</summary>
+    public void ApplyPreset(ProviderPreset preset)
+    {
+        Profile.Provider = preset.Kind;
+        Profile.BaseUrl = preset.BaseUrl;
+        Profile.Model = preset.Model;
+        Profile.Protocol = preset.Protocol;
+
+        _contextWindowText = Profile.ContextWindow?.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
+        OnPropertyChanged(nameof(ContextWindowText));
+        OnPropertyChanged(nameof(BaseUrl));
+        OnPropertyChanged(nameof(ModelId));
+        OnPropertyChanged(nameof(DisplayName));
+        OnPropertyChanged(nameof(Summary));
+        OnPropertyChanged(nameof(EndpointHint));
+        NotifyProtocolChanged();
+        Touch();
+    }
+
+    public void RefreshProtocolSummary()
+    {
+        NotifyProtocolChanged();
+        OnPropertyChanged(nameof(Summary));
+    }
+
+    private void NotifyProtocolChanged()
+    {
+        OnPropertyChanged(nameof(IsChatProtocolSelected));
+        OnPropertyChanged(nameof(IsResponsesProtocolSelected));
+        OnPropertyChanged(nameof(IsMessagesProtocolSelected));
+        OnPropertyChanged(nameof(ProtocolHint));
+        OnPropertyChanged(nameof(Summary));
+        OnPropertyChanged(nameof(ContextWindowHint));
+    }
+
+    private string EndpointHost
+        => Uri.TryCreate(Profile.BaseUrl, UriKind.Absolute, out var uri) ? uri.Host : string.Empty;
+
+    private void Touch() => _changed();
+}
+
 public sealed partial class SettingsViewModel : ObservableObject, IDisposable
 {
     private readonly MainWindowViewModel _host;
@@ -53,10 +296,9 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         _host.FontScaleChanged += OnHostFontScaleChanged;
 
         Providers = new ObservableCollection<ProviderOptionViewModel>(
-            ProviderPreset.All.Select(preset => new ProviderOptionViewModel(preset, SelectProvider)
-            {
-                IsSelected = preset.Kind == Settings.Provider,
-            }));
+            ProviderPreset.All.Select(preset => new ProviderOptionViewModel(preset, SelectProvider)));
+
+        LoadProfileList();
 
         SavedText = string.Empty;
     }
@@ -71,43 +313,155 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
 
     public AssistantSettings Settings { get; }
 
+    /// <summary>
+    /// 当前看的是哪一栏：<c>system</c> 系统设置，<c>models</c> 模型设置。
+    /// 两栏只是同一份设置的两种视角，切换不丢改动——保存条一直在底部。
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsModelSection))]
+    [NotifyPropertyChangedFor(nameof(IsSystemSection))]
+    private string selectedSection = "models";
+
+    /// <summary>只有明确选了 system 才显示系统设置：绑定还没落值时先按模型设置渲染，不会两栏同时出现。</summary>
+    public bool IsSystemSection => string.Equals(SelectedSection, "system", StringComparison.OrdinalIgnoreCase);
+
+    public bool IsModelSection => !IsSystemSection;
+
+    /// <summary>配好的模型。列表本身是可绑定的，删改都直接反映到 <see cref="AssistantSettings.Models"/>。</summary>
+    public ObservableCollection<ModelProfileViewModel> Profiles { get; } = [];
+
     public ObservableCollection<ProviderOptionViewModel> Providers { get; }
 
-    public string ApiKey
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSelectedProfile))]
+    [NotifyPropertyChangedFor(nameof(CanTestConnection))]
+    [NotifyPropertyChangedFor(nameof(CanDeleteProfile))]
+    private ModelProfileViewModel? selectedProfile;
+
+    public bool HasSelectedProfile => SelectedProfile is not null;
+
+    public bool CanDeleteProfile => Profiles.Count > 1;
+
+    partial void OnSelectedProfileChanged(ModelProfileViewModel? value)
     {
-        get => Settings.ApiKey;
-        set
+        foreach (var profile in Profiles)
         {
-            Settings.ApiKey = value;
-            OnPropertyChanged();
-            Touch();
-            ClearTestResult();
+            profile.IsSelected = ReferenceEquals(profile, value);
+        }
+
+        RefreshProviderSelection();
+        ClearTestResult();
+    }
+
+    private void LoadProfileList()
+    {
+        Profiles.Clear();
+        foreach (var profile in Settings.Models)
+        {
+            Profiles.Add(CreateProfileViewModel(profile));
+        }
+
+        RefreshDeleteAvailability();
+        SelectedProfile = Profiles.FirstOrDefault(item => item.Id == Settings.ActiveModelId) ?? Profiles.FirstOrDefault();
+        RefreshActiveFlags();
+        RefreshProviderSelection();
+    }
+
+    private ModelProfileViewModel CreateProfileViewModel(ModelProfile profile)
+        => new(profile, SelectProfile, Touch) { CanDelete = Profiles.Count > 1 };
+
+    private void SelectProfile(ModelProfileViewModel profile) => SelectedProfile = profile;
+
+    /// <summary>只改「当前用哪套」：真正的生效要等保存，和这一页的其他设置保持一致。</summary>
+    [RelayCommand]
+    private void UseSelectedProfile()
+    {
+        if (SelectedProfile is null)
+        {
+            return;
+        }
+
+        Settings.ActiveModelId = SelectedProfile.Id;
+        RefreshActiveFlags();
+        Touch();
+    }
+
+    [RelayCommand]
+    private void AddProfile()
+    {
+        var created = ModelProfile.Create(AgentProviderKind.Custom, usePresetDefaults: true);
+        Settings.Models.Add(created);
+
+        var item = CreateProfileViewModel(created);
+        Profiles.Add(item);
+        RefreshDeleteAvailability();
+        SelectedProfile = item;
+
+        // 只有一套时它就是当前模型，新建的这套不必再点一次「设为当前」
+        if (Profiles.Count == 1 || string.IsNullOrWhiteSpace(Settings.ActiveModelId))
+        {
+            Settings.ActiveModelId = created.Id;
+            RefreshActiveFlags();
+        }
+
+        Touch();
+    }
+
+    [RelayCommand]
+    private void DeleteSelectedProfile()
+    {
+        if (SelectedProfile is not { } item || Profiles.Count <= 1)
+        {
+            return;
+        }
+
+        var index = Profiles.IndexOf(item);
+        Settings.Models.Remove(item.Profile);
+        Profiles.Remove(item);
+
+        // 删掉的正是当前用的那套：接到列表里剩下的第一套，别让「当前模型」指向一个不存在的 id
+        if (string.Equals(Settings.ActiveModelId, item.Id, StringComparison.Ordinal))
+        {
+            Settings.ActiveModelId = Profiles[0].Id;
+        }
+
+        RefreshActiveFlags();
+        RefreshDeleteAvailability();
+        SelectedProfile = Profiles[Math.Clamp(index, 0, Profiles.Count - 1)];
+        Touch();
+    }
+
+    private void RefreshActiveFlags()
+    {
+        foreach (var profile in Profiles)
+        {
+            profile.IsActive = string.Equals(profile.Id, Settings.ActiveModelId, StringComparison.Ordinal);
         }
     }
 
-    public string BaseUrl
+    private void RefreshDeleteAvailability()
     {
-        get => Settings.BaseUrl;
-        set
+        var canDelete = Profiles.Count > 1;
+        foreach (var profile in Profiles)
         {
-            Settings.BaseUrl = value;
-            OnPropertyChanged();
-            Touch();
-            ClearTestResult();
+            profile.CanDelete = canDelete;
+        }
+
+        OnPropertyChanged(nameof(CanDeleteProfile));
+    }
+
+    private void RefreshProviderSelection()
+    {
+        var kind = SelectedProfile?.Profile.Provider;
+        foreach (var provider in Providers)
+        {
+            provider.IsSelected = kind is not null && provider.Preset.Kind == kind;
         }
     }
 
-    public string Model
-    {
-        get => Settings.Model;
-        set
-        {
-            Settings.Model = value;
-            OnPropertyChanged();
-            Touch();
-            ClearTestResult();
-        }
-    }
+    public string DataFolder => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        "AvaloniaAssistant");
 
     /// <summary>
     /// 数值字段用字符串接：以前直接绑 double / int，填错时绑定静默失败，
@@ -162,7 +516,10 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     public bool HasMaxTokensError => !string.IsNullOrWhiteSpace(MaxTokensError);
 
     /// <summary>有任一字段没填对：保存要拦下来，不能假装成功。</summary>
-    public bool HasFieldErrors => HasTemperatureError || HasMaxTokensError;
+    public bool HasFieldErrors => HasTemperatureError || HasMaxTokensError || HasProfileErrors;
+
+    /// <summary>模型里也有必填项（地址、模型名）和上下文窗口的数字校验。</summary>
+    private bool HasProfileErrors => Profiles.Any(profile => profile.HasContextWindowError);
 
     /// <summary>
     /// 保存按钮能不能点。字段没填对时直接禁掉——点得下去、点了才说「没保存」，
@@ -208,21 +565,50 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
 
     /// <summary>有没有还没保存的改动。返回按钮和底部提示都看它。</summary>
     public bool HasUnsavedChanges =>
-        Settings.Provider != _baseline.Provider
-        || Settings.Permission != _baseline.Permission
-        || Settings.Protocol != _baseline.Protocol
+        Settings.Permission != _baseline.Permission
         || Settings.MaxTokens != _baseline.MaxTokens
         || Math.Abs(Settings.Temperature - _baseline.Temperature) > 0.0001
-        || !string.Equals(Settings.ApiKey, _baseline.ApiKey, StringComparison.Ordinal)
-        || !string.Equals(Settings.BaseUrl, _baseline.BaseUrl, StringComparison.Ordinal)
-        || !string.Equals(Settings.Model, _baseline.Model, StringComparison.Ordinal)
-        || !string.Equals(Settings.WorkspacePath, _baseline.WorkspacePath, StringComparison.OrdinalIgnoreCase);
+        || !string.Equals(Settings.WorkspacePath, _baseline.WorkspacePath, StringComparison.OrdinalIgnoreCase)
+        || ModelsChanged();
+
+    /// <summary>
+    /// 模型列表是不是改过。逐字段比：增删一套、改个地址、换个协议、连删两套又加回来，
+    /// 只有完全一样才算没动。
+    /// </summary>
+    private bool ModelsChanged()
+    {
+        if (!string.Equals(Settings.ActiveModelId, _baseline.ActiveModelId, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        if (Settings.Models.Count != _baseline.Models.Count)
+        {
+            return true;
+        }
+
+        for (var index = 0; index < Settings.Models.Count; index++)
+        {
+            if (!Settings.Models[index].SameAs(_baseline.Models[index]))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     /// <summary>点了返回但还有改动：底部换成「保存并返回 / 放弃改动」，别一声不响地丢掉。</summary>
     [ObservableProperty]
     private bool showLeavePrompt;
 
-    private void Touch() => OnPropertyChanged(nameof(HasUnsavedChanges));
+    private void Touch()
+    {
+        OnPropertyChanged(nameof(HasUnsavedChanges));
+        OnPropertyChanged(nameof(CanSave));
+        OnPropertyChanged(nameof(HasFieldErrors));
+        ClearTestResult();
+    }
 
     /// <summary>改了和连接有关的字段，上一次的测试结论就不作数了。</summary>
     private void ClearTestResult()
@@ -233,19 +619,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         }
     }
 
-
     public string WorkspacePath => Settings.WorkspacePath;
-
-    public bool IsChatProtocolSelected => Settings.EffectiveProtocol == AgentProtocol.OpenAiCompatible;
-
-    public bool IsResponsesProtocolSelected => Settings.EffectiveProtocol == AgentProtocol.OpenAiResponses;
-
-    public bool IsMessagesProtocolSelected => Settings.EffectiveProtocol == AgentProtocol.AnthropicMessages;
-
-    /// <summary>协议说明。没手动选过时补一句“跟随服务商推荐”，避免以为是写死的。</summary>
-    public string ProtocolHint => Settings.Protocol is null
-        ? Settings.ProtocolInfo.Description + "（当前跟随服务商推荐）"
-        : Settings.ProtocolInfo.Description;
 
     public bool IsReadOnlySelected => Settings.Permission == PermissionMode.ReadOnly;
 
@@ -329,10 +703,6 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         Settings.LastSessionId = live.LastSessionId;
     }
 
-    public string DataFolder => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "AvaloniaAssistant");
-
     [ObservableProperty]
     private string savedText = string.Empty;
 
@@ -364,9 +734,12 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(TestButtonText))]
     [NotifyPropertyChangedFor(nameof(TestBrush))]
+    [NotifyPropertyChangedFor(nameof(CanTestConnection))]
     private bool isTesting;
 
     public string TestButtonText => IsTesting ? "测试中…" : "测试连接";
+
+    public bool CanTestConnection => !IsTesting && !IsSaving && HasSelectedProfile;
 
     /// <summary>测试结果。改任何一项设置都会清掉，免得旧的「连上了」挂在改过的表单上。</summary>
     [ObservableProperty]
@@ -381,16 +754,19 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     public bool ShowTestResult => !string.IsNullOrWhiteSpace(TestResultText);
 
     public IBrush TestBrush => IsTesting
-        ? new SolidColorBrush(Color.Parse("#6F6F69"))
+        ? new SolidColorBrush(Color.FromArgb(0x99, 0x6F, 0x6F, 0x69))
         : TestOk
             ? new SolidColorBrush(Color.Parse("#2E7D32"))
             : new SolidColorBrush(Color.Parse("#B3261E"));
 
-    /// <summary>用表单里这份（还没保存的）设置发一次最小请求，别让人保存完再靠发消息去试。</summary>
+    /// <summary>
+    /// 用选中的那一套（还没保存的也可以）发一次最小请求。
+    /// 以前只能测「当前配置」，现在列表里改哪套就测哪套。
+    /// </summary>
     [RelayCommand]
     private async Task TestConnectionAsync()
     {
-        if (IsTesting || IsSaving)
+        if (!CanTestConnection || SelectedProfile is null)
         {
             return;
         }
@@ -401,7 +777,11 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
 
         try
         {
-            var result = await _host.Runtime.TestConnectionAsync(Settings);
+            var probe = new AssistantSettings();
+            probe.Models = [SelectedProfile.Profile.Clone()];
+            probe.ActiveModelId = SelectedProfile.Id;
+
+            var result = await _host.Runtime.TestConnectionAsync(probe);
             TestOk = result.Ok;
             TestResultText = result.Summary;
         }
@@ -421,45 +801,15 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void SelectProvider(ProviderOptionViewModel option)
     {
-        Settings.Provider = option.Preset.Kind;
-        Settings.BaseUrl = option.Preset.BaseUrl;
-        Settings.Model = option.Preset.Model;
-        // 换服务商时协议回到推荐值，用户想用代理绕协议可以再手动改。
-        Settings.Protocol = option.Preset.Protocol;
-
-        foreach (var provider in Providers)
+        if (SelectedProfile is null)
         {
-            provider.IsSelected = ReferenceEquals(provider, option);
+            return;
         }
 
-        OnPropertyChanged(nameof(BaseUrl));
-        OnPropertyChanged(nameof(Model));
-        NotifyProtocolChanged();
-        Touch();
+        SelectedProfile.ApplyPreset(option.Preset);
+        RefreshProviderSelection();
         ClearTestResult();
-    }
-
-    [RelayCommand]
-    private void SetProtocol(string protocol)
-    {
-        Settings.Protocol = protocol switch
-        {
-            "responses" => AgentProtocol.OpenAiResponses,
-            "messages" => AgentProtocol.AnthropicMessages,
-            _ => AgentProtocol.OpenAiCompatible,
-        };
-
-        NotifyProtocolChanged();
         Touch();
-        ClearTestResult();
-    }
-
-    private void NotifyProtocolChanged()
-    {
-        OnPropertyChanged(nameof(IsChatProtocolSelected));
-        OnPropertyChanged(nameof(IsResponsesProtocolSelected));
-        OnPropertyChanged(nameof(IsMessagesProtocolSelected));
-        OnPropertyChanged(nameof(ProtocolHint));
     }
 
     [RelayCommand]
@@ -510,6 +860,12 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
 
         if (HasFieldErrors)
         {
+            // 错在模型那栏却停在基础设置：跳回去，否则用户只看到保存按钮是灰的，找不到哪项没填对
+            if (HasProfileErrors)
+            {
+                SelectedSection = "models";
+            }
+
             // 字段里有错就别提示「已保存」：用户会以为那份错的配置生效了
             SavedText = "有参数没填对，先按提示改一下";
             ShowToast("有参数没填对，还没保存", error: true);
@@ -522,20 +878,16 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         {
             // 窗口/侧栏/最后会话这些是后台实时写的，不能被进页面时的快照覆盖回去。
             SyncWindowPreferences();
-
-            if (string.IsNullOrWhiteSpace(Settings.Model))
-            {
-                Settings.Model = ProviderPreset.For(Settings.Provider).Model;
-            }
-
-            if (string.IsNullOrWhiteSpace(Settings.BaseUrl))
-            {
-                Settings.BaseUrl = ProviderPreset.For(Settings.Provider).BaseUrl;
-            }
+            Settings.NormalizeModels();
 
             await _host.SettingsProvider.SaveAsync(Settings);
             _baseline = Settings.Clone();
             ShowLeavePrompt = false;
+
+            // 归一化可能补了空模型名/空地址：重建一次列表，界面显示的才是真正存进去的那份
+            var keep = SelectedProfile?.Id;
+            LoadProfileList();
+            SelectedProfile = Profiles.FirstOrDefault(item => item.Id == keep) ?? SelectedProfile;
             Touch();
             SavedText = $"已保存 · {DateTime.Now:HH:mm:ss}";
             ShowToast("设置已保存", error: false);

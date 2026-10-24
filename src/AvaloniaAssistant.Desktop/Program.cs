@@ -115,6 +115,9 @@ internal static class Program
                 case "--permission-pending":
                     AppLaunchOptions.PermissionPending = true;
                     break;
+                case "--verify-models":
+                    AppLaunchOptions.VerifyModels = true;
+                    break;
                 case "--model-flyout":
                     AppLaunchOptions.ModelFlyout = true;
                     break;

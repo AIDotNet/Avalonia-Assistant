@@ -22,14 +22,6 @@ namespace AvaloniaAssistant.Agent;
 /// </remarks>
 public sealed class PiAgentRuntime : IAssistantRuntime
 {
-    private static readonly Dictionary<AgentProviderKind, string[]> KnownModels = new()
-    {
-        [AgentProviderKind.DeepSeek] = ["deepseek-flash", "deepseek-v4-pro"],
-        [AgentProviderKind.OpenAI] = ["gpt-6.1-sol", "gpt-6-astra", "gpt-6-luna"],
-        [AgentProviderKind.Anthropic] = ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-fable-5-1"],
-        [AgentProviderKind.Custom] = ["qwen3.8:27b", "qwen3.8-flash"],
-    };
-
     private readonly ISettingsProvider _settings;
     private readonly IPiStreamFactory? _streams;
     private readonly AgentToolRegistry _registry;
@@ -107,6 +99,9 @@ public sealed class PiAgentRuntime : IAssistantRuntime
 
         var writer = channel.Writer;
         var modelOption = ResolveModel(settings);
+
+        // 消息下面那行字写的是模型名，不是模型配置的 id：两套配置可以指向同一个模型。
+        var runModel = string.IsNullOrWhiteSpace(settings.Model) ? modelOption.Name : settings.Model;
         var cwd = ResolveWorkspace(request.WorkspacePath);
 
         SessionHolder? holder = null;
@@ -169,7 +164,7 @@ public sealed class PiAgentRuntime : IAssistantRuntime
         {
             try
             {
-                await writer.WriteAsync(new AgentStreamEvent.RunStarted(request.SessionId, modelOption.Id)).ConfigureAwait(false);
+                await writer.WriteAsync(new AgentStreamEvent.RunStarted(request.SessionId, runModel)).ConfigureAwait(false);
                 await session.PromptAsync(
                         request.Prompt,
                         new PromptOptions { Source = "interactive", Images = LoadImages(request.Images) })
@@ -182,11 +177,11 @@ public sealed class PiAgentRuntime : IAssistantRuntime
                     last?.ErrorMessage,
                     stats.Tokens.Input,
                     stats.Tokens.Output,
-                    modelOption.Id)).ConfigureAwait(false);
+                    runModel)).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
-                writer.TryWrite(new AgentStreamEvent.RunCompleted(AgentStopReason.Aborted, null, 0, 0, modelOption.Id));
+                writer.TryWrite(new AgentStreamEvent.RunCompleted(AgentStopReason.Aborted, null, 0, 0, runModel));
             }
             catch (Exception ex)
             {
@@ -270,6 +265,7 @@ public sealed class PiAgentRuntime : IAssistantRuntime
                 Catalog = catalog,
                 LastHistory = history,
                 Permission = request.Permission,
+                ModelProfileId = settings.ActiveModelId ?? string.Empty,
                 Model = settings.Model,
                 ApiKey = settings.ApiKey,
                 BaseUrl = settings.BaseUrl,
@@ -415,44 +411,61 @@ public sealed class PiAgentRuntime : IAssistantRuntime
     /// <summary>没选工作区的任务落在 ~/.avaloniaassistant，不再拿整个用户目录当工作区。</summary>
     private static string ResolveWorkspace(string? workspacePath) => PlainWorkspace.Resolve(workspacePath);
 
+    /// <summary>
+    /// 输入框里的模型列表就是用户配的那几套，不再按服务商预设脑补。
+    /// 以前这里按 <c>KnownModels[provider]</c> 列一长串：连着公司网关、只配了一个 deepseek-flash，
+    /// 却能把 OpenAI 预设里的三个 GPT 模型全摆出来，点了必然报错——那些模型端点根本没有。
+    /// </summary>
     private static IReadOnlyList<ModelOption> BuildModels(AssistantSettings settings)
     {
-        var preset = ProviderPreset.For(settings.Provider);
-        var models = new List<ModelOption>();
-        foreach (var id in KnownModels[settings.Provider])
+        if (settings.Models.Count == 0)
         {
-            models.Add(CreateOption(id, id, preset, preset.Description));
+            return [];
         }
 
-        if (models.All(option => option.Id != settings.Model))
-        {
-            models.Insert(0, CreateOption(settings.Model, settings.Model, preset, "当前配置"));
-        }
-
-        return models;
+        return settings.Models.Select(CreateOption).ToList();
     }
 
-    /// <summary>带上本地目录里的上下文窗口；查不到就标成估算，界面据此写「（估算）」。</summary>
-    private static ModelOption CreateOption(
-        string id,
-        string name,
-        ProviderPreset preset,
-        string description)
+    /// <summary>带上本地目录里的上下文窗口；模型配置里写了覆盖值就用它，查不到才标成估算。</summary>
+    private static ModelOption CreateOption(ModelProfile profile)
     {
-        var window = ModelContextCatalog.Find(id);
+        var window = profile.ContextWindow ?? ModelContextCatalog.Find(profile.Model);
         return new ModelOption(
-            id,
-            name,
-            preset.Name,
-            description,
+            profile.Id,
+            profile.DisplayName,
+            profile.ProviderName,
+            Describe(profile),
             window ?? ModelContextCatalog.FallbackWindow,
             window is null);
     }
 
     private static ModelOption ResolveModel(AssistantSettings settings)
+        => settings.ActiveModel is { } profile
+            ? CreateOption(profile)
+            : new ModelOption(string.Empty, string.Empty, string.Empty, string.Empty, ModelContextCatalog.FallbackWindow, true);
+
+    /// <summary>浮层第二行：模型名 / 协议 / 主机。同名时不重复写两遍。</summary>
+    private static string Describe(ModelProfile profile)
     {
-        var preset = ProviderPreset.For(settings.Provider);
-        return CreateOption(settings.Model, settings.Model, preset, preset.Description);
+        var parts = new List<string>(3);
+        if (!string.Equals(profile.Model, profile.DisplayName, StringComparison.Ordinal))
+        {
+            parts.Add(profile.Model);
+        }
+
+        parts.Add(profile.EffectiveProtocol switch
+        {
+            AgentProtocol.AnthropicMessages => "Messages",
+            AgentProtocol.OpenAiResponses => "Responses",
+            _ => "Chat",
+        });
+
+        if (Uri.TryCreate(profile.BaseUrl, UriKind.Absolute, out var uri))
+        {
+            parts.Add(uri.Host);
+        }
+
+        return string.Join(" · ", parts.Where(part => !string.IsNullOrWhiteSpace(part)));
     }
 
     private static AgentStopReason MapStop(StopReason? reason) => reason switch
@@ -537,6 +550,9 @@ public sealed class PiAgentRuntime : IAssistantRuntime
 
         public required PermissionMode Permission { get; init; }
 
+        /// <summary>建会话时用的是哪一套模型配置。两套配置可能模型名、端点都一样，但上下文窗口覆盖不同。</summary>
+        public required string ModelProfileId { get; init; }
+
         public required string Model { get; init; }
 
         public required string ApiKey { get; init; }
@@ -556,6 +572,7 @@ public sealed class PiAgentRuntime : IAssistantRuntime
         /// </summary>
         public bool Matches(IReadOnlyList<HistoryTurn> history, AssistantSettings settings)
             => Permission == settings.Permission
+               && ModelProfileId == (settings.ActiveModelId ?? string.Empty)
                && Model == settings.Model
                && ApiKey == settings.ApiKey
                && BaseUrl == settings.BaseUrl

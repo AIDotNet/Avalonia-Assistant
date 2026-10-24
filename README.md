@@ -95,19 +95,20 @@ dotnet run --project src/AvaloniaAssistant.Desktop
 
 首次启动进入首页，点右上角「设置」或提示条里的「去设置」：
 
-1. 选一个服务商（默认 DeepSeek）；
-2. 填 API Key；
-3. Base URL 与模型会自动带出，也可以手动改；
-4. 保存后回到首页，直接输入任务。
+1. 在「模型」里配一套：名称（可留空，留空就显示模型名）、Base URL、API Key、模型名；
+2. 服务商预设只负责带默认值（DeepSeek / OpenAI / Anthropic / 自定义），协议按端点选
+   Chat Completions / Responses / Anthropic Messages；
+3. 需要多个渠道就点左边「+ 添加模型」继续加：每套有各自的地址、Key 和协议，互不影响；
+4. 保存后，输入框下方那颗胶囊里随时切换当前模型。列表里只有你配过的那几套。
 
-默认配置：
+预设带出的默认值：
 
-| 服务商 | Base URL | 默认模型 | 备选 |
-| --- | --- | --- | --- |
-| DeepSeek | `https://api.deepseek.com/v1` | `deepseek-flash` | `deepseek-v4-pro` |
-| OpenAI | `https://api.openai.com/v1` | `gpt-6.1-sol` | `gpt-6-astra`（需申请）、`gpt-6-luna` |
-| Anthropic | `https://api.anthropic.com` | `claude-sonnet-5-5` | `claude-opus-5-5`、`claude-haiku-5-5` |
-| 自定义 | `http://localhost:11434/v1` | `qwen3.8:27b` | `qwen3.8-flash`（云端 API 名） |
+| 预设 | Base URL | 默认模型 | 协议 | 该厂商其它常用模型 |
+| --- | --- | --- | --- | --- |
+| DeepSeek | `https://api.deepseek.com/v1` | `deepseek-flash` | Chat Completions | `deepseek-v4-pro` |
+| OpenAI | `https://api.openai.com/v1` | `gpt-6.1-sol` | Chat Completions | `gpt-6-astra`（需申请）、`gpt-6-luna` |
+| Anthropic | `https://api.anthropic.com` | `claude-sonnet-5-5` | Anthropic Messages | `claude-opus-5-5`、`claude-haiku-5-5` |
+| 自定义 | `http://localhost:11434/v1` | `qwen3.8:27b` | Chat Completions | `qwen3.8-flash`（云端 API 名） |
 
 > 默认走「够用且便宜」的那一档：DeepSeek 用 Flash、Anthropic 用 Sonnet、本地用 27B。要更强就换成
 > `deepseek-v4-pro` 或 `claude-opus-5-5`，Token 消耗也会跟着上去。
@@ -116,6 +117,10 @@ dotnet run --project src/AvaloniaAssistant.Desktop
 > DeepSeek `deepseek-flash` 用连字符，Ollama 的 tag 用冒号（`qwen3.8:27b`），填错直接 404。
 > 旧的 `deepseek-chat` / `deepseek-reasoner` 已于 2026-07-24 下线，`deepseek-v4-flash` 也已退役
 > （请求会被转到 `deepseek-flash`，但别再写了）。
+>
+> 公司网关、代理这类自建端点选「自定义」：预设里的模型名只是该厂商的示例，
+> App 不会替你猜端点上有哪些模型。旧版单套配置（settings.json 里的扁平 provider/apiKey/...）
+> 会在首次启动时自动搬成一套模型，地址和预设对不上时标为「自定义」。
 
 > 自定义端点必须是 OpenAI 兼容的 `/chat/completions`。本地 LLM 不再走 LLamaSharp，
 > 用 Ollama / LM Studio 暴露一个兼容端点即可。
