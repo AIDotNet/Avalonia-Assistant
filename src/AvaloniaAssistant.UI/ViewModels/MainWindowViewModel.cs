@@ -135,13 +135,25 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
     }
 
-    /// <summary>「任务」是全部任务的总入口：归了空间也还是任务，不从这里消失。</summary>
-    public string SessionCountText => IsSearching
+    /// <summary>
+    /// 「任务」是全部任务的总入口：归了空间也还是任务，不从这里消失。
+    /// 标题和计数写在一起（「任务 (10)」），和「空间」那行同一个写法。
+    /// </summary>
+    public string TaskSectionText => IsSearching
         ? $"任务 ({_visibleSessionCount})"
         : $"任务 ({_sessionCache.Count})";
 
-    /// <summary>「空间」标题右侧跟着条数，和「任务」保持一致；一个都没有时不挂个 0。</summary>
-    public string WorkspaceCountText => HasWorkspaces ? $"空间 ({Workspaces.Count})" : "空间";
+    /// <summary>「空间」标题。一个都没有时不挂个 0。</summary>
+    public string WorkspaceSectionText => HasWorkspaces ? $"空间 ({Workspaces.Count})" : "空间";
+
+    /// <summary>空间区能不能整体收起。和「任务」一样是浏览用的开关，只活在这次运行里。</summary>
+    private bool _workspaceSectionExpanded = true;
+
+    /// <summary>搜索时强制展开：命中藏在收起的标题里，只看见个数字等于没搜。</summary>
+    public bool IsWorkspaceSectionExpanded => IsSearching || _workspaceSectionExpanded;
+
+    /// <summary>空间区收起来时，那句「还没有空间」的提示也一起收掉。</summary>
+    public bool ShowWorkspaceEmptyHint => IsWorkspaceSectionExpanded && !HasWorkspaces;
 
     public bool HasNoSessions => _sessionCache.Count == 0;
 
@@ -612,6 +624,15 @@ public sealed partial class MainWindowViewModel : ObservableObject
     {
         _taskSectionExpanded = !IsTaskSectionExpanded;
         OnPropertyChanged(nameof(IsTaskSectionExpanded));
+    }
+
+    /// <summary>点「空间」标题：展开/收起全部空间。空间多的时候不用一个个收。</summary>
+    [RelayCommand]
+    private void ToggleWorkspaceSection()
+    {
+        _workspaceSectionExpanded = !_workspaceSectionExpanded;
+        OnPropertyChanged(nameof(IsWorkspaceSectionExpanded));
+        OnPropertyChanged(nameof(ShowWorkspaceEmptyHint));
     }
 
     public Task StartNewChatAsync(string? prompt)
@@ -1157,15 +1178,17 @@ public sealed partial class MainWindowViewModel : ObservableObject
                     displayTitles.GetValueOrDefault(session.Id, session.Title)))));
         }
 
-        OnPropertyChanged(nameof(SessionCountText));
+        OnPropertyChanged(nameof(TaskSectionText));
         OnPropertyChanged(nameof(HasNoSessions));
         OnPropertyChanged(nameof(ShowEmptyTasksHint));
         OnPropertyChanged(nameof(ShowNoSearchResults));
         OnPropertyChanged(nameof(IsSearching));
         OnPropertyChanged(nameof(SearchEmptyText));
         OnPropertyChanged(nameof(IsTaskSectionExpanded));
+        OnPropertyChanged(nameof(IsWorkspaceSectionExpanded));
         OnPropertyChanged(nameof(HasWorkspaces));
-        OnPropertyChanged(nameof(WorkspaceCountText));
+        OnPropertyChanged(nameof(WorkspaceSectionText));
+        OnPropertyChanged(nameof(ShowWorkspaceEmptyHint));
     }
 
     private SessionItemViewModel CreateSessionItem(

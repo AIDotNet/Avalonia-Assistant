@@ -334,7 +334,7 @@ public sealed class PiAgentRuntime : IAssistantRuntime
                 return new BeforeToolCallResult(Block: true, Reason: "没有可用的授权界面，已阻止该操作。");
             }
 
-            var approved = await request.ApprovalGate.RequestAsync(
+            var decision = await request.ApprovalGate.RequestAsync(
                 new ToolApprovalRequest(
                     request.SessionId,
                     name,
@@ -344,9 +344,23 @@ public sealed class PiAgentRuntime : IAssistantRuntime
                     request.Permission),
                 token).ConfigureAwait(false);
 
-            return approved
-                ? null
-                : new BeforeToolCallResult(Block: true, Reason: "用户拒绝了该操作。请停下来说明原因，不要重复尝试。");
+            if (decision.Allowed)
+            {
+                return null;
+            }
+
+            // 用户在卡片里改了参数：SDK 不允许改写 context.Args，只能拦下这次调用，
+            // 把改后的参数写进理由，让模型在下一步原样重发。措辞要足够硬，否则模型会自由发挥。
+            if (!string.IsNullOrWhiteSpace(decision.CorrectedArguments))
+            {
+                return new BeforeToolCallResult(
+                    Block: true,
+                    Reason: $"用户没有允许原来的参数，而是把它改成了下面这份。"
+                            + $"请立刻用这份参数重新调用 {name} 一次，不要解释、不要改动其它字段：\n"
+                            + decision.CorrectedArguments);
+            }
+
+            return new BeforeToolCallResult(Block: true, Reason: "用户拒绝了该操作。请停下来说明原因，不要重复尝试。");
         };
     }
 
@@ -406,21 +420,38 @@ public sealed class PiAgentRuntime : IAssistantRuntime
         var models = new List<ModelOption>();
         foreach (var id in KnownModels[settings.Provider])
         {
-            models.Add(new ModelOption(id, id, preset.Name, preset.Description));
+            models.Add(CreateOption(id, id, preset, preset.Description));
         }
 
         if (models.All(option => option.Id != settings.Model))
         {
-            models.Insert(0, new ModelOption(settings.Model, settings.Model, preset.Name, "当前配置"));
+            models.Insert(0, CreateOption(settings.Model, settings.Model, preset, "当前配置"));
         }
 
         return models;
     }
 
+    /// <summary>带上本地目录里的上下文窗口；查不到就标成估算，界面据此写「（估算）」。</summary>
+    private static ModelOption CreateOption(
+        string id,
+        string name,
+        ProviderPreset preset,
+        string description)
+    {
+        var window = ModelContextCatalog.Find(id);
+        return new ModelOption(
+            id,
+            name,
+            preset.Name,
+            description,
+            window ?? ModelContextCatalog.FallbackWindow,
+            window is null);
+    }
+
     private static ModelOption ResolveModel(AssistantSettings settings)
     {
         var preset = ProviderPreset.For(settings.Provider);
-        return new ModelOption(settings.Model, settings.Model, preset.Name, preset.Description);
+        return CreateOption(settings.Model, settings.Model, preset, preset.Description);
     }
 
     private static AgentStopReason MapStop(StopReason? reason) => reason switch

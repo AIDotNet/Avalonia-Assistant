@@ -84,8 +84,8 @@ internal sealed class CodingSessionFactory
                     Input = [Pi.Ai.Models.ModelInput.Text],
                     Cost = new ModelCostRates(0, 0),
                     Reasoning = false,
-                    // 目录里查不到该模型的真实窗口，取一个保守值让压缩按比例触发。
-                    ContextWindow = 128_000,
+                    // 窗口按本地模型目录来；查不到才退回保守值，避免压缩阈值和界面水位条各说一套。
+                    ContextWindow = ModelContextCatalog.Resolve(settings.Model),
                     MaxTokens = settings.MaxTokens,
                 },
             ],

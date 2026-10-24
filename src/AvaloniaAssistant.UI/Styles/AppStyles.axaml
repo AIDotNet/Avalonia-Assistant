@@ -129,6 +129,20 @@
     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
   </Style>
 
+  <!--
+    两区标题（任务 / 空间）共用这一套：高度和左距一致，折叠箭头在文字右侧。
+    箭头放右边，标题就不需要左侧槽位去凑对齐——之前两区差 40px 就是那么来的。
+  -->
+  <Style Selector="Button.nav.section-head">
+    <Setter Property="Height" Value="32" />
+    <Setter Property="Padding" Value="8,0" />
+    <Setter Property="HorizontalContentAlignment" Value="Left" />
+  </Style>
+
+  <Style Selector="Button.nav.section-head:pointerover">
+    <Setter Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+  </Style>
+
   <Style Selector="Button.icon">
     <Setter Property="Transitions">
       <Transitions>

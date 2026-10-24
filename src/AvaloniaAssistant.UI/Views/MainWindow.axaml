@@ -22,6 +22,24 @@
                        DataContext="{Binding}"
                        IsVisible="{Binding IsSidebarVisible}" />
 
+    <!-- 折叠态占一条窄轨，专门放「展开侧栏」。
+         以前这个按钮浮在内容区左上角，而页内 header 本身就有一个靠左的按钮
+         （返回箭头、刷新），两个图标叠在同一点，看着像多出来一个。
+         现在窄轨和页面各自一块地方：左边是「侧栏」，右边是「这一页」。 -->
+    <Border Grid.Column="0"
+            Width="40"
+            IsVisible="{Binding !IsSidebarVisible}"
+            Background="{StaticResource SidebarBrush}">
+      <Button Classes="icon"
+              HorizontalAlignment="Center"
+              VerticalAlignment="Top"
+              Margin="0,18,0,0"
+              Command="{Binding ToggleSidebarCommand}"
+              ToolTip.Tip="展开侧边栏">
+        <arc:ArcGlyph Data="{x:Static arc:ArcIcons.PanelLeft}" Size="15" />
+      </Button>
+    </Border>
+
     <!-- 侧栏宽度可拖：长任务名和深层目录不该只能靠悬停卡片看全 -->
     <Border x:Name="SidebarResizer"
             Grid.Column="1"
@@ -44,16 +62,6 @@
             ClipToBounds="True">
       <Grid>
         <ContentControl Content="{Binding CurrentPage}" />
-
-        <Button Classes="icon"
-                IsVisible="{Binding !IsSidebarVisible}"
-                HorizontalAlignment="Left"
-                VerticalAlignment="Top"
-                Margin="10"
-                Command="{Binding ToggleSidebarCommand}"
-                ToolTip.Tip="展开侧边栏">
-          <arc:ArcGlyph Data="{x:Static arc:ArcIcons.PanelLeft}" Size="15" />
-        </Button>
       </Grid>
     </Border>
   </Grid>

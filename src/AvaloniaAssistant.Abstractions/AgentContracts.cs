@@ -42,11 +42,17 @@ public abstract record AgentStreamEvent
     public sealed record RunFailed(string Message) : AgentStreamEvent;
 }
 
+/// <summary>
+/// 模型菜单里的一项。<see cref="ContextWindow"/> 来自本地模型目录，
+/// <see cref="ContextWindowEstimated"/> 为 true 表示目录里没查到、用的是保守值。
+/// </summary>
 public sealed record ModelOption(
     string Id,
     string Name,
     string ProviderName,
-    string Description);
+    string Description,
+    long ContextWindow = 0,
+    bool ContextWindowEstimated = true);
 
 /// <summary>
 /// 「测试连接」的结果。成功时带一次往返耗时，失败时带一句人话和可折叠的原文。

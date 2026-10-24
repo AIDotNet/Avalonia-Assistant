@@ -42,10 +42,27 @@ public interface IAssistantRuntime
     void InvalidateSessions();
 }
 
+/// <summary>
+/// 一次授权的结论。
+/// <para>
+/// <see cref="CorrectedArguments"/> 非空表示「不放行原来这次调用，但用户把参数改好了」：
+/// SDK 的 <c>BeforeToolCallResult</c> 只能拦截、不能改写参数，所以运行时会把改后的参数
+/// 写进拒绝理由，让模型立刻用新参数重发一次。界面上要如实说明这一点，别说成「直接执行」。
+/// </para>
+/// </summary>
+public sealed record ToolApprovalDecision(bool Allowed, string? CorrectedArguments = null)
+{
+    public static readonly ToolApprovalDecision Allow = new(true);
+
+    public static readonly ToolApprovalDecision Deny = new(false);
+
+    public static ToolApprovalDecision Correct(string arguments) => new(false, arguments);
+}
+
 /// <summary>逐次工具授权的回调。UI 在对话里弹出允许/拒绝卡片并等待用户选择。</summary>
 public interface IToolApprovalGate
 {
-    Task<bool> RequestAsync(ToolApprovalRequest request, CancellationToken cancellationToken);
+    Task<ToolApprovalDecision> RequestAsync(ToolApprovalRequest request, CancellationToken cancellationToken);
 }
 
 /// <summary>麦克风录音 + 语音转写。实现放在基础设施层，UI 只负责按钮状态。</summary>

@@ -16,18 +16,28 @@
         <Button Classes="task"
                 Classes.active="{Binding IsActive}"
                 Command="{Binding OpenCommand}">
-          <StackPanel Spacing="1" VerticalAlignment="Center">
-            <TextBlock Text="{Binding DisplayTitle}"
-                       FontSize="12.5"
-                       VerticalAlignment="Center"
-                       TextTrimming="CharacterEllipsis" />
-            <!-- 搜索命中在正文里时，把那一句亮出来，否则只看见标题不知道凭什么命中 -->
-            <TextBlock Text="{Binding MatchSnippet}"
-                       IsVisible="{Binding HasMatchSnippet}"
-                       Classes="caption"
-                       FontSize="10"
-                       TextTrimming="CharacterEllipsis" />
-          </StackPanel>
+          <!-- 时间放在行内右侧：以前只有悬停 450ms 的信息卡才看得到，
+               一屏任务分不清哪个是刚跑的。悬停时它淡出，让位给「⋯」。 -->
+          <Grid ColumnDefinitions="*,Auto">
+            <StackPanel Spacing="1" VerticalAlignment="Center">
+              <TextBlock Text="{Binding DisplayTitle}"
+                         FontSize="12.5"
+                         VerticalAlignment="Center"
+                         TextTrimming="CharacterEllipsis" />
+              <!-- 搜索命中在正文里时，把那一句亮出来，否则只看见标题不知道凭什么命中 -->
+              <TextBlock Text="{Binding MatchSnippet}"
+                         IsVisible="{Binding HasMatchSnippet}"
+                         Classes="caption"
+                         FontSize="10"
+                         TextTrimming="CharacterEllipsis" />
+            </StackPanel>
+            <TextBlock Grid.Column="1"
+                       Classes="caption row-time"
+                       Text="{Binding TimeText}"
+                       FontSize="9.5"
+                       Margin="10,0,26,0"
+                       VerticalAlignment="Center" />
+          </Grid>
         </Button>
 
         <!-- 后台跑完、还没回来看：一个点比"再点进去确认"省事 -->
@@ -244,46 +254,43 @@
           <Border Height="1" Background="{StaticResource BorderBrush}" Margin="8,12,8,10" />
 
           <!-- 「任务」是全部任务的总入口，「空间」只是另一层归类：
-               归了空间的任务在这里仍然看得见，不会因为分了组就消失。 -->
-          <Button Classes="nav ws-head"
+               归了空间的任务在这里仍然看得见，不会因为分了组就消失。
+               折叠箭头放在标题右侧（参考 WorkBuddy）：箭头不占左侧槽位，
+               两区标题就天然同一条左边缘，不用再拿占位块去凑。 -->
+          <Button Classes="nav section-head"
                   Command="{Binding ToggleTaskSectionCommand}"
                   ToolTip.Tip="展开 / 收起全部任务">
-            <Grid ColumnDefinitions="Auto,Auto,*">
-              <Panel Width="12" VerticalAlignment="Center">
-                <arc:ArcGlyph Data="{x:Static arc:ArcIcons.ChevronDown}"
-                              Size="11"
-                              IsVisible="{Binding IsTaskSectionExpanded}" />
-                <arc:ArcGlyph Data="{x:Static arc:ArcIcons.ChevronRight}"
-                              Size="11"
-                              IsVisible="{Binding !IsTaskSectionExpanded}" />
-              </Panel>
-              <!-- 空出空间那一行的文件夹图标位，两区标题才对得齐 -->
-              <Panel Grid.Column="1" Width="19" />
-              <TextBlock Grid.Column="2"
-                         Text="{Binding SessionCountText}"
+            <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+              <TextBlock Text="{Binding TaskSectionText}"
                          Classes="section-title"
-                         Margin="9,0,0,0"
                          VerticalAlignment="Center" />
-            </Grid>
+              <arc:ArcGlyph Data="{x:Static arc:ArcIcons.ChevronDown}"
+                            Size="11"
+                            IsVisible="{Binding IsTaskSectionExpanded}"
+                            Foreground="{StaticResource TextMutedBrush}"
+                            VerticalAlignment="Center" />
+              <arc:ArcGlyph Data="{x:Static arc:ArcIcons.ChevronRight}"
+                            Size="11"
+                            IsVisible="{Binding !IsTaskSectionExpanded}"
+                            Foreground="{StaticResource TextMutedBrush}"
+                            VerticalAlignment="Center" />
+            </StackPanel>
           </Button>
 
           <Border IsVisible="{Binding IsTaskSectionExpanded}"
-                  Margin="13,2,0,0"
-                  Padding="6,0,0,0"
-                  BorderBrush="{StaticResource BorderBrush}"
-                  BorderThickness="1,0,0,0">
+                  Margin="8,2,0,0">
             <StackPanel>
               <TextBlock Text="还没有任务，点上面「新建任务」开始。"
                          Classes="caption"
                          FontSize="10.5"
-                         Margin="0,2,0,4"
+                         Margin="8,2,0,4"
                          TextWrapping="Wrap"
                          IsVisible="{Binding ShowEmptyTasksHint}" />
 
               <TextBlock Text="{Binding SearchEmptyText}"
                          Classes="caption"
                          FontSize="10.5"
-                         Margin="0,2,0,4"
+                         Margin="8,2,0,4"
                          TextWrapping="Wrap"
                          IsVisible="{Binding ShowNoSearchResults}" />
 
@@ -293,7 +300,7 @@
                     <StackPanel Margin="0,4,0,0">
                       <TextBlock Text="{Binding Header}"
                                  Classes="caption"
-                                 Margin="0,2,0,4"
+                                 Margin="8,2,0,4"
                                  FontSize="10.5" />
                       <ItemsControl ItemsSource="{Binding Items}"
                                     ItemTemplate="{StaticResource SessionRowTemplate}" />
@@ -306,19 +313,42 @@
 
           <Border Height="1" Background="{StaticResource BorderBrush}" Margin="8,12,8,10" />
 
-          <Grid ColumnDefinitions="*,Auto" Margin="8,0,4,4">
-            <TextBlock Text="{Binding WorkspaceCountText}" Classes="section-title" />
+          <!-- 和「任务」同一层级、同一骨架，也能整段收起 -->
+          <Grid ColumnDefinitions="*,Auto">
+            <Button Classes="nav section-head"
+                    Command="{Binding ToggleWorkspaceSectionCommand}"
+                    ToolTip.Tip="展开 / 收起全部空间">
+              <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                <TextBlock Text="{Binding WorkspaceSectionText}"
+                           Classes="section-title"
+                           VerticalAlignment="Center" />
+                <arc:ArcGlyph Data="{x:Static arc:ArcIcons.ChevronDown}"
+                              Size="11"
+                              IsVisible="{Binding IsWorkspaceSectionExpanded}"
+                              Foreground="{StaticResource TextMutedBrush}"
+                              VerticalAlignment="Center" />
+                <arc:ArcGlyph Data="{x:Static arc:ArcIcons.ChevronRight}"
+                              Size="11"
+                              IsVisible="{Binding !IsWorkspaceSectionExpanded}"
+                              Foreground="{StaticResource TextMutedBrush}"
+                              VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+
             <Button Grid.Column="1"
                     Classes="icon"
                     Width="22"
                     Height="22"
+                    Margin="2,0,2,0"
                     Command="{Binding AddWorkspaceCommand}"
                     ToolTip.Tip="新建空间">
               <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Plus}" Size="13" />
             </Button>
           </Grid>
 
-          <ItemsControl ItemsSource="{Binding Workspaces}">
+          <ItemsControl ItemsSource="{Binding Workspaces}"
+                        IsVisible="{Binding IsWorkspaceSectionExpanded}">
+                    
             <ItemsControl.ItemTemplate>
               <DataTemplate>
                 <!-- 空间之间留一点空隙，免得两组对话连成一整片 -->
@@ -378,10 +408,10 @@
                     </Grid>
                   </Border>
 
-                  <!-- 空间下的对话：一条竖线把层级挂住，收起来时整块不占位 -->
+                  <!-- 空间下的对话：竖线挂在文件夹图标右沿，文字和空间名对齐（参考 WorkBuddy）。
+                       以前是反过来：子项比父项名字还靠左，看着不像父子。 -->
                   <Border IsVisible="{Binding IsExpanded}"
-                          Margin="13,2,0,0"
-                          Padding="6,0,0,0"
+                          Margin="38,2,0,0"
                           BorderBrush="{StaticResource BorderBrush}"
                           BorderThickness="1,0,0,0">
                     <ItemsControl ItemsSource="{Binding Sessions}"
@@ -397,7 +427,7 @@
                      FontSize="10.5"
                      Margin="8,2,8,2"
                      TextWrapping="Wrap"
-                     IsVisible="{Binding !HasWorkspaces}" />
+                     IsVisible="{Binding ShowWorkspaceEmptyHint}" />
         </StackPanel>
       </ScrollViewer>
 
