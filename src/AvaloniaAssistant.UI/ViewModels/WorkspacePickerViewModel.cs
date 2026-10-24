@@ -71,8 +71,17 @@ public sealed partial class WorkspacePickerViewModel : ObservableObject
 
     public string AddLimitHint => $"最多 {MainWindowViewModel.MaxWorkspaceCount} 个工作空间，先在侧栏移除一个再加。";
 
+    /// <summary>
+    /// 这条任务已经开口、目录钉住了：切换只影响下一个任务。
+    /// 不说的话，用户会以为这一下改的是当前任务——胶囊一变，他更确信了。
+    /// </summary>
+    public bool IsPinnedToTask => _host.IsActiveWorkspacePinned;
+
+    public string PinHint
+        => $"这条任务固定在 {Ui.ShortenPath(_host.ActiveWorkspacePath)}；切换工作区只对下一个任务生效。";
+
     /// <summary>当前是「普通任务」：工作区那条是空的，浮层最下面那行打勾。</summary>
-    public bool IsPlainTask => string.IsNullOrWhiteSpace(_host.Settings.WorkspacePath);
+    public bool IsPlainTask => string.IsNullOrWhiteSpace(_host.ActiveWorkspacePath);
 
     /// <summary>不选空间时文件落在哪，挂在那一行的悬停提示上——省得事后问「我刚写的东西哪去了」。</summary>
     public string PlainPathHint => $"不选空间时，文件落在 {PlainWorkspace.Root}";
@@ -119,7 +128,8 @@ public sealed partial class WorkspacePickerViewModel : ObservableObject
 
         foreach (var path in MainWindowViewModel.WorkspacePaths(settings))
         {
-            _all.Add(new WorkspaceChoiceViewModel(path, MainWindowViewModel.SamePath(path, settings.WorkspacePath)));
+            // 打勾的是「这条任务实际在用的目录」，不一定是设置里那个
+            _all.Add(new WorkspaceChoiceViewModel(path, MainWindowViewModel.SamePath(path, _host.ActiveWorkspacePath)));
         }
 
         ApplyFilter(preferCurrent: true);

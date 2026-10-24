@@ -81,7 +81,19 @@ public sealed partial class SessionItemViewModel : ObservableObject
 
     /// <summary>这一轮还在跑。切走之后也要看得见，否则不知道任务到底跑没跑完。</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowRunningSpinner))]
     private bool isRunning;
+
+    /// <summary>
+    /// 这一轮停在人工确认上。和「正在跑」分开：一个在消耗 token，一个在等用户，
+    /// 侧栏用同一个转圈表示这两件事，用户会把等待读成计算。
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowRunningSpinner))]
+    private bool needsApproval;
+
+    /// <summary>等待确认时不再转圈，换成盾牌；两个图标叠在同一位置会糊成一团。</summary>
+    public bool ShowRunningSpinner => IsRunning && !NeedsApproval;
 
     /// <summary>后台跑完了，用户还没回去看。打开这条任务就清掉。</summary>
     [ObservableProperty]

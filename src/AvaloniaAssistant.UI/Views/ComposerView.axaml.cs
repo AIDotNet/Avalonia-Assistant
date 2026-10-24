@@ -162,6 +162,22 @@ public partial class ComposerView : UserControl
         }
 
         e.Handled = true;
+
+        // 录音中按 Enter：先把录音停下来转写。以前这一下被 CanExecute 挡掉，
+        // 按键被吃掉、界面一声不响，和第一轮修掉的「生成中按 Enter 没反应」是同一个体感。
+        if (viewModel.IsRecording)
+        {
+            viewModel.ToggleVoiceCommand.Execute(null);
+            return;
+        }
+
+        // 正在读引用：记下来，读完立刻发。不要静默吞掉。
+        if (viewModel.IsSending)
+        {
+            viewModel.SendAfterReading();
+            return;
+        }
+
         if (viewModel.SendCommand.CanExecute(null))
         {
             viewModel.SendCommand.Execute(null);

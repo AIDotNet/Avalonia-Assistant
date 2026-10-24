@@ -483,6 +483,9 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         Services.Ui.OpenExternal(DataFolder);
     }
 
+    /// <summary>返回按钮的悬停提示：有来源任务时写清回到哪，别让人猜「返回」是回首页还是回对话。</summary>
+    public string BackHint => _host.ReturnHint;
+
     /// <summary>改过东西就直接返回，等于把改动丢掉；先问一句，给「保存并返回」和「放弃」两条路。</summary>
     [RelayCommand]
     private void Back()
@@ -493,7 +496,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
             return;
         }
 
-        _host.OpenHome();
+        _host.GoBack();
     }
 
     [RelayCommand]
@@ -502,10 +505,10 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         await SaveAsync();
         if (!IsSaveError)
         {
-            _host.OpenHome();
+            _host.GoBack();
         }
     }
 
     [RelayCommand]
-    private void DiscardAndLeave() => _host.OpenHome();
+    private void DiscardAndLeave() => _host.GoBack();
 }

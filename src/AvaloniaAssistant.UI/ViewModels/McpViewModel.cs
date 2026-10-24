@@ -1,5 +1,7 @@
 using System.Collections.ObjectModel;
+using System.Text.Json.Nodes;
 using Avalonia.Media;
+using Avalonia.Threading;
 using AvaloniaAssistant.Abstractions;
 using AvaloniaAssistant.Storage;
 using AvaloniaAssistant.UI.Services;
@@ -63,6 +65,16 @@ public sealed partial class McpServerCardViewModel : ObservableObject
 
     public bool ShowRetry => !IsChecking;
 
+    /// <summary>删除是不可逆的：先就地换成确认态。一点垃圾桶就把整段 env / headers 抹掉太便宜了。</summary>
+    [ObservableProperty]
+    private bool isConfirmingDelete;
+
+    [RelayCommand]
+    private void StartDelete() => IsConfirmingDelete = true;
+
+    [RelayCommand]
+    private void CancelDelete() => IsConfirmingDelete = false;
+
     public void Apply(McpProbeResult result)
     {
         Connected = result.Ok;
@@ -96,6 +108,24 @@ public sealed partial class McpViewModel : ObservableObject
 
     private readonly MainWindowViewModel _host;
     private string _configPathRaw = string.Empty;
+
+    /// <summary>编辑态：非空表示表单是在改这一条，而不是新增。</summary>
+    private string? _editingName;
+
+    /// <summary>刚删掉的那条配置（原文），用来给「撤销」兜 10 秒。</summary>
+    private (string Name, string Json)? _undoEntry;
+
+    private DispatcherTimer? _undoTimer;
+
+    /// <summary>表单标题和保存按钮：编辑和新增要说清自己在干什么。</summary>
+    public string FormTitle => _editingName is null ? "添加 MCP 服务端（stdio）" : $"编辑「{_editingName}」";
+
+    public string SaveLabel => _editingName is null ? "保存" : "保存修改";
+
+    [ObservableProperty]
+    private bool canUndo;
+
+    public string UndoText => _undoEntry is { } entry ? $"已移除「{entry.Name}」" : string.Empty;
 
     public McpViewModel(MainWindowViewModel host)
     {
@@ -152,8 +182,11 @@ public sealed partial class McpViewModel : ObservableObject
 
     partial void OnNoticeChanged(string? value) => OnPropertyChanged(nameof(HasNotice));
 
+    /// <summary>有来源任务时写清返回哪里：从对话页来查 MCP，返回不该落在首页。</summary>
+    public string BackHint => _host.ReturnHint;
+
     [RelayCommand]
-    private void Back() => _host.OpenHome();
+    private void Back() => _host.GoBack();
 
     [RelayCommand]
     private void Refresh()
@@ -326,9 +359,71 @@ public sealed partial class McpViewModel : ObservableObject
     [RelayCommand]
     private void ShowForm()
     {
+        _editingName = null;
         IsFormOpen = true;
         IsImportOpen = false;
         Notice = null;
+        OnPropertyChanged(nameof(FormTitle));
+        OnPropertyChanged(nameof(SaveLabel));
+    }
+
+    /// <summary>改一个已有服务端。远程（url / headers）表单表达不了，转去 JSON 编辑。</summary>
+    [RelayCommand]
+    private void Edit(McpServerCardViewModel? server)
+    {
+        if (server is null || string.IsNullOrWhiteSpace(_configPathRaw))
+        {
+            return;
+        }
+
+        var raw = CapabilityInstaller.ReadMcpServer(_configPathRaw, server.Name);
+        if (raw is null)
+        {
+            ShowNotice("读不到这个服务端的配置，可能刚被改过；点「重新扫描」再看一次。", isError: true);
+            return;
+        }
+
+        var node = JsonNode.Parse(raw) as JsonObject;
+        if (node?["url"] is not null)
+        {
+            // 远程服务端的 headers 原样保留，用 JSON 改最稳；勾上覆盖同名就是原地替换
+            ImportJson = "{\"mcpServers\":{\"" + server.Name + "\":" + raw + "}}";
+            OverwriteExisting = true;
+            IsImportOpen = true;
+            IsFormOpen = false;
+            Notice = null;
+            ShowNotice("远程服务端（url / headers）请在 JSON 里改；导入时已勾上「覆盖同名」。", isError: false);
+            return;
+        }
+
+        _editingName = server.Name;
+        Name = server.Name;
+        Command = node?["command"]?.GetValue<string>() ?? "npx";
+        Args = JoinArgs(node?["args"]);
+        IsFormOpen = true;
+        IsImportOpen = false;
+        Notice = null;
+        OnPropertyChanged(nameof(FormTitle));
+        OnPropertyChanged(nameof(SaveLabel));
+    }
+
+    private static string JoinArgs(JsonNode? node)
+    {
+        if (node is not JsonArray array)
+        {
+            return string.Empty;
+        }
+
+        var parts = new List<string>(array.Count);
+        foreach (var item in array)
+        {
+            if (item is JsonValue value && value.TryGetValue<string>(out var text) && text is not null)
+            {
+                parts.Add(text);
+            }
+        }
+
+        return string.Join(' ', parts);
     }
 
     [RelayCommand]
@@ -337,6 +432,9 @@ public sealed partial class McpViewModel : ObservableObject
         IsFormOpen = false;
         Name = string.Empty;
         Args = string.Empty;
+        _editingName = null;
+        OnPropertyChanged(nameof(FormTitle));
+        OnPropertyChanged(nameof(SaveLabel));
     }
 
     [RelayCommand]
@@ -348,15 +446,34 @@ public sealed partial class McpViewModel : ObservableObject
             return;
         }
 
+        var editing = _editingName;
+
         try
         {
-            CapabilityInstaller.AddMcpServer(_configPathRaw, Name, Command, Args);
+            if (editing is null)
+            {
+                CapabilityInstaller.AddMcpServer(_configPathRaw, Name, Command, Args);
+            }
+            else
+            {
+                CapabilityInstaller.ReplaceMcpServer(_configPathRaw, editing, Name, Command, Args);
+            }
+
             _host.Runtime.InvalidateSessions();
             Refresh();
             IsFormOpen = false;
+            _editingName = null;
+            var savedName = Name;
             Name = string.Empty;
             Args = string.Empty;
-            ShowNotice("已写入 mcp.json。下一个会话会连接它，工具以 mcp__<名称>__<工具> 出现。", isError: false);
+            OnPropertyChanged(nameof(FormTitle));
+            OnPropertyChanged(nameof(SaveLabel));
+
+            ShowNotice(
+                editing is null
+                    ? "已写入 mcp.json。下一个会话会连接它，工具以 mcp__<名称>__<工具> 出现。"
+                    : $"已保存对「{savedName}」的修改。下一个会话按新配置连接。",
+                isError: false);
         }
         catch (Exception ex)
         {
@@ -374,16 +491,71 @@ public sealed partial class McpViewModel : ObservableObject
 
         try
         {
+            // 删除前把原文留一份：撤销要按原样放回去（env / headers 一个字都不改）
+            var raw = CapabilityInstaller.ReadMcpServer(_configPathRaw, server.Name);
+
             if (CapabilityInstaller.RemoveMcpServer(_configPathRaw, server.Name))
             {
+                if (raw is not null)
+                {
+                    SetUndo(server.Name, raw);
+                }
+
                 _host.Runtime.InvalidateSessions();
                 Refresh();
-                ShowNotice($"已移除「{server.Name}」。", isError: false);
+                ShowNotice($"已移除「{server.Name}」。配置里的 env / headers 一起删了，10 秒内可以撤销。", isError: false);
             }
         }
         catch (Exception ex)
         {
             ShowNotice(ex.Message, isError: true);
+        }
+    }
+
+    /// <summary>撤销窗口。10 秒够用，又不至于让「已删除」的提示一直挂在页面上。</summary>
+    private void SetUndo(string name, string json)
+    {
+        _undoEntry = (name, json);
+        CanUndo = true;
+        OnPropertyChanged(nameof(UndoText));
+
+        _undoTimer?.Stop();
+        _undoTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(10) };
+        _undoTimer.Tick += (_, _) =>
+        {
+            ClearUndo();
+        };
+        _undoTimer.Start();
+    }
+
+    private void ClearUndo()
+    {
+        _undoTimer?.Stop();
+        _undoTimer = null;
+        _undoEntry = null;
+        CanUndo = false;
+        OnPropertyChanged(nameof(UndoText));
+    }
+
+    [RelayCommand]
+    private void UndoRemove()
+    {
+        if (_undoEntry is not { } entry || string.IsNullOrWhiteSpace(_configPathRaw))
+        {
+            return;
+        }
+
+        try
+        {
+            CapabilityInstaller.RestoreMcpServer(_configPathRaw, entry.Name, entry.Json);
+            ClearUndo();
+            _host.Runtime.InvalidateSessions();
+            Refresh();
+            ShowNotice($"已恢复「{entry.Name}」。", isError: false);
+        }
+        catch (Exception ex)
+        {
+            ShowNotice("恢复失败：" + ex.Message, isError: true);
         }
     }
 

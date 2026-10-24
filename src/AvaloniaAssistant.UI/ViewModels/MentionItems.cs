@@ -25,7 +25,8 @@ public sealed partial class PendingImageViewModel : ObservableObject
 
     public Bitmap Thumbnail { get; }
 
-    public string Caption => Image.Caption;
+    /// <summary>悬停提示：尺寸、占用、估算 token，压缩过的还写出原图尺寸。</summary>
+    public string Caption => Image.DetailCaption;
 
     [RelayCommand]
     private void Remove() => _remove?.Invoke(this);

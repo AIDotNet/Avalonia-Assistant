@@ -219,6 +219,14 @@
             </ItemsControl.ItemTemplate>
           </ItemsControl>
 
+          <!-- 贴到第 4 张：说清这一轮会明显变贵，别让用户以为图片不要钱 -->
+          <TextBlock Text="{Binding ManyImagesHint}"
+                     IsVisible="{Binding ShowManyImagesHint}"
+                     FontSize="10.5"
+                     Foreground="{StaticResource WarningBrush}"
+                     Margin="2,1,0,0"
+                     TextWrapping="Wrap" />
+
           <ItemsControl ItemsSource="{Binding References}" IsVisible="{Binding HasReferences}">
             <ItemsControl.ItemsPanel>
               <ItemsPanelTemplate>
@@ -516,6 +524,18 @@
           <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
             <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Folder}" Size="12" />
             <TextBlock Text="{Binding WorkspaceLabel}" FontSize="11.5" />
+            <!-- 已开口的任务钉在开始的目录上：给一枚角标，别让用户以为下面这一条能改当前任务 -->
+            <Border IsVisible="{Binding IsWorkspacePinned}"
+                    Background="{StaticResource SurfaceMutedBrush}"
+                    CornerRadius="4"
+                    Padding="4,1"
+                    VerticalAlignment="Center"
+                    ToolTip.Tip="{Binding WorkspacePathHint}">
+              <TextBlock Text="已固定"
+                         FontSize="9"
+                         Foreground="{StaticResource TextMutedBrush}"
+                         VerticalAlignment="Center" />
+            </Border>
             <arc:ArcGlyph Data="{x:Static arc:ArcIcons.ChevronDown}" Size="11" />
           </StackPanel>
         </Button>

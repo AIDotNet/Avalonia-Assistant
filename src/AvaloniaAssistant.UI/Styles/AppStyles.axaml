@@ -92,11 +92,33 @@
     <Setter Property="Padding" Value="5,1" />
   </Style>
 
-  <!-- 卡片自带一层皮，去掉 ToolTip 默认的内边距和底色，只留我们自己的 Border -->
+  <!--
+    悬停提示：一律是一张小白卡。
+    这里以前为了「悬停信息卡」把 ToolTip 掏成透明底 + 零内边距（卡片自带一层皮），
+    但信息卡早改成 Popup 自绘了（SidebarView.axaml 里的 Border.hover-card），
+    剩下 80 多处纯文字提示全变成飘在内容上的黑字——侧栏空间行的「新建会话」、工具行的
+    「展开看参数与结果」都压在正文上，看起来就是重影。现在恢复成正常气泡。
+  -->
   <Style Selector="ToolTip">
-    <Setter Property="Padding" Value="0" />
-    <Setter Property="Background" Value="Transparent" />
-    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="9,5,9,6" />
+    <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource BorderStrongBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="6" />
+    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+    <Setter Property="FontSize" Value="11.5" />
+    <Setter Property="MaxWidth" Value="420" />
+    <!-- 提示里会出现完整路径、完整时间，得折行，否则会拉成横穿窗口的一条 -->
+    <Setter Property="ContentTemplate">
+      <DataTemplate>
+        <TextBlock Text="{Binding}"
+                   TextWrapping="Wrap"
+                   LineHeight="16" />
+      </DataTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="ToolTip Border">
+    <Setter Property="BoxShadow" Value="{StaticResource CardShadow}" />
   </Style>
 
   <!-- 空间标题：比导航项矮一档，左边留出展开箭头的位置 -->

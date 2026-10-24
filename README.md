@@ -317,6 +317,9 @@ dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --pag
 # 授权卡版式；--press-escape 会真的发一次 Esc，验证「Esc 拒绝」
 dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --page chat --approval-demo --press-escape --scroll-bottom
 
+# 悬停提示的皮：短提示 / 中等长度 / 长路径折行三种样例
+dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --tooltips
+
 # 隔离数据目录：设置/会话都写到这里，验收启动恢复时不碰真实数据
 dotnet run --project src/AvaloniaAssistant.Desktop -- --data-dir .tmp/verify
 ```

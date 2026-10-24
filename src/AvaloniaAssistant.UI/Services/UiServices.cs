@@ -293,6 +293,9 @@ public static class AppLaunchOptions
     /// <summary>开发用：给侧栏搜索框预置关键词，检查正文命中摘要。</summary>
     public static string? SessionQuery { get; set; }
 
+    /// <summary>开发用：把悬停提示单独摆进一个窗口再截图，检查提示框的底色/边框/折行。</summary>
+    public static bool ShowTooltips { get; set; }
+
     /// <summary>开发用：单独摆出「还有任务在跑」的关窗确认层，配合 --screenshot 看版式。</summary>
     public static bool RunningDialog { get; set; }
 

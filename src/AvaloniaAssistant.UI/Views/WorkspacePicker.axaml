@@ -67,6 +67,22 @@
                          Placeholder="搜索工作空间"
                          Text="{Binding SearchText, Mode=TwoWay}" />
 
+        <!-- 已开口的任务：目录是钉住的，切换只影响下一个任务。不说清就会出现
+             「胶囊显示新目录、任务还在旧目录」的两套说法 -->
+        <Border IsVisible="{Binding IsPinnedToTask}"
+                Background="{StaticResource WarningSubtleBrush}"
+                BorderBrush="#EFD9B8"
+                BorderThickness="1"
+                CornerRadius="8"
+                Padding="8,6"
+                Margin="0,3,0,2">
+          <TextBlock Text="{Binding PinHint}"
+                     FontSize="10.5"
+                     LineHeight="15"
+                     TextWrapping="Wrap"
+                     Foreground="{StaticResource WarningBrush}" />
+        </Border>
+
         <ScrollViewer MaxHeight="212"
                       HorizontalScrollBarVisibility="Disabled"
                       VerticalScrollBarVisibility="Auto">

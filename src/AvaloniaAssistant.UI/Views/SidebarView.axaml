@@ -41,7 +41,7 @@
                  ToolTip.Tip="已跑完，还没看过" />
 
         <!-- 后台还在跑：转圈和对话里的「正在处理」是同一个语义，比一个圆点更不容易被读成未读 -->
-        <arc:ArcSpinner IsVisible="{Binding IsRunning}"
+        <arc:ArcSpinner IsVisible="{Binding ShowRunningSpinner}"
                         Width="11"
                         Height="11"
                         HorizontalAlignment="Right"
@@ -49,6 +49,21 @@
                         Margin="0,0,28,0"
                         Foreground="{StaticResource TextMutedBrush}"
                         ToolTip.Tip="正在运行" />
+
+        <!-- 卡在工具确认上：不转圈，改琥珀盾牌。这两件事对用户是两种等待，不能长一样 -->
+        <Border IsVisible="{Binding NeedsApproval}"
+                Width="11"
+                Height="11"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Center"
+                Margin="0,0,28,0"
+                ToolTip.Tip="等待你确认：点开这条任务处理">
+          <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Shield}"
+                        Size="11"
+                        Foreground="{StaticResource WarningBrush}"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center" />
+        </Border>
 
         <Button Classes="icon row-more"
                 Width="22"

@@ -98,21 +98,39 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     public bool HasRunningChats => RunningChatCount > 0;
 
-    /// <summary>当前这条任务有工具在等用户点头。整轮已经被阻塞，标题上也要能看见。</summary>
-    public bool HasPendingApproval => CurrentPage is ChatViewModel chat && chat.HasPendingApproval;
+    /// <summary>
+    /// 有几条任务因为工具调用卡在人工确认上。当前页和后台都要算：
+    /// 后台那条卡住时，侧栏只显示转圈，用户会以为它还在算。
+    /// </summary>
+    public int PendingApprovalCount
+        => (CurrentPage is ChatViewModel active && active.HasPendingApproval ? 1 : 0)
+           + _backgroundChats.Values.Count(chat => chat.HasPendingApproval);
 
-    /// <summary>标题栏直接说"还在跑几个 / 有操作等你确认"，用户切到别的窗口也能从任务栏看出来。</summary>
+    /// <summary>有工具在等用户点头。整轮已经被阻塞，标题上也要能看见。</summary>
+    public bool HasPendingApproval => PendingApprovalCount > 0;
+
+    /// <summary>
+    /// 标题栏直接说"还在跑几个 / 有操作等你确认"，用户切到别的窗口也能从任务栏看出来。
+    /// 审批优先：等待确认的任务本身也算 IsBusy（整轮没结束），
+    /// 先判"正在执行"会让"等你确认"那条分支永远走不到——用户以为它在算，其实是在等他。
+    /// </summary>
     public string WindowTitle
     {
         get
         {
-            if (RunningChatCount > 0)
+            var waiting = PendingApprovalCount;
+            var running = RunningChatCount;
+
+            if (waiting > 0)
             {
-                return $"Avalonia Assistant — 正在执行（{RunningChatCount}）";
+                var executing = Math.Max(0, running - waiting);
+                return executing > 0
+                    ? $"Avalonia Assistant — 等你确认（{waiting}）· 执行中（{executing}）"
+                    : $"Avalonia Assistant — 等你确认（{waiting}）";
             }
 
-            return HasPendingApproval
-                ? "Avalonia Assistant — 有操作待确认"
+            return running > 0
+                ? $"Avalonia Assistant — 正在执行（{running}）"
                 : "Avalonia Assistant";
         }
     }
@@ -252,6 +270,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private async Task NewTaskAsync()
     {
+        ClearReturnChat();
+
         // 新建任务默认是普通任务：上一次选的工作区不跟过来。
         // 想在某个空间里干活，就在输入框下面重新挑一个，或者点空间那一行的「+」。
         await ClearWorkspaceAsync();
@@ -285,9 +305,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
         else if (e.PropertyName == nameof(ChatViewModel.HasPendingApproval))
         {
-            // 审批卡出现/消失时标题也要跟着变，不能等下一轮跑完才刷
-            OnPropertyChanged(nameof(HasPendingApproval));
-            OnPropertyChanged(nameof(WindowTitle));
+            // 审批卡出现/消失时标题和侧栏都要跟着变，不能等下一轮跑完才刷
+            SetApprovalFlag(chat.Session.Id, chat.HasPendingApproval);
         }
     }
 
@@ -304,6 +323,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
             if (running)
             {
                 item.HasUnread = false;
+            }
+            else
+            {
+                // 这一轮结束了，还挂着「等待确认」就是错的
+                item.NeedsApproval = false;
             }
         }
 
@@ -323,6 +347,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
         OnPropertyChanged(nameof(RunningChatCount));
         OnPropertyChanged(nameof(HasRunningChats));
+        OnPropertyChanged(nameof(PendingApprovalCount));
+        OnPropertyChanged(nameof(HasPendingApproval));
         OnPropertyChanged(nameof(WindowTitle));
 
         if (!running)
@@ -331,20 +357,70 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
     }
 
+    /// <summary>
+    /// 某条任务的审批卡出现/消失了。侧栏那一行换成琥珀色的盾牌，
+    /// 别让它继续显示"正在运行"——那两件事对用户的含义完全不同。
+    /// </summary>
+    private void SetApprovalFlag(string sessionId, bool waiting)
+    {
+        foreach (var item in AllSessionItems().Where(item => item.Id == sessionId))
+        {
+            item.NeedsApproval = waiting;
+            if (waiting)
+            {
+                item.HasUnread = false;
+            }
+        }
+
+        OnPropertyChanged(nameof(PendingApprovalCount));
+        OnPropertyChanged(nameof(HasPendingApproval));
+        OnPropertyChanged(nameof(WindowTitle));
+
+        // 人在别的页面/别的窗口：任务已经停住了，得让他知道
+        if (waiting && !IsActiveSession(sessionId))
+        {
+            AttentionRequested?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
     private bool IsActiveSession(string sessionId)
         => CurrentPage is ChatViewModel chat && chat.Session.Id == sessionId;
 
-    /// <summary>关窗前用户选了「停止并退出」：把所有还在跑的轮次停掉，别让进程带着半截请求退出。</summary>
+    /// <summary>关窗前用户选了「停止并退出」：先把已经生成的正文同步落盘，再停掉还在跑的轮次。</summary>
     public void StopAllRuns()
     {
+        var running = new List<ChatViewModel>();
         if (CurrentPage is ChatViewModel active && active.IsBusy)
         {
-            active.StopCommand.Execute(null);
+            running.Add(active);
         }
 
-        foreach (var chat in _backgroundChats.Values.Where(item => item.IsBusy).ToList())
+        running.AddRange(_backgroundChats.Values.Where(item => item.IsBusy));
+
+        foreach (var chat in running)
         {
+            // 顺序不能反：停掉之后 finally 会异步落盘，而进程退出不会等它。
+            // 这里先把半截回复写成同步文件，再取消请求。
+            chat.FlushPartialForShutdown();
             chat.StopCommand.Execute(null);
+        }
+    }
+
+    /// <summary>
+    /// 关窗抢救用：同步写一次会话。SaveAsync 内部全程 ConfigureAwait(false)，
+    /// 在 UI 线程上等不会死锁；写的是几百 KB 的 JSON，阻塞可以忽略。
+    /// </summary>
+    public void SaveSessionNow(ChatSession session)
+    {
+        _sessionCache[session.Id] = session;
+
+        try
+        {
+            _sessions.SaveAsync(session).GetAwaiter().GetResult();
+        }
+        catch
+        {
+            // 关窗路径上保存失败不该阻止退出
         }
     }
 
@@ -368,17 +444,92 @@ public sealed partial class MainWindowViewModel : ObservableObject
     }
 
     [RelayCommand]
-    public void OpenHome() => CurrentPage = Home;
+    public void OpenHome()
+    {
+        ClearReturnChat();
+        CurrentPage = Home;
+    }
+
+    /// <summary>
+    /// 从对话页跳去设置 / 技能 / MCP 时记住来源。以前这三个页面的「返回」一律回首页，
+    /// 改完 Key 得自己在侧栏里把刚才那条任务找回来。
+    /// </summary>
+    private ChatViewModel? _returnChat;
+
+    public string ReturnHint => _returnChat is null ? "返回首页" : $"返回「{_returnChat.Title}」";
+
+    /// <summary>
+    /// 当前任务真正会读写的目录：已经开口的会话按钉住的那个，否则按设置。
+    /// 工作区浮层的勾选和「普通任务」判断都用它，避免浮层说一套、任务跑另一套。
+    /// </summary>
+    public string ActiveWorkspacePath
+        => (CurrentPage as ChatViewModel)?.PinnedWorkspacePath ?? Settings.WorkspacePath;
+
+    /// <summary>当前任务是不是已经钉住目录了（发过话的会话都算）。</summary>
+    public bool IsActiveWorkspacePinned
+        => (CurrentPage as ChatViewModel)?.PinnedWorkspacePath is { Length: > 0 };
+
+    /// <summary>只记对话页：从设置跳技能再跳 MCP，返回时仍然回到最初那条任务。</summary>
+    private void RememberReturnPage()
+    {
+        if (CurrentPage is ChatViewModel { IsBusy: false } chat)
+        {
+            _returnChat = chat;
+            OnPropertyChanged(nameof(ReturnHint));
+        }
+    }
+
+    /// <summary>去了别处（首页、新建、打开另一条任务）：先前记下的来源不再有效。</summary>
+    private void ClearReturnChat()
+    {
+        if (_returnChat is { } chat && !ReferenceEquals(chat, CurrentPage))
+        {
+            chat.PropertyChanged -= OnChatPropertyChanged;
+            chat.Dispose();
+        }
+
+        _returnChat = null;
+        OnPropertyChanged(nameof(ReturnHint));
+    }
+
+    /// <summary>「返回」：有来源就回来源，没有才回首页。</summary>
+    public void GoBack()
+    {
+        var target = _returnChat;
+        _returnChat = null;
+        OnPropertyChanged(nameof(ReturnHint));
+
+        if (target is null)
+        {
+            CurrentPage = Home;
+            return;
+        }
+
+        // 理论上不会同时存在；真撞上了以页面为准，别让同一个会话有两份活实例
+        _backgroundChats.Remove(target.Session.Id);
+
+        CurrentPage = target;
+        _ = SetActiveSessionAsync(target.Session.Id);
+    }
 
     [RelayCommand]
-    public void OpenTools() => CurrentPage = new ToolsViewModel(this);
+    public void OpenTools()
+    {
+        RememberReturnPage();
+        CurrentPage = new ToolsViewModel(this);
+    }
 
     [RelayCommand]
-    public void OpenMcp() => CurrentPage = new McpViewModel(this);
+    public void OpenMcp()
+    {
+        RememberReturnPage();
+        CurrentPage = new McpViewModel(this);
+    }
 
     [RelayCommand]
     public async Task OpenSettingsAsync()
     {
+        RememberReturnPage();
         CurrentPage = new SettingsViewModel(this);
         await Task.CompletedTask;
     }
@@ -471,6 +622,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     private async Task OpenNewChatAsync(PromptRequest? request)
     {
+        ClearReturnChat();
+
         var chat = CreateChat(null, consumePendingDraft: request is null);
         CurrentPage = chat;
         await SetActiveSessionAsync(null);
@@ -483,6 +636,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     public async Task OpenSessionAsync(string sessionId)
     {
+        ClearReturnChat();
+
         // 已经在看这一条，就别再建一个新 VM 把旧的挤到后台去
         if (CurrentPage is ChatViewModel current && current.Session.Id == sessionId)
         {
@@ -579,6 +734,13 @@ public sealed partial class MainWindowViewModel : ObservableObject
         _sessionCache.Remove(sessionId);
         _drafts.Remove(sessionId);
         _unreadSessions.Remove(sessionId);
+
+        // 删的正好是「返回」要去的那条：来源作废，别把人带回一个已经删掉的页面
+        if (_returnChat?.Session.Id == sessionId)
+        {
+            _returnChat = null;
+            OnPropertyChanged(nameof(ReturnHint));
+        }
 
         if (CurrentPage is ChatViewModel chat && chat.Session.Id == sessionId)
         {
@@ -1023,8 +1185,20 @@ public sealed partial class MainWindowViewModel : ObservableObject
         {
             IsActive = session.Id == activeId,
             IsRunning = IsChatRunning(session.Id),
+            NeedsApproval = IsChatWaitingApproval(session.Id),
             HasUnread = _unreadSessions.Contains(session.Id),
         };
+
+    /// <summary>这条任务是不是停在人工确认上：同样当前页和后台都要看。</summary>
+    private bool IsChatWaitingApproval(string sessionId)
+    {
+        if (CurrentPage is ChatViewModel current && current.Session.Id == sessionId)
+        {
+            return current.HasPendingApproval;
+        }
+
+        return _backgroundChats.TryGetValue(sessionId, out var background) && background.HasPendingApproval;
+    }
 
     /// <summary>
     /// 重名任务在侧栏补一个区分后缀：优先补日期，同一天还重名再补序号。
@@ -1178,6 +1352,13 @@ public sealed partial class MainWindowViewModel : ObservableObject
         if (Workspaces.FirstOrDefault()?.Sessions.FirstOrDefault() is { } first)
         {
             first.IsActive = true;
+
+            // --approval-wait 的意思是「摆出等待确认的状态」，侧栏那行也得跟着摆，
+            // 否则只能截到输入框上方那条常驻提示，看不见盾牌与转圈是否打架
+            if (AppLaunchOptions.ApprovalWait)
+            {
+                first.NeedsApproval = true;
+            }
         }
     }
 
@@ -1246,6 +1427,13 @@ public sealed partial class MainWindowViewModel : ObservableObject
             return;
         }
 
+        // 去设置/技能/MCP 时留下的来源页：留着不拆，返回时原样接回来
+        // （草稿、滚动位置、已渲染的消息都还在，不用从磁盘重读重建）
+        if (ReferenceEquals(chat, _returnChat))
+        {
+            return;
+        }
+
         chat.PropertyChanged -= OnChatPropertyChanged;
         chat.Dispose();
     }
@@ -1258,6 +1446,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(IsSettingsSelected));
         OnPropertyChanged(nameof(RunningChatCount));
         OnPropertyChanged(nameof(HasRunningChats));
+        OnPropertyChanged(nameof(PendingApprovalCount));
+        OnPropertyChanged(nameof(HasPendingApproval));
         OnPropertyChanged(nameof(WindowTitle));
     }
 

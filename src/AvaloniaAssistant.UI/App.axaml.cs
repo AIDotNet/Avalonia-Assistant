@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Input;
+using Avalonia.Layout;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
@@ -123,6 +124,28 @@ public partial class AssistantApp : Application
                 }
 
                 preview.Close();
+            }
+
+            // 验收用：悬停提示的皮。全局样式曾经为了「悬停信息卡」把 ToolTip 掏成透明底 + 零内边距，
+            // 结果纯文字提示全飘在界面内容上（看着像重影），这里单独摆出来对照。
+            if (AppLaunchOptions.ShowTooltips)
+            {
+                var preview = CreateTooltipPreview();
+                preview.Show();
+                await Task.Delay(400);
+
+                if (!string.IsNullOrWhiteSpace(AppLaunchOptions.ScreenshotPath))
+                {
+                    Capture(preview, AppLaunchOptions.ScreenshotPath);
+                }
+
+                preview.Close();
+
+                if (!string.IsNullOrWhiteSpace(AppLaunchOptions.ScreenshotPath))
+                {
+                    desktop.Shutdown();
+                    return;
+                }
             }
 
             switch (AppLaunchOptions.Page)
@@ -443,6 +466,48 @@ public partial class AssistantApp : Application
         await Task.Delay(700);
         Capture(preview, path);
         preview.Close();
+    }
+
+    private static Window CreateTooltipPreview()
+    {
+        var samples = new (string Label, string Tip)[]
+        {
+            ("侧栏空间行的 +（短提示）", "新建会话"),
+            ("工具行（中等长度）", "展开看参数与结果"),
+            ("长文本要折行：完整路径", @"D:\AI\github\Avalonia-Assistant\src\AvaloniaAssistant.Agent\PiAgentRuntime.cs"),
+        };
+
+        var panel = new StackPanel { Spacing = 12 };
+
+        foreach (var sample in samples)
+        {
+            panel.Children.Add(new TextBlock
+            {
+                Text = sample.Label,
+                FontSize = 11,
+                Foreground = new SolidColorBrush(Color.Parse("#6F6F69")),
+            });
+
+            // 直接摆一个 ToolTip 控件：和真实提示是同一套样式和模板
+            panel.Children.Add(new ToolTip
+            {
+                Content = sample.Tip,
+                HorizontalAlignment = HorizontalAlignment.Left,
+            });
+        }
+
+        return new Window
+        {
+            WindowDecorations = WindowDecorations.None,
+            SizeToContent = SizeToContent.WidthAndHeight,
+            CanResize = false,
+            ShowInTaskbar = false,
+            WindowStartupLocation = WindowStartupLocation.Manual,
+            Position = new PixelPoint(60, 60),
+            // 用侧栏底色当背景：白色提示卡贴在白色画布上就看不出有没有皮
+            Background = new SolidColorBrush(Color.Parse("#F1F1EF")),
+            Content = new Border { Padding = new Thickness(20), Child = panel },
+        };
     }
 
     private static void Capture(Window window, string path)

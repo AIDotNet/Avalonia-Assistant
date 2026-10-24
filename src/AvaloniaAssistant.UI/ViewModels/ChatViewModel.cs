@@ -31,6 +31,17 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
     /// <summary>生成中切过的档位。本轮结束后再补一条提示，不静默吞掉。</summary>
     private PermissionMode? _pendingPermission;
 
+    /// <summary>
+    /// 正在跑的这一轮的存档条目和气泡。关窗前要拿它们把已经流出来的半截回复同步写进存档——
+    /// 否则「停止并退出」之后重开，那一轮只剩一个空的助手气泡。
+    /// </summary>
+    private ChatEntry? _activeEntry;
+
+    private AssistantMessageViewModel? _activeAssistant;
+
+    /// <summary>关窗时抢救过半截正文。收尾不能再把「已停止」改回「完成」。</summary>
+    private bool _flushedForShutdown;
+
     public ChatViewModel(MainWindowViewModel host, ChatSession? session, bool consumePendingDraft = true)
     {
         _host = host;
@@ -73,9 +84,20 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
 
         LoadEntries();
         RefreshDateHeaders();
+        SyncComposerWorkspacePin();
     }
 
     public ChatSession Session { get; }
+
+    /// <summary>
+    /// 这条任务钉住的工作区：开口之后就不跟着设置走了。还没发过话时为空。
+    /// 输入框下面那颗胶囊按它显示，页头副标题也按它显示，两处同源。
+    /// </summary>
+    public string? PinnedWorkspacePath => Session.Entries.Count > 0 ? Session.WorkspacePath : null;
+
+    /// <summary>把「钉在哪个目录」同步给胶囊。开会话、切设置、跑完一轮、重跑截断之后都要对一次。</summary>
+    private void SyncComposerWorkspacePin()
+        => Composer.PinnedWorkspacePath = PinnedWorkspacePath;
 
     /// <summary>任务被删掉了：这一轮跑完不要再写回存档，否则删掉的任务会自己回来。</summary>
     public bool IsDiscarded { get; set; }
@@ -129,8 +151,11 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
             && !MainWindowViewModel.SamePath(Session.WorkspacePath, _settings.Current.WorkspacePath))
         {
             Session.WorkspacePath = _settings.Current.WorkspacePath;
+            Composer.PinnedWorkspacePath = null;
         }
 
+        // 已经开口的会话：胶囊仍显示钉住的那个目录，不能让设置把它带跑
+        SyncComposerWorkspacePin();
         OnPropertyChanged(nameof(HeaderSubtitle));
     }
 
@@ -515,9 +540,37 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>生成期间按了发送：按先后顺序记下来，本轮结束后一条一条接着发。</summary>
-    private void OnQueueRequested(object? sender, PromptRequest request)
+    /// <summary>
+    /// 关窗前调用：把当前流式输出的正文同步写回存档。
+    /// 正常收尾在 RunPromptAsync 的 finally 里，但那个 finally 是异步的——进程退出不会等它。
+    /// 这里先把已经生成的内容落到盘上，再让调用方去停。
+    /// </summary>
+    public void FlushPartialForShutdown()
     {
+        if (_activeEntry is not { } entry)
+        {
+            return;
+        }
+
+        var assistant = _activeAssistant;
+        if (assistant is not null)
+        {
+            entry.Text = assistant.Text;
+            entry.Reasoning = assistant.Reasoning;
+            entry.Model = assistant.Model ?? entry.Model;
+            entry.InputTokens = assistant.InputTokens;
+            entry.OutputTokens = assistant.OutputTokens;
+        }
+
+        // 这一轮确定跑不完了，存档里标成被停止：重开时不会显示成「完成」
+        entry.Stopped = true;
+        _flushedForShutdown = true;
+        Session.UpdatedAt = DateTimeOffset.Now;
+        _host.SaveSessionNow(Session);
+    }
+
+    /// <summary>生成期间按了发送：按先后顺序记下来，本轮结束后一条一条接着发。</summary>
+    private void OnQueueRequested(object? sender, PromptRequest request)    {
         _queuedPrompts.Add(request);
         UpdateQueueHint();
     }
@@ -717,6 +770,9 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
             Messages.RemoveAt(Messages.Count - 1);
         }
 
+        // 截到一条不剩时这条任务又变成「没开口」，工作区重新跟着选择走
+        SyncComposerWorkspacePin();
+
         await RunPromptAsync(prompt, addUserMessage: false);
     }
 
@@ -821,6 +877,10 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
 
                 assistant!.Resume();
             }
+
+            // 记下这一轮的落点：关窗时用它把已经流出来的半截回复同步写进存档
+            _activeEntry = assistantEntry;
+            _activeAssistant = assistant;
 
             // addUserMessage=false（重试）时，最后一条也是这次要重发的 user，一并排除；
             // 继续写则保留半截回复，模型得看见自己写到哪儿了。
@@ -997,7 +1057,7 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
                 assistantEntry.Text = assistant?.Text ?? string.Empty;
                 assistantEntry.Reasoning = assistant?.Reasoning;
                 assistantEntry.Error = assistant?.Error;
-                assistantEntry.Stopped = assistant?.IsStopped ?? false;
+                assistantEntry.Stopped = _flushedForShutdown || (assistant?.IsStopped ?? false);
                 assistantEntry.Model = assistant?.Model ?? assistantEntry.Model;
                 assistantEntry.InputTokens = assistant?.InputTokens ?? 0;
                 assistantEntry.OutputTokens = assistant?.OutputTokens ?? 0;
@@ -1007,6 +1067,9 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
             _lastRunFailed = failed || !string.IsNullOrWhiteSpace(assistant?.Error);
             IsBusy = false;
             Composer.IsBusy = false;
+
+            // 第一轮跑完，「还没开口」变成「钉在这个目录」：胶囊从此跟任务走，不再跟设置走
+            SyncComposerWorkspacePin();
 
             // 生成中切过权限：这一轮按旧档位跑完了，现在把「已生效」补上。
             Composer.PermissionPendingNextRun = false;
@@ -1046,6 +1109,11 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
                     StatusText = "会话保存失败：" + ex.Message;
                 }
             }
+
+            // 这一轮已经完整收尾，关窗时不用再抢救了
+            _activeEntry = null;
+            _activeAssistant = null;
+            _flushedForShutdown = false;
         }
     }
 

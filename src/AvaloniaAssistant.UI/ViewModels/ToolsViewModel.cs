@@ -151,8 +151,11 @@ public sealed partial class ToolsViewModel : ObservableObject
     [RelayCommand]
     private void ClearSearch() => SearchText = string.Empty;
 
+    /// <summary>有来源任务时写清返回哪里：从对话页来查技能，返回不该落在首页。</summary>
+    public string BackHint => _host.ReturnHint;
+
     [RelayCommand]
-    private void Back() => _host.OpenHome();
+    private void Back() => _host.GoBack();
 
     /// <summary>选一个含 SKILL.md 的文件夹，复制进技能目录。</summary>
     [RelayCommand]

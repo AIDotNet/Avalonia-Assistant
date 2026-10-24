@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Text.RegularExpressions;
+using Avalonia;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
@@ -85,6 +86,17 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
 
     public bool HasImages => Images.Count > 0;
 
+    /// <summary>
+    /// 视觉模型的常用输入长边上限。超过这个尺寸的图不会多看到细节，
+    /// 只会多花 token——落盘前先缩，原图尺寸另存在 ChatImage 里。
+    /// </summary>
+    private const int MaxImageEdge = 1568;
+
+    /// <summary>一条消息里贴太多图时提醒一句：请求会明显变贵，而且是倍数级。</summary>
+    public bool ShowManyImagesHint => Images.Count > 3;
+
+    public string ManyImagesHint => $"已贴 {Images.Count} 张图，这一轮请求会明显变贵。";
+
     public bool HasReferences => References.Count > 0;
 
     public bool HasMentionItems => MentionItems.Count > 0;
@@ -132,14 +144,29 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
     /// 生成期间按 Enter 不是"没反应"，是排队。把这件事写在原来那行提示里，
     /// 用户不用先按一次才发现行为变了。
     /// </summary>
-    public string InputHint => IsBusy
-        ? "Enter 排队，本轮结束后自动发送"
-        : "Enter 发送 · Shift+Enter 换行 · @ 引用文件";
+    public string InputHint => IsTranscribing
+        ? "正在转写这段录音，完成后按 Enter 发送"
+        : IsSending
+            ? "正在读取引用，按 Enter 会在读完后再发"
+            : IsBusy
+                ? "Enter 排队，本轮结束后自动发送"
+                : "Enter 发送 · Shift+Enter 换行 · @ 引用文件";
 
     /// <summary>正在读引用文件的正文，读完才真正发出。</summary>
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SendCommand))]
+    [NotifyPropertyChangedFor(nameof(InputHint))]
     private bool isSending;
+
+    /// <summary>录音已经停了，正在等转写结果。这一段以前在界面上完全没有痕迹。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(InputHint))]
+    [NotifyPropertyChangedFor(nameof(CanUseVoice))]
+    [NotifyPropertyChangedFor(nameof(MicTooltip))]
+    private bool isTranscribing;
+
+    /// <summary>读引用的过程中用户按了 Enter：读完就把输入框里剩下的内容发出去。</summary>
+    private bool _sendAfterReading;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(MicTooltip))]
@@ -217,11 +244,13 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
         _imageErrorTimer.Start();
     }
 
-    public bool CanUseVoice => !IsBusy;
+    public bool CanUseVoice => !IsBusy && !IsTranscribing;
 
-    public string MicTooltip => IsBusy
-        ? "正在生成，本轮结束后可用"
-        : IsRecording ? "停止并转写" : "语音输入";
+    public string MicTooltip => IsTranscribing
+        ? "正在转写，稍等"
+        : IsBusy
+            ? "正在生成，本轮结束后可用"
+            : IsRecording ? "停止并转写" : "语音输入";
 
     public IBrush MicBrush => IsRecording
         ? new SolidColorBrush(Color.Parse("#B3261E"))
@@ -280,24 +309,42 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
     /// <summary>完全访问时在输入框下方给一条常驻提醒。</summary>
     public bool ShowFullAccessNotice => _settings.Current.Permission == PermissionMode.FullAccess;
 
+    /// <summary>
+    /// 这条任务已经开口之后钉住的目录。null 表示还没发过话，跟着当前选择走。
+    /// 以前胶囊一律读全局设置：已开始的会话里换目录，胶囊变了、任务没变，
+    /// 页头副标题又显示旧目录——同一屏两个答案，而模型读写的是后者。
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsWorkspacePinned))]
+    [NotifyPropertyChangedFor(nameof(WorkspaceLabel))]
+    [NotifyPropertyChangedFor(nameof(WorkspacePath))]
+    [NotifyPropertyChangedFor(nameof(WorkspacePathHint))]
+    private string? pinnedWorkspacePath;
+
+    public bool IsWorkspacePinned => !string.IsNullOrWhiteSpace(PinnedWorkspacePath);
+
     public string WorkspaceLabel
     {
         get
         {
-            var name = WorkspaceNaming.ShortName(_settings.Current.WorkspacePath);
+            var name = WorkspaceNaming.ShortName(WorkspacePath);
             return name.Length > 0 ? name : "普通任务";
         }
     }
 
-    public string WorkspacePath => _settings.Current.WorkspacePath;
+    /// <summary>这条任务真正会读写的目录：钉住了用钉住的，否则跟着设置。</summary>
+    public string WorkspacePath => IsWorkspacePinned ? PinnedWorkspacePath! : _settings.Current.WorkspacePath;
 
     /// <summary>
     /// 胶囊的悬停提示。普通任务也有落点（用户目录下的 .avaloniaassistant），
     /// 得说出来——不然让它写的报告到底存哪了，只能靠猜。
+    /// 钉住的会话要额外说清「切换只影响新任务」，否则用户会以为这一下改了当前任务。
     /// </summary>
-    public string WorkspacePathHint => string.IsNullOrWhiteSpace(WorkspacePath)
-        ? $"文件落在 {Ui.ShortenPath(PlainWorkspace.Root)}"
-        : WorkspacePath;
+    public string WorkspacePathHint => IsWorkspacePinned
+        ? $"这条任务固定在 {WorkspacePath}；切换工作区只对下一个任务生效"
+        : string.IsNullOrWhiteSpace(WorkspacePath)
+            ? $"文件落在 {Ui.ShortenPath(PlainWorkspace.Root)}"
+            : WorkspacePath;
 
     public bool IsConfigured => !string.IsNullOrWhiteSpace(_settings.Current.ApiKey);
 
@@ -314,6 +361,10 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
         {
             return;
         }
+
+        // 读引用要几秒，这期间用户接着敲的字不能被 `Text = ""` 一起抹掉。
+        // 先留一份原文，读完只清掉真正发出去的那一段。
+        var originalText = Text ?? string.Empty;
 
         if (!IsConfigured)
         {
@@ -380,7 +431,7 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
 
             var images = Images.Select(item => item.Image).ToList();
 
-            Text = string.Empty;
+            KeepTextTypedWhileReading(originalText);
             References.Clear();
             Images.Clear();
             OnPropertyChanged(nameof(HasReferences));
@@ -403,6 +454,53 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
         {
             IsSending = false;
         }
+
+        // 读引用时按过 Enter：刚才那句话已经发出去了，这里把后来补的内容接着发。
+        // 不这样做，那一下 Enter 就是纯静默失败。
+        if (_sendAfterReading)
+        {
+            _sendAfterReading = false;
+            UpdateActivity();
+            if (SendCommand.CanExecute(null))
+            {
+                await SendAsync();
+            }
+        }
+    }
+
+    /// <summary>
+    /// 只清掉已经发出去的那段文字。用户在读引用期间补了新内容时保留下来，
+    /// 否则那几个字会跟着 Text 一起被清空——他明明看见自己打上去了。
+    /// </summary>
+    private void KeepTextTypedWhileReading(string sent)
+    {
+        var current = Text ?? string.Empty;
+
+        if (string.Equals(current, sent, StringComparison.Ordinal))
+        {
+            Text = string.Empty;
+            return;
+        }
+
+        // 原文还在前面：去掉它，只留新敲的部分；已经被改得面目全非时原样保留
+        Text = current.StartsWith(sent, StringComparison.Ordinal)
+            ? current[sent.Length..].TrimStart()
+            : current;
+    }
+
+    /// <summary>
+    /// 读引用期间按了 Enter。不抢那一下按键，记下来等读完再发。
+    /// 和生成期间的「排队」是同一个承诺：按下去一定有回应。
+    /// </summary>
+    public void SendAfterReading()
+    {
+        if (!IsSending || _sendAfterReading)
+        {
+            return;
+        }
+
+        _sendAfterReading = true;
+        UpdateActivity();
     }
 
     /// <summary>把一个引用变成模型能读的附件：发送时才读盘，文件刚改过也能读到新内容。</summary>
@@ -685,20 +783,52 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
 
             var id = Guid.NewGuid().ToString("n")[..12];
             var path = Path.Combine(AppPaths.Images, id + ".png");
-            bitmap.Save(path);
+
+            var sourceWidth = bitmap.PixelSize.Width;
+            var sourceHeight = bitmap.PixelSize.Height;
+            var scale = Math.Min(1d, MaxImageEdge / (double)Math.Max(sourceWidth, sourceHeight));
+
+            Bitmap? scaled = null;
+            var stored = bitmap;
+            var storedWidth = sourceWidth;
+            var storedHeight = sourceHeight;
+            if (scale < 1)
+            {
+                storedWidth = Math.Max(1, (int)Math.Round(sourceWidth * scale));
+                storedHeight = Math.Max(1, (int)Math.Round(sourceHeight * scale));
+                scaled = bitmap.CreateScaledBitmap(
+                    new PixelSize(storedWidth, storedHeight),
+                    BitmapInterpolationMode.HighQuality);
+                stored = scaled;
+            }
+
+            try
+            {
+                stored.Save(path);
+            }
+            finally
+            {
+                // 只放自己创建的副本；调用方传进来的位图还要拿去当缩略图
+                scaled?.Dispose();
+            }
 
             var image = new ChatImage
             {
                 Id = id,
                 Path = path,
                 MimeType = "image/png",
-                Width = bitmap.PixelSize.Width,
-                Height = bitmap.PixelSize.Height,
+                Width = storedWidth,
+                Height = storedHeight,
+                OriginalWidth = sourceWidth,
+                OriginalHeight = sourceHeight,
+                Compressed = scale < 1,
                 Size = new FileInfo(path).Length,
             };
 
             Images.Add(new PendingImageViewModel(image, bitmap, RemoveImage));
             OnPropertyChanged(nameof(HasImages));
+            OnPropertyChanged(nameof(ShowManyImagesHint));
+            OnPropertyChanged(nameof(ManyImagesHint));
             SendCommand.NotifyCanExecuteChanged();
             ImageError = null;
             return true;
@@ -714,6 +844,8 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
         if (Images.Remove(item))
         {
             OnPropertyChanged(nameof(HasImages));
+            OnPropertyChanged(nameof(ShowManyImagesHint));
+            OnPropertyChanged(nameof(ManyImagesHint));
             SendCommand.NotifyCanExecuteChanged();
         }
     }
@@ -803,7 +935,9 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
 
         if (!IsConfigured)
         {
-            _ = _openSettings();
+            // 和发送按钮一样就地说明：点麦克风却整页跳到设置，比什么都不做更让人意外
+            SetupHint = "语音输入要用模型服务的 Key 做转写：先在设置里填 API Key，这段文字会留在这里。";
+            RequestFocus();
             return;
         }
 
@@ -841,14 +975,23 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
         }
 
         IsRecording = false;
-        var text = await _voice.StopAndTranscribeAsync();
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            VoiceError = "这段录音里没有识别到说话声：靠近麦克风再说一次，或直接用键盘输入。";
-            return;
-        }
+        IsTranscribing = true;
 
-        Text = string.IsNullOrWhiteSpace(Text) ? text : $"{Text.TrimEnd()} {text}";
+        try
+        {
+            var text = await _voice.StopAndTranscribeAsync();
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                VoiceError = "这段录音里没有识别到说话声：靠近麦克风再说一次，或直接用键盘输入。";
+                return;
+            }
+
+            Text = string.IsNullOrWhiteSpace(Text) ? text : $"{Text.TrimEnd()} {text}";
+        }
+        finally
+        {
+            IsTranscribing = false;
+        }
     }
 
     /// <summary>
@@ -1025,10 +1168,16 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
                 ? $"正在录音 {elapsed:mm\\:ss} · 还剩 {Math.Max(0, (int)left.TotalSeconds)} 秒自动转写"
                 : $"正在录音 {elapsed:mm\\:ss} / 最长 2:00 · 再点麦克风结束，Esc 取消";
         }
+        else if (IsTranscribing)
+        {
+            ActivityText = "正在转写这段录音，转到输入框里…";
+        }
         else if (IsSending)
         {
             ActivityText = References.Count > 0
-                ? $"正在读取 {References.Count} 份引用…"
+                ? _sendAfterReading
+                    ? $"正在读取 {References.Count} 份引用…读完就发"
+                    : $"正在读取 {References.Count} 份引用…"
                 : "正在准备…";
         }
         else

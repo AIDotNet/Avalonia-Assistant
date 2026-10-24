@@ -171,6 +171,9 @@ internal static class Program
                 case "--workspace-flow":
                     AppLaunchOptions.VerifyWorkspaceFlow = true;
                     break;
+                case "--tooltips":
+                    AppLaunchOptions.ShowTooltips = true;
+                    break;
                 case "--data-dir" when index + 1 < args.Length:
                     AppPaths.UseRoot(args[++index]);
                     break;

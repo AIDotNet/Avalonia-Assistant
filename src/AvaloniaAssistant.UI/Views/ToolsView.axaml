@@ -5,7 +5,7 @@
   <Grid RowDefinitions="Auto,*">
     <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="18,10,20,10">
       <Grid ColumnDefinitions="Auto,*,Auto">
-        <Button Classes="icon" Command="{Binding BackCommand}" ToolTip.Tip="返回">
+        <Button Classes="icon" Command="{Binding BackCommand}" ToolTip.Tip="{Binding BackHint}">
           <arc:ArcGlyph Data="{x:Static arc:ArcIcons.ChevronLeft}" Size="16" />
         </Button>
         <StackPanel Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Center" Spacing="1">

@@ -182,6 +182,15 @@ public sealed class ChatImage
 
     public int Height { get; set; }
 
+    /// <summary>粘贴进来时的原始像素宽。落盘前缩过的图，<see cref="Width"/> 是压缩后的尺寸。</summary>
+    public int OriginalWidth { get; set; }
+
+    /// <summary>粘贴进来时的原始像素高。</summary>
+    public int OriginalHeight { get; set; }
+
+    /// <summary>落盘前缩过。长边超过视觉模型的常用输入上限时才会发生。</summary>
+    public bool Compressed { get; set; }
+
     public long Size { get; set; }
 
     [JsonIgnore]
@@ -191,6 +200,23 @@ public sealed class ChatImage
 
     [JsonIgnore]
     public string Caption => $"{Width}×{Height} · {DisplaySize}";
+
+    /// <summary>
+    /// 悬停提示：带上原图尺寸和估算 token。视觉模型按分辨率折算 token，
+    /// 一张 4K 截图能吃掉上千 token——不说的话，用户以为只是"顺手贴一张"。
+    /// </summary>
+    [JsonIgnore]
+    public string DetailCaption
+    {
+        get
+        {
+            var tokens = Math.Max(1, (int)Math.Ceiling((long)Width * Height / 750d));
+            var size = Compressed
+                ? $"{Width}×{Height}（原图 {OriginalWidth}×{OriginalHeight}，已压缩）"
+                : $"{Width}×{Height}";
+            return $"{size} · {DisplaySize} · 约 {tokens} token";
+        }
+    }
 }
 
 public sealed class ToolCallRecord
