@@ -43,4 +43,13 @@
   <BoxShadows x:Key="CardShadow">0 1 2 0 #0A000000</BoxShadows>
 
   <Thickness x:Key="PagePadding">28</Thickness>
+
+  <!--
+    会话内查找：正文里命中词的底色。arc:Markdown 的 Find 是从资源里按这两个键取色的，
+    Arc 的主题没有定义它们，于是命中词只有文字、没有底——长回复里还是找不到那一行。
+    这套界面整体是暖灰纸面（#F4F4F2 / #FFFFFF / #1D1D1B），所以不用荧光笔那种亮黄：
+    弱一档的沙色打底，当前命中压深一档，扫一眼分得出「这一处」和「其它几处」。
+  -->
+  <Color x:Key="Md.SearchHighlightBackground">#F4E3C6</Color>
+  <Color x:Key="Md.SearchCurrentBackground">#EDC58A</Color>
 </ResourceDictionary>

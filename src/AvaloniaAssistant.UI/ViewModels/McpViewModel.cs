@@ -216,10 +216,23 @@ public sealed partial class McpViewModel : ObservableObject
     /// </summary>
     private async Task ProbeAllAsync()
     {
-        foreach (var server in Servers.ToList())
+        // 串行是以前的做法：6 个服务端排队，每个最多 20 秒，最后一张卡要等两分钟才出状态。
+        // 限 3 个并发，既快又不会同时拉起一堆 npx 把机器拖住。
+        using var gate = new SemaphoreSlim(3);
+        var tasks = Servers.ToList().Select(async server =>
         {
-            await ProbeAsync(server);
-        }
+            await gate.WaitAsync();
+            try
+            {
+                await ProbeAsync(server);
+            }
+            finally
+            {
+                gate.Release();
+            }
+        });
+
+        await Task.WhenAll(tasks);
     }
 
     [RelayCommand]

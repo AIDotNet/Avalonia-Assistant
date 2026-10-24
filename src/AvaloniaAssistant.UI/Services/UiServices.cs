@@ -338,6 +338,15 @@ public static class AppLaunchOptions
     /// <summary>把上下文用量调到 84%，检查水位条和警示文案。</summary>
     public static bool ContextTight { get; set; }
 
+    /// <summary>开发用：页头摆出「这一轮已经跑了一会儿」的状态，检查状态胶囊和计时。</summary>
+    public static bool RunClock { get; set; }
+
+    /// <summary>开发用：侧栏摆一条置顶任务，检查置顶分组和行首标记。</summary>
+    public static bool DemoPin { get; set; }
+
+    /// <summary>开发用：给示例会话一个「上次读到 45%」的位置，检查打开时是否接着读而不是跳到底部。</summary>
+    public static double? ReadingRatio { get; set; }
+
     /// <summary>摆出「重跑会删掉后面几轮」的确认弹窗，检查版式与红色主按钮。</summary>
     public static bool ShowRetryConfirm { get; set; }
 

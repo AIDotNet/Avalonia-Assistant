@@ -20,10 +20,23 @@
                一屏任务分不清哪个是刚跑的。悬停时它淡出，让位给「⋯」。 -->
           <Grid ColumnDefinitions="*,Auto">
             <StackPanel Spacing="1" VerticalAlignment="Center">
-              <TextBlock Text="{Binding DisplayTitle}"
-                         FontSize="12.5"
-                         VerticalAlignment="Center"
-                         TextTrimming="CharacterEllipsis" />
+              <!-- 置顶标记：只给置顶的那几条占位，没置顶时这一列宽度是 0 -->
+              <Grid ColumnDefinitions="Auto,*">
+                <arc:ArcGlyph Grid.Column="0"
+                              Data="{x:Static arc:ArcIcons.ArrowUp}"
+                              Size="10"
+                              Margin="0,0,4,0"
+                              IsVisible="{Binding IsPinned}"
+                              VerticalAlignment="Center"
+                              Foreground="{StaticResource AccentBrush}"
+                              ToolTip.Tip="已置顶" />
+                <TextBlock Grid.Column="1"
+                           Classes="row-title"
+                           Text="{Binding DisplayTitle}"
+                           FontSize="12.5"
+                           VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis" />
+              </Grid>
               <!-- 搜索命中在正文里时，把那一句亮出来，否则只看见标题不知道凭什么命中 -->
               <TextBlock Text="{Binding MatchSnippet}"
                          IsVisible="{Binding HasMatchSnippet}"

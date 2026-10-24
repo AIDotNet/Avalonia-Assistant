@@ -26,11 +26,6 @@
       <Setter Property="Background" Value="{StaticResource SurfaceMutedBrush}" />
     </Style>
 
-    <!-- 会话内查找停在哪条消息上。只加一层浅底，不动排版 -->
-    <Style Selector="Border.hit">
-      <Setter Property="Background" Value="#FFF6D6" />
-    </Style>
-
     <!-- 工具调用压成一行：一次任务十几次调用，卡片会把人埋掉 -->
     <Style Selector="Button.tool-line">
       <Setter Property="MinHeight" Value="24" />
@@ -91,9 +86,9 @@
                  FontSize="10.5"
                  HorizontalAlignment="Center"
                  Margin="0,6,0,2" />
-      <!-- 查找命中时给整条消息一层浅底。Padding 6 / Margin 收 6，净位置和原来一致 -->
-      <Border Classes.hit="{Binding IsSearchHit}"
-              HorizontalAlignment="Right"
+      <!-- 命中靠正文里的词标记，不再给整块消息铺底色：一大片黄压在白气泡上太抢眼，
+           而且整条染黄也指不到具体是哪一句。Padding 6 / Margin 收 6，净位置和原来一致 -->
+      <Border HorizontalAlignment="Right"
               CornerRadius="12"
               Padding="6"
               Margin="0,4,-6,12">
@@ -191,9 +186,8 @@
                  FontSize="10.5"
                  HorizontalAlignment="Center"
                  Margin="0,6,0,2" />
-      <!-- 命中的浅底铺满整块回复；Padding 6 / Margin 收 6，净位置和原来一致 -->
-      <Border Classes.hit="{Binding IsSearchHit}"
-              CornerRadius="12"
+      <!-- 命中只标正文里的词，不给整块消息铺底色。Padding 6 / Margin 收 6，净位置和原来一致 -->
+      <Border CornerRadius="12"
               Padding="6"
               Margin="-6,-4,-6,20">
         <Grid ColumnDefinitions="28,*">
@@ -688,7 +682,11 @@
         </Button>
         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
           <TextBlock Text="{Binding Title}" FontSize="13.5" FontWeight="Medium" TextTrimming="CharacterEllipsis" />
-          <TextBlock Text="{Binding HeaderSubtitle}" Classes="caption" FontSize="10.5" />
+          <TextBlock Text="{Binding HeaderSubtitle}"
+                     Classes="caption"
+                     FontSize="10.5"
+                     TextTrimming="CharacterEllipsis"
+                     ToolTip.Tip="{Binding UsageHint}" />
         </StackPanel>
         <!-- 停止已经在输入框里（运行中发送键会变成停止键），重试挂在每条回复下面，
              顶栏只留查找、导出和状态，避免同一个动作出现两处入口。 -->
@@ -710,8 +708,23 @@
                 Background="{StaticResource SurfaceMutedBrush}"
                 CornerRadius="11"
                 Padding="10,4"
-                VerticalAlignment="Center">
-          <TextBlock Text="{Binding StatusText}" Classes="caption" FontSize="10.5" />
+                VerticalAlignment="Center"
+                ToolTip.Tip="本轮已用时。跑完会停下并保留总时长。">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <!-- 状态词里带工具名，长的能到二十几个字：限宽省略，否则胶囊会顶出窗口右边缘，
+                 计时也跟着被裁掉——那正好是用户最想看的那一段。 -->
+            <TextBlock Text="{Binding StatusText}"
+                       Classes="caption"
+                       FontSize="10.5"
+                       MaxWidth="210"
+                       TextTrimming="CharacterEllipsis" />
+            <!-- 等了两分钟却不知道是在想还是卡住了：状态词旁边挂一个走动的秒表 -->
+            <TextBlock Text="{Binding RunClockText}"
+                       IsVisible="{Binding HasRunClock}"
+                       Classes="caption"
+                       FontSize="10.5"
+                       Opacity="0.62" />
+          </StackPanel>
         </Border>
       </Grid>
     </Border>
@@ -723,6 +736,7 @@
             BorderBrush="{StaticResource BorderBrush}"
             BorderThickness="0,0,0,1"
             Padding="18,7">
+      <StackPanel Spacing="3">
       <StackPanel Orientation="Horizontal"
                   Spacing="6"
                   HorizontalAlignment="Right"
@@ -762,6 +776,17 @@
                 ToolTip.Tip="关闭（Esc）">
           <arc:ArcGlyph Data="{x:Static arc:ArcIcons.CircleX}" Size="13" />
         </Button>
+      </StackPanel>
+
+        <!-- 命中在哪：整条染黄之外给一句上下文，长回复里不用自己找那一行 -->
+        <TextBlock Text="{Binding SearchSnippet}"
+                   IsVisible="{Binding HasSearchSnippet}"
+                   Classes="caption"
+                   FontSize="10"
+                   MaxWidth="780"
+                   HorizontalAlignment="Right"
+                   TextTrimming="CharacterEllipsis"
+                   ToolTip.Tip="{Binding SearchSnippet}" />
       </StackPanel>
     </Border>
 
@@ -940,6 +965,41 @@
                          VerticalAlignment="Center" />
             </Grid>
           </Button>
+        </Border>
+
+        <!-- 一次性回执：导出完给个落点，点一下打开所在文件夹；几秒后自己消失 -->
+        <Border IsVisible="{Binding HasToast}"
+                Background="{StaticResource SurfaceMutedBrush}"
+                BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="1"
+                CornerRadius="10"
+                Padding="12,6"
+                Margin="0,0,0,8">
+          <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+            <arc:ArcGlyph Data="{x:Static arc:ArcIcons.CircleCheck}"
+                          Size="13"
+                          Foreground="{StaticResource TextSecondaryBrush}"
+                          VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1"
+                       Text="{Binding ToastText}"
+                       FontSize="11.5"
+                       Margin="8,0,8,0"
+                       TextTrimming="CharacterEllipsis"
+                       VerticalAlignment="Center" />
+            <Button Grid.Column="2"
+                    Classes="ghost-action"
+                    Command="{Binding OpenToastTargetCommand}"
+                    Content="{Binding ToastActionLabel}" />
+            <Button Grid.Column="3"
+                    Classes="icon"
+                    Width="22"
+                    Height="22"
+                    Margin="2,0,0,0"
+                    Command="{Binding DismissToastCommand}"
+                    ToolTip.Tip="关掉">
+              <arc:ArcGlyph Data="{x:Static arc:ArcIcons.CircleX}" Size="12" />
+            </Button>
+          </Grid>
         </Border>
 
         <views:ComposerView DataContext="{Binding Composer}" MaxWidth="840" />

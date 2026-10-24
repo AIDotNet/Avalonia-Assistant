@@ -126,12 +126,24 @@ internal sealed class CodingSessionFactory
             ProjectTrusted = settings.TrustWorkspace,
         });
 
+        // 关掉的技能在加载结果里摘掉：SDK 只认加载器给出的清单，磁盘上的 SKILL.md 一个字不动，
+        // 「关掉」随时能改回来。Skills 是 init-only 的，只能从构造参数里过滤。
+        var disabledSkills = new HashSet<string>(settings.DisabledSkills, StringComparer.OrdinalIgnoreCase);
+
         // SDK 不会像 CLI 那样自动装内置扩展：技能靠 loader，MCP / codemode / tool-search 靠这四个扩展工厂。
         var resourceLoader = new DefaultResourceLoader(
             cwd,
             agentDir,
             settingsManager,
-            extensionFactories: BuiltInExtensions.All);
+            extensionFactories: BuiltInExtensions.All,
+            skillsOverride: outcome => disabledSkills.Count == 0
+                ? outcome
+                : outcome with
+                {
+                    Skills = outcome.Skills
+                        .Where(skill => !disabledSkills.Contains(skill.Name))
+                        .ToList(),
+                });
         await resourceLoader.ReloadAsync(null, cancellationToken).ConfigureAwait(false);
 
         var result = await Sdk.CreateAgentSessionAsync(

@@ -1,7 +1,8 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Text;
 using Avalonia.Media;
+using Avalonia.Threading;
 using AvaloniaAssistant.Abstractions;
 using AvaloniaAssistant.UI.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -111,6 +112,9 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
 
     public void Dispose()
     {
+        // 读到哪儿、写到哪儿都在这儿落一次盘：页面被换走之后，滚动位置就没人记得了。
+        PersistReadingRatio();
+
         // 页面被换走（去设置、回首页、开别的任务）时把没发出去的草稿留一份，
         // 否则几十个字跟着 ChatViewModel 一起没了。
         // 一句话都没发过的新任务还没有稳定 id，走单独的待用草稿位。
@@ -126,6 +130,10 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
         _settings.Changed -= OnSettingsChanged;
         Composer.PermissionChanged -= OnPermissionChanged;
         Composer.ResetSessionAllowedRequested -= OnResetSessionAllowed;
+        _toastTimer?.Stop();
+        _toastTimer = null;
+        _runClockTimer?.Stop();
+        _runClockTimer = null;
         Composer.Dispose();
     }
 
@@ -200,7 +208,7 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
     {
         PermissionMode.FullAccess => "已切换为完全访问：执行命令、修改文件都不再逐次确认。",
         PermissionMode.ReadOnly => "已切换为只读：不会修改文件，也不会执行命令。",
-        _ => "已切换为默认权限：执行命令、调用 MCP 工具前会先问你。",
+        _ => "已切换为工作区可写：执行命令、调用 MCP 工具前会先问你。",
     };
 
     public ObservableCollection<MessageViewModel> Messages { get; } = [];
@@ -216,7 +224,8 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
             var workspace = string.IsNullOrWhiteSpace(Session.WorkspacePath)
                 ? "普通任务"
                 : Path.GetFileName(Session.WorkspacePath.TrimEnd(Path.DirectorySeparatorChar));
-            return $"{workspace} · {_settings.Current.Model} · {WorkModeText.Describe(Session.Mode)}";
+            var line = $"{workspace} · {_settings.Current.Model} · {WorkModeText.Describe(Session.Mode)}";
+            return UsageText.Length > 0 ? $"{line} · {UsageText}" : line;
         }
     }
 
@@ -227,6 +236,53 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
 
     /// <summary>用户当前是不是停在底部。由 ChatView 的滚动策略实时回写，审批和浮标都靠它判断。</summary>
     public bool IsAtBottom { get; set; } = true;
+
+    /// <summary>
+    /// 上次读到哪儿（0~1）。打开会话时视图按它定位——
+    /// 以前固定跳到底部，翻到一半去改设置再回来，又得重新往下滚一遍。
+    /// </summary>
+    public double ReadingRatio => Session.ReadingRatio;
+
+    /// <summary>位置真的挪过才值得重写整份会话。</summary>
+    private bool _readingRatioDirty;
+
+    /// <summary>视图滚完把新位置告诉 VM，只记在内存里，落盘等到切页 / 关窗。</summary>
+    public void ReportReadingRatio(double ratio)
+    {
+        if (double.IsNaN(ratio) || double.IsInfinity(ratio))
+        {
+            return;
+        }
+
+        // 还没说过话的会话不记位置：记了就会在磁盘上留一份空存档
+        if (Session.Entries.Count == 0)
+        {
+            return;
+        }
+
+        ratio = Math.Clamp(ratio, 0, 1);
+        if (Math.Abs(Session.ReadingRatio - ratio) < 0.01)
+        {
+            return;
+        }
+
+        Session.ReadingRatio = ratio;
+        _readingRatioDirty = true;
+    }
+
+    /// <summary>切页 / 关窗时落盘。滚动过程中一次都不写文件。</summary>
+    public void PersistReadingRatio()
+    {
+        if (!_readingRatioDirty || Session.Entries.Count == 0)
+        {
+            return;
+        }
+
+        _readingRatioDirty = false;
+
+        // 关窗路径上进程不等异步任务，这里同步写一次
+        _host.SaveSessionNow(Session);
+    }
 
     /// <summary>停在上面时，底部飘一句「有新内容 / 有操作待确认」，点一下回到底部。</summary>
     [ObservableProperty]
@@ -337,7 +393,7 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
     {
         if (!HasMessages)
         {
-            StatusText = "还没有内容可以导出";
+            ShowToast("还没有内容可以导出", null);
             return;
         }
 
@@ -354,11 +410,13 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
         try
         {
             await File.WriteAllTextAsync(path, SessionExport.ToMarkdown(Session), Encoding.UTF8);
-            StatusText = "已导出";
+
+            // 回执带动作：刚存到哪儿了、点一下就能打开，不用自己去资源管理器翻
+            ShowToast($"已导出 {Path.GetFileName(path)}", Path.GetDirectoryName(path));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            StatusText = "导出失败：" + ex.Message;
+            ShowToast("导出失败：" + ex.Message, null);
         }
     }
 
@@ -366,6 +424,12 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
 
     /// <summary>把某条消息滚进视野。视图负责找容器，VM 只说"是这一条"。</summary>
     public event EventHandler<MessageViewModel>? ScrollToMessageRequested;
+
+    /// <summary>
+    /// 让视图把正文里的命中词标出来。<see cref="SearchHighlightRequest.Query"/> 为空表示清掉高亮。
+    /// 以前只能把整条消息染一层浅底，长回复里还得自己往下找那一行。
+    /// </summary>
+    public event EventHandler<SearchHighlightRequest>? SearchHighlightRequested;
 
     [ObservableProperty]
     private bool isSearchOpen;
@@ -387,6 +451,11 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
 
     private int _searchHitIndex = -1;
 
+    /// <summary>
+    /// 命中的那几条消息。视图挂载晚于查找时（截图、自动化），要按这份名单补一次高亮。
+    /// </summary>
+    public IReadOnlyList<MessageViewModel> SearchHitMessages => _searchHits;
+
     partial void OnSearchQueryChanged(string? value) => RebuildSearchHits(value);
 
     [RelayCommand]
@@ -406,12 +475,22 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
         IsSearchOpen = false;
         SearchQuery = string.Empty;
         SearchCounter = string.Empty;
+        SearchSnippet = null;
         _searchHits.Clear();
         _searchHitCounts.Clear();
         _searchHitIndex = -1;
-        ClearSearchMarks();
+        SearchHighlightRequested?.Invoke(this, new SearchHighlightRequest(string.Empty, null));
         Composer.RequestFocus();
     }
+
+    /// <summary>当前命中在消息里的上下文片段；搜索条下面那一行。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSearchSnippet))]
+    private string? searchSnippet;
+
+    public bool HasSearchSnippet => !string.IsNullOrWhiteSpace(SearchSnippet);
+
+    private string _searchKeyword = string.Empty;
 
     [RelayCommand]
     private void NextSearchHit() => MoveSearchHit(1);
@@ -421,15 +500,17 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
 
     private void RebuildSearchHits(string? query)
     {
-        ClearSearchMarks();
         _searchHits.Clear();
         _searchHitCounts.Clear();
         _searchHitIndex = -1;
 
         var keyword = (query ?? string.Empty).Trim();
+        _searchKeyword = keyword;
         if (keyword.Length == 0)
         {
             SearchCounter = string.Empty;
+            SearchSnippet = null;
+            SearchHighlightRequested?.Invoke(this, new SearchHighlightRequest(string.Empty, null));
             return;
         }
 
@@ -453,6 +534,7 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
         if (_searchHits.Count == 0)
         {
             SearchCounter = "没有匹配";
+            SearchHighlightRequested?.Invoke(this, new SearchHighlightRequest(string.Empty, null));
             return;
         }
 
@@ -498,24 +580,46 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
         _searchHitIndex = next;
         var target = _searchHits[next];
 
-        foreach (var message in Messages)
-        {
-            message.IsSearchHit = ReferenceEquals(message, target);
-        }
-
         var occurrences = _searchHitCounts.TryGetValue(target, out var value) ? value : 0;
         SearchCounter = $"第 {next + 1} 条 / 共 {_searchHits.Count} 条"
                         + (occurrences > 1 ? $" · 本条 {occurrences} 处" : string.Empty);
 
+        // 正文里那一处已经标出来了，搜索条下面再补一句上下文：
+        // 不用把视线挪回正文，也知道命中的是命令、路径还是正文。
+        SearchSnippet = BuildSnippet(target, _searchKeyword);
+
         ScrollToMessageRequested?.Invoke(this, target);
+
+        // 正文里所有命中都标出来，当前这一条的第一处设为当前
+        SearchHighlightRequested?.Invoke(this, new SearchHighlightRequest(_searchKeyword, target, _searchHits));
     }
 
-    private void ClearSearchMarks()
+    /// <summary>命中那一句的上下文。没有行内高亮（arc:Markdown 不暴露分词），至少给出前后文。</summary>
+    private static string? BuildSnippet(MessageViewModel message, string keyword)
     {
-        foreach (var message in Messages)
+        if (keyword.Length == 0)
         {
-            message.IsSearchHit = false;
+            return null;
         }
+
+        foreach (var text in SearchableTexts(message))
+        {
+            var index = text.IndexOf(keyword, StringComparison.OrdinalIgnoreCase);
+            if (index < 0)
+            {
+                continue;
+            }
+
+            var start = Math.Max(0, index - 16);
+            var end = Math.Min(text.Length, index + keyword.Length + 26);
+            var slice = text[start..end].ReplaceLineEndings(" ").Trim();
+
+            return (start > 0 ? "…" : string.Empty)
+                   + slice
+                   + (end < text.Length ? "…" : string.Empty);
+        }
+
+        return null;
     }
 
     /// <summary>能被搜到的东西：用户原话、助手正文、工具那一行和它的结果。</summary>
@@ -562,6 +666,153 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     private string statusText = "就绪";
+
+    /// <summary>
+    /// 本轮用时。跑的时候每秒跳一次，跑完停下并保留最终值——
+    /// 以前只有「正在回复…」这类状态词，等了两分钟不知道到底是在想还是卡住了。
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasRunClock))]
+    private string? runClockText;
+
+    public bool HasRunClock => !string.IsNullOrEmpty(RunClockText);
+
+    private DispatcherTimer? _runClockTimer;
+    private DateTimeOffset _runStartedAt;
+
+    private void StartRunClock()
+    {
+        _runStartedAt = DateTimeOffset.Now;
+        TickRunClock();
+
+        _runClockTimer?.Stop();
+        _runClockTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        _runClockTimer.Tick += (_, _) => TickRunClock();
+        _runClockTimer.Start();
+    }
+
+    private void TickRunClock()
+        => RunClockText = FormatDuration(DateTimeOffset.Now - _runStartedAt);
+
+    /// <summary>停下计时并定格成「用时 x」。</summary>
+    private void StopRunClock()
+    {
+        _runClockTimer?.Stop();
+        _runClockTimer = null;
+
+        if (_runStartedAt == default)
+        {
+            return;
+        }
+
+        RunClockText = "用时 " + FormatDuration(DateTimeOffset.Now - _runStartedAt);
+        _runStartedAt = default;
+    }
+
+    private static string FormatDuration(TimeSpan span)
+    {
+        var seconds = Math.Max(0, (int)span.TotalSeconds);
+        if (seconds < 60)
+        {
+            return $"{seconds}s";
+        }
+
+        if (seconds < 3600)
+        {
+            return $"{seconds / 60}m{seconds % 60:00}s";
+        }
+
+        return $"{seconds / 3600}h{seconds % 3600 / 60:00}m";
+    }
+
+    // ---- 用量 ----
+
+    /// <summary>本任务累计输入 / 输出 token。只看单条气泡，回答不了「这活一共花了多少」。</summary>
+    public long SessionInputTokens => Session.Entries.Sum(entry => entry.InputTokens);
+
+    public long SessionOutputTokens => Session.Entries.Sum(entry => entry.OutputTokens);
+
+    public int SessionTurnCount => Session.Entries.Count(entry => entry.Kind == ChatEntryKind.Assistant);
+
+    /// <summary>页头副标题尾巴上的那一小截：没有用量时整段不出现。</summary>
+    public string UsageText
+    {
+        get
+        {
+            var total = SessionInputTokens + SessionOutputTokens;
+            return total <= 0 ? string.Empty : $"累计 {FormatTokens(total)}";
+        }
+    }
+
+    public string UsageHint
+        => SessionInputTokens + SessionOutputTokens <= 0
+            ? "本任务还没有用量记录"
+            : $"本任务累计：输入 {SessionInputTokens:N0} · 输出 {SessionOutputTokens:N0} token"
+              + $"（{SessionTurnCount} 轮回复）。单条的用量挂在每条回复下面。";
+
+    private static string FormatTokens(long value)
+        => value >= 1_000_000
+            ? $"{value / 1_000_000d:0.##}M"
+            : value >= 1000 ? $"{value / 1000d:0.#}k" : value.ToString();
+
+    /// <summary>一轮跑完补上这笔账，页头副标题跟着换。</summary>
+    private void RefreshUsage()
+    {
+        OnPropertyChanged(nameof(SessionInputTokens));
+        OnPropertyChanged(nameof(SessionOutputTokens));
+        OnPropertyChanged(nameof(SessionTurnCount));
+        OnPropertyChanged(nameof(UsageText));
+        OnPropertyChanged(nameof(UsageHint));
+        OnPropertyChanged(nameof(HeaderSubtitle));
+    }
+
+    /// <summary>
+    /// 一次性回执（导出成功之类）。页头那颗胶囊只放运行状态——
+    /// 以前导出完标题会一直写着「已导出」，直到下一轮才被覆盖，读起来像状态坏了。
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasToast))]
+    private string? toastText;
+
+    public bool HasToast => !string.IsNullOrWhiteSpace(ToastText);
+
+    public string ToastActionLabel => "打开所在文件夹";
+
+    /// <summary>回执上那个动作要打开的位置。</summary>
+    private string? _toastTarget;
+
+    private DispatcherTimer? _toastTimer;
+
+    private void ShowToast(string text, string? target)
+    {
+        ToastText = text;
+        _toastTarget = target;
+
+        _toastTimer?.Stop();
+        _toastTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(9) };
+        _toastTimer.Tick += (_, _) => ClearToast();
+        _toastTimer.Start();
+    }
+
+    private void ClearToast()
+    {
+        _toastTimer?.Stop();
+        _toastTimer = null;
+        ToastText = null;
+        _toastTarget = null;
+    }
+
+    [RelayCommand]
+    private void OpenToastTarget()
+    {
+        if (!string.IsNullOrWhiteSpace(_toastTarget))
+        {
+            Ui.RevealInExplorer(_toastTarget);
+        }
+    }
+
+    [RelayCommand]
+    private void DismissToast() => ClearToast();
 
     [RelayCommand]
     private void Back() => _host.OpenHome();
@@ -851,6 +1102,7 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
         IsBusy = true;
         Composer.IsBusy = true;
         StatusText = "正在准备…";
+        StartRunClock();
 
         // 上一轮留下的「改后自动放行」不跨轮生效
         _pendingCorrectedArguments = null;
@@ -1110,6 +1362,8 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
 
             Session.UpdatedAt = DateTimeOffset.Now;
             _lastRunFailed = failed || !string.IsNullOrWhiteSpace(assistant?.Error);
+            StopRunClock();
+            RefreshUsage();
             IsBusy = false;
             Composer.IsBusy = false;
 
@@ -1160,6 +1414,17 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
             _activeAssistant = null;
             _flushedForShutdown = false;
         }
+    }
+
+    /// <summary>
+    /// 仅用于 --screenshot：摆出「这一轮已经跑了一会儿」的页头，检查状态词旁边的计时。
+    /// 真跑一轮才有这个状态，截图里没有模型可调，只能这样摆。
+    /// </summary>
+    public void ShowDemoRunning()
+    {
+        StatusText = "正在执行「执行命令」…";
+        RunClockText = "1m23s";
+        Composer.IsBusy = true;
     }
 
     /// <summary>
@@ -1571,3 +1836,9 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
         }
     }
 }
+
+/// <summary>会话内查找要在正文里标出来的东西：命中词、当前停在哪条消息上、以及哪几条消息里有命中。</summary>
+public sealed record SearchHighlightRequest(
+    string Query,
+    MessageViewModel? Target,
+    IReadOnlyList<MessageViewModel>? Hits = null);

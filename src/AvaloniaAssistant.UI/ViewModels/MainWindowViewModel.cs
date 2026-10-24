@@ -419,6 +419,18 @@ public sealed partial class MainWindowViewModel : ObservableObject
     }
 
     /// <summary>
+    /// 关窗时记下当前任务读到哪儿。后台任务各自收尾时会写存档，
+    /// 这一条只是「用户正在看」的那一页——读完直接关窗，下次进来还得停在原处。
+    /// </summary>
+    public void PersistReadingPosition()
+    {
+        if (CurrentPage is ChatViewModel chat)
+        {
+            chat.PersistReadingRatio();
+        }
+    }
+
+    /// <summary>
     /// 关窗抢救用：同步写一次会话。SaveAsync 内部全程 ConfigureAwait(false)，
     /// 在 UI 线程上等不会死锁；写的是几百 KB 的 JSON，阻塞可以忽略。
     /// </summary>
@@ -698,7 +710,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
         await ExpandWorkspaceAsync(session);
 
         await _sessions.SaveAsync(session);
-        await ReloadSessionsAsync();
+
+        // 以前这里再走一次 LoadAllAsync：每轮结束把所有会话文件重读一遍，只为刷侧栏。
+        // 会话对象已经在 _sessionCache 里，直接重建列表即可，别把磁盘拖进来。
+        await Ui.OnUiAsync(RebuildSidebar);
 
         // 高亮只跟着「用户正在看的那条」走：后台任务跑完不该把侧栏选中项抢过去。
         await SetActiveSessionAsync(ActiveChatId);
@@ -1113,7 +1128,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
             }
         }
 
-        sessions.Sort((left, right) => right.UpdatedAt.CompareTo(left.UpdatedAt));
+        // 置顶的排前面；同为置顶（或都没置顶）仍按最近使用排。
+        // 只改顺序，不动 UpdatedAt——取消置顶之后任务回到它本来该在的位置。
+        sessions.Sort((left, right) =>
+            left.Pinned != right.Pinned
+                ? left.Pinned ? -1 : 1
+                : right.UpdatedAt.CompareTo(left.UpdatedAt));
 
         // 同名任务在列表里长得一模一样，只能靠点开确认是哪条。重名的补上日期/序号。
         var displayTitles = BuildDisplayTitles();
@@ -1167,7 +1187,23 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
 
         SessionGroups.Clear();
+
+        // 置顶的单独一栏放最上面：混在日期分组里，就等于还是得往下翻。
+        var pinned = sessions.Where(session => session.Pinned).ToList();
+        if (pinned.Count > 0)
+        {
+            SessionGroups.Add(new SessionGroupViewModel(
+                "置顶",
+                pinned.Select(session => CreateSessionItem(
+                    session,
+                    activeId,
+                    LooseWorkspaceName(session),
+                    snippets.GetValueOrDefault(session.Id, string.Empty),
+                    displayTitles.GetValueOrDefault(session.Id, session.Title)))));
+        }
+
         foreach (var group in sessions
+                     .Where(session => !session.Pinned)
                      .GroupBy(session => GroupName(session.UpdatedAt))
                      .OrderBy(group => GroupOrder(group.Key)))
         {
@@ -1207,7 +1243,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
             id => _ = DeleteSessionAsync(id),
             RenameSessionAsync,
             matchSnippet,
-            displayTitle)
+            displayTitle,
+            id => _ = TogglePinAsync(id))
         {
             IsActive = session.Id == activeId,
             IsRunning = IsChatRunning(session.Id),
@@ -1262,6 +1299,34 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
 
         return _backgroundChats.TryGetValue(sessionId, out var background) && background.IsBusy;
+    }
+
+    /// <summary>
+    /// 置顶 / 取消置顶。只改侧栏顺序：不动 <see cref="ChatSession.UpdatedAt"/>，
+    /// 取消置顶之后任务回到它本来该在的时间位置上，而不是被顶到最前面。
+    /// </summary>
+    public async Task TogglePinAsync(string sessionId)
+    {
+        if (!_sessionCache.TryGetValue(sessionId, out var session))
+        {
+            return;
+        }
+
+        session.Pinned = !session.Pinned;
+
+        try
+        {
+            await _sessions.SaveAsync(session);
+        }
+        catch (Exception ex)
+        {
+            // 写盘失败就退回去。界面显示「置顶了」而磁盘上没有，下次启动会自己变回去，
+            // 不如当场回滚：这一行没动，就是没置顶成功。
+            session.Pinned = !session.Pinned;
+            System.Diagnostics.Debug.WriteLine("置顶没保存成功：" + ex.Message);
+        }
+
+        await Ui.OnUiAsync(RebuildSidebar);
     }
 
     /// <summary>改任务标题。成功返回 null，失败返回一句能直接展示的原因。</summary>
@@ -1339,6 +1404,14 @@ public sealed partial class MainWindowViewModel : ObservableObject
         var session = dateDemo
             ? DemoData.CreateDateDemoSession(Settings.WorkspacePath)
             : DemoData.CreateSession(Settings.WorkspacePath);
+
+        // --reading-ratio：给示例会话一个「上次读到一半」的位置。
+        // 必须在页面挂上来之前设好，视图一挂载就按它定位了。
+        if (AppLaunchOptions.ReadingRatio is { } ratio)
+        {
+            session.ReadingRatio = ratio;
+        }
+
         CurrentPage = CreateChat(session);
     }
 
@@ -1369,6 +1442,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
                 WorkspacePath = demo.Workspace,
                 CreatedAt = now + demo.Ago,
                 UpdatedAt = now + demo.Ago,
+
+                // --demo-pin：把「把周报改成三段式」置顶，看顶部分组和行首那枚标记
+                Pinned = AppLaunchOptions.DemoPin && demo.Id == "demo-2",
             };
         }
 

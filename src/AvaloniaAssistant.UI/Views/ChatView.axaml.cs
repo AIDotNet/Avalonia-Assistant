@@ -10,6 +10,7 @@ using Avalonia.VisualTree;
 using AvaloniaAssistant.Abstractions;
 using AvaloniaAssistant.UI.Services;
 using AvaloniaAssistant.UI.ViewModels;
+using ArcMarkdown = TKCode.Arc.Markdown;
 
 namespace AvaloniaAssistant.UI.Views;
 
@@ -67,7 +68,11 @@ public partial class ChatView : UserControl
         {
             _viewModel.ScrollToEndRequested -= OnScrollToEndRequested;
             _viewModel.ScrollToMessageRequested -= OnScrollToMessageRequested;
+            _viewModel.SearchHighlightRequested -= OnSearchHighlightRequested;
             _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
+
+            // 离开这一页时把读到哪儿记下来：VM 的 Dispose 不一定被调用（跑到后台的任务还活着）
+            _viewModel.PersistReadingRatio();
         }
 
         base.OnDetachedFromVisualTree(e);
@@ -79,7 +84,10 @@ public partial class ChatView : UserControl
         {
             _viewModel.ScrollToEndRequested -= OnScrollToEndRequested;
             _viewModel.ScrollToMessageRequested -= OnScrollToMessageRequested;
+            _viewModel.SearchHighlightRequested -= OnSearchHighlightRequested;
             _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
+
+            _viewModel.PersistReadingRatio();
         }
 
         _viewModel = DataContext as ChatViewModel;
@@ -87,6 +95,7 @@ public partial class ChatView : UserControl
         {
             _viewModel.ScrollToEndRequested += OnScrollToEndRequested;
             _viewModel.ScrollToMessageRequested += OnScrollToMessageRequested;
+            _viewModel.SearchHighlightRequested += OnSearchHighlightRequested;
             _viewModel.PropertyChanged += OnViewModelPropertyChanged;
 
             // 重跑会删掉后面几轮，先把话说清楚再动手
@@ -163,6 +172,29 @@ public partial class ChatView : UserControl
         AttachDropSurface();
         Dispatcher.UIThread.Post(AttachDropSurface, DispatcherPriority.Loaded);
         ScheduleInitialScroll();
+        RestoreSearchHighlight();
+    }
+
+    /// <summary>
+    /// 视图挂载时查找条已经填好了关键词（截图、自动化就是这样）：
+    /// 那时事件已经发过一遍，视图还没订阅，得按当前命中名单补一次。
+    /// </summary>
+    private void RestoreSearchHighlight()
+    {
+        if (_viewModel is not { IsSearchOpen: true } viewModel)
+        {
+            return;
+        }
+
+        var query = (viewModel.SearchQuery ?? string.Empty).Trim();
+        if (query.Length == 0)
+        {
+            return;
+        }
+
+        _searchQuery = query;
+        _searchTargets = viewModel.SearchHitMessages;
+        ApplySearchHighlight();
     }
 
     /// <summary>把整页变成拖放落点：拖到消息区中间时不用先去找输入框。</summary>
@@ -258,6 +290,122 @@ public partial class ChatView : UserControl
             DispatcherPriority.Loaded);
     }
 
+    /// <summary>
+    /// 让正文自己把命中词标出来。以前只把整条消息染一层浅底，长回复里还得自己往下找那一行；
+    /// <c>arc:Markdown</c> 自带 Find（标出全部匹配、第一处为当前）和 ClearSearch，用它就够了。
+    /// </summary>
+    private void OnSearchHighlightRequested(object? sender, SearchHighlightRequest request)
+    {
+        _searchQuery = (request.Query ?? string.Empty).Trim();
+        _searchTargets = request.Hits;
+        ApplySearchHighlight();
+    }
+
+    private string _searchQuery = string.Empty;
+
+    private IReadOnlyList<MessageViewModel>? _searchTargets;
+
+    /// <summary>已经挂过 DocumentReady 的控件。正文还在排版时 Find 会被丢掉，要等文档就绪再补一次。</summary>
+    private readonly HashSet<ArcMarkdown> _searchHooked = [];
+
+    private DispatcherTimer? _highlightRetry;
+
+    private int _highlightRetryTicks;
+
+    /// <summary>正文还没进可视树：隔一会儿再试，别指望某一刻的时机刚好。</summary>
+    private void RetrySearchHighlight()
+    {
+        if (_searchQuery.Length == 0 || _highlightRetry is not null)
+        {
+            return;
+        }
+
+        _highlightRetryTicks = 0;
+        _highlightRetry = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(160) };
+        _highlightRetry.Tick += (_, _) =>
+        {
+            if (++_highlightRetryTicks > 12)
+            {
+                StopHighlightRetry();
+                return;
+            }
+
+            ApplySearchHighlight();
+        };
+        _highlightRetry.Start();
+    }
+
+    private void StopHighlightRetry()
+    {
+        _highlightRetry?.Stop();
+        _highlightRetry = null;
+    }
+
+    private void ApplySearchHighlight()
+    {
+        if (_searchQuery.Length == 0)
+        {
+            StopHighlightRetry();
+        }
+
+        var controls = this.GetVisualDescendants().OfType<ArcMarkdown>().ToList();
+        if (controls.Count == 0)
+        {
+            // 正文还没进可视树（刚切页、刚挂载）：隔一会儿再看，最多等两秒左右
+            RetrySearchHighlight();
+            return;
+        }
+
+        StopHighlightRetry();
+
+        // 消息被删/重跑之后，旧控件要放掉，别一直攥着已经离开可视树的实例
+        var alive = new HashSet<ArcMarkdown>(controls);
+        _searchHooked.RemoveWhere(item => !alive.Contains(item));
+
+        foreach (var markdown in controls)
+        {
+            if (markdown.DataContext is not MessageViewModel)
+            {
+                continue;
+            }
+
+            if (_searchHooked.Add(markdown))
+            {
+                markdown.DocumentReady += OnMarkdownDocumentReady;
+            }
+
+            ApplyTo(markdown);
+        }
+    }
+
+    private void ApplyTo(ArcMarkdown markdown)
+    {
+        if (markdown.DataContext is not MessageViewModel message)
+        {
+            return;
+        }
+
+        // 换关键词时旧命中必须清掉，否则几条消息上一起留着上次的浅底
+        if (_searchQuery.Length > 0
+            && (_searchTargets is null || _searchTargets.Any(item => ReferenceEquals(item, message))))
+        {
+            markdown.Find(_searchQuery, false);
+        }
+        else
+        {
+            markdown.ClearSearch();
+        }
+    }
+
+    /// <summary>正文刚排版完：这时候 Find 才找得到东西。</summary>
+    private void OnMarkdownDocumentReady(object? sender, EventArgs e)
+    {
+        if (_searchQuery.Length > 0 && sender is ArcMarkdown markdown)
+        {
+            ApplyTo(markdown);
+        }
+    }
+
     private void AttachScrollViewer()
     {
         if (_scroll is not null)
@@ -329,7 +477,9 @@ public partial class ChatView : UserControl
         {
             Trace($"scrollchanged offset={_scroll.Offset.Y:0} delta={e.OffsetDelta.Y:0} -> follow=false (drag={_draggingScrollBar})");
             _followOutput = false;
+            _userTookOverScroll = true;
             SyncFollowState();
+            ReportReadingRatio();
         }
     }
 
@@ -364,9 +514,11 @@ public partial class ChatView : UserControl
         }
 
         _draggingScrollBar = false;
+        _userTookOverScroll = true;
         // 拖回底部就继续跟随，拖到中间就停在那儿
         _followOutput = IsNearBottom();
         SyncFollowState();
+        ReportReadingRatio();
         Trace($"drag end offset={_scroll?.Offset.Y:0} follow={_followOutput}");
     }
 
@@ -380,6 +532,7 @@ public partial class ChatView : UserControl
         if (e.Delta.Y > 0)
         {
             _followOutput = false;
+            _userTookOverScroll = true;
             SyncFollowState();
         }
         else if (e.Delta.Y < 0 && IsNearBottom())
@@ -387,6 +540,9 @@ public partial class ChatView : UserControl
             _followOutput = true;
             SyncFollowState();
         }
+
+        // 滚轮之后才拿得到新的 Offset，等这一帧处理完再记位置
+        Dispatcher.UIThread.Post(ReportReadingRatio, DispatcherPriority.Background);
     }
 
     /// <summary>
@@ -420,8 +576,86 @@ public partial class ChatView : UserControl
         _draggingScrollBar = false;
         _lastExtent = 0;
         _expectedOffsetY = double.NaN;
+        _pendingRestoreRatio = double.NaN;
+        _userTookOverScroll = false;
+        _restoreAttempt = 0;
         SyncFollowState();
+
+        // 上次读到一半：接着读。以前固定跳到底部，翻到一半去改个设置再回来，
+        // 又得从头往下滚一遍。
+        var ratio = _viewModel?.ReadingRatio ?? -1;
+        Trace($"init ratio={ratio:0.###} vm={_viewModel is not null}");
+        if (ratio > 0.001 && ratio < 0.995)
+        {
+            _pendingRestoreRatio = ratio;
+            _followOutput = false;
+            SyncFollowState();
+
+            // 两趟：第一趟正文刚排完，第二趟等 Markdown 把高度撑开后再校正一次
+            DispatcherTimer.RunOnce(ApplyPendingRestore, TimeSpan.FromMilliseconds(150));
+            DispatcherTimer.RunOnce(ApplyPendingRestore, TimeSpan.FromMilliseconds(560));
+            return;
+        }
+
         DispatcherTimer.RunOnce(ScrollToBottom, TimeSpan.FromMilliseconds(140));
+    }
+
+    /// <summary>上次的阅读位置（0~1）。恢复期间不跟随输出，也不算「用户自己动了」。</summary>
+    private double _pendingRestoreRatio = double.NaN;
+
+    /// <summary>用户自己滚过之后，第二次恢复就不能再把他拽回去。</summary>
+    private bool _userTookOverScroll;
+
+    private int _restoreAttempt;
+
+    private void ApplyPendingRestore()
+    {
+        if (_scroll is null || _viewModel is null || double.IsNaN(_pendingRestoreRatio))
+        {
+            return;
+        }
+
+        if (_draggingScrollBar || _userTookOverScroll)
+        {
+            _pendingRestoreRatio = double.NaN;
+            return;
+        }
+
+        var max = _scroll.Extent.Height - _scroll.Viewport.Height;
+        if (max > 0.5)
+        {
+            var target = Math.Clamp(max * _pendingRestoreRatio, 0, max);
+            _expectedOffsetY = target;
+            _scroll.Offset = new Vector(_scroll.Offset.X, target);
+            _lastExtent = _scroll.Extent.Height;
+
+            // 落到位置上就恢复跟随判断：读到最底下了才继续跟着新内容走
+            _followOutput = IsNearBottom();
+            SyncFollowState();
+            Trace($"restore ratio={_pendingRestoreRatio:0.###} target={target:0} max={max:0}");
+        }
+
+        // 两趟都没量出高度就放弃，别一直挂着一个「正在恢复」的状态
+        _restoreAttempt++;
+        if (_restoreAttempt >= 2)
+        {
+            _pendingRestoreRatio = double.NaN;
+            Trace("restore done");
+        }
+    }
+
+    /// <summary>把当前读到的比例告诉 VM。只记内存，落盘在切页 / 关窗时。</summary>
+    private void ReportReadingRatio()
+    {
+        if (_scroll is null || !double.IsNaN(_pendingRestoreRatio))
+        {
+            // 恢复定位的中途态不记，否则重新打开会越读越往下
+            return;
+        }
+
+        var max = _scroll.Extent.Height - _scroll.Viewport.Height;
+        var ratio = max <= 1 ? 1 : Math.Clamp(_scroll.Offset.Y / max, 0, 1);
+        _viewModel?.ReportReadingRatio(ratio);
     }
 
     /// <summary>
@@ -494,6 +728,7 @@ public partial class ChatView : UserControl
 
         _expectedOffsetY = target;
         _scroll.Offset = new Vector(_scroll.Offset.X, target);
+        ReportReadingRatio();
         Trace($"scrollto target={target:0} actual={_scroll.Offset.Y:0}");
     }
 }

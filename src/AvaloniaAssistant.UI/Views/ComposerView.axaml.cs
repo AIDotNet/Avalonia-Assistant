@@ -763,7 +763,7 @@ public partial class ComposerView : UserControl
             Background = ThemeBrush("BorderBrush", Brushes.Gainsboro),
         });
 
-        stack.Children.Add(BuildPermissionOption(viewModel, PermissionMode.Workspace, "默认权限", "执行命令、调用 MCP 前先问你"));
+        stack.Children.Add(BuildPermissionOption(viewModel, PermissionMode.Workspace, "工作区可写", "执行命令、调用 MCP 前先问你"));
         stack.Children.Add(BuildPermissionOption(viewModel, PermissionMode.FullAccess, "完全访问", "所有工具直接执行，不再逐次确认"));
         stack.Children.Add(BuildPermissionOption(viewModel, PermissionMode.ReadOnly, "只读", "不改文件、不执行命令"));
 

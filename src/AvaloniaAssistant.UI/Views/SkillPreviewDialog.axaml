@@ -1,0 +1,92 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:arc="https://github.com/AIDotNet/TKCode.Arc"
+        x:Class="AvaloniaAssistant.UI.Views.SkillPreviewDialog"
+        Title="技能正文"
+        CanResize="False"
+        ShowInTaskbar="False"
+        WindowDecorations="None"
+        WindowStartupLocation="CenterOwner"
+        TransparencyLevelHint="Transparent"
+        Background="Transparent"
+        FontFamily="{StaticResource AppFontFamily}"
+        RequestedThemeVariant="Light">
+  <Grid Background="#66000000">
+    <Border Width="760"
+            MaxHeight="680"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center"
+            Background="{StaticResource SurfaceBrush}"
+            BorderBrush="{StaticResource BorderStrongBrush}"
+            BorderThickness="1"
+            CornerRadius="18"
+            Padding="22,18,22,16"
+            BoxShadow="0 24 64 0 #33000000">
+      <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="10">
+        <Grid ColumnDefinitions="Auto,*,Auto">
+          <Border Width="26"
+                  Height="26"
+                  CornerRadius="8"
+                  Background="#FCE9F1"
+                  VerticalAlignment="Top">
+            <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Sparkles}"
+                          Size="14"
+                          Foreground="#C2417B"
+                          HorizontalAlignment="Center"
+                          VerticalAlignment="Center" />
+          </Border>
+          <StackPanel Grid.Column="1" Margin="10,0,8,0" Spacing="2" VerticalAlignment="Center">
+            <TextBlock x:Name="TitleText" FontSize="16" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+            <TextBlock Text="SKILL.md 原文：模型先看到的是名字和描述，正文按需加载"
+                       Classes="caption"
+                       FontSize="10.5" />
+          </StackPanel>
+          <Button Grid.Column="2" Classes="icon" Click="OnCloseClick" ToolTip.Tip="关闭（Esc）">
+            <arc:ArcGlyph Data="{x:Static arc:ArcIcons.CircleX}" Size="15" />
+          </Button>
+        </Grid>
+
+        <TextBlock x:Name="PathText"
+                   Grid.Row="1"
+                   FontFamily="{StaticResource MonoFontFamily}"
+                   FontSize="10"
+                   Foreground="{StaticResource TextMutedBrush}"
+                   TextTrimming="CharacterEllipsis" />
+
+        <Border Grid.Row="2"
+                Background="{StaticResource SurfaceMutedBrush}"
+                BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="1"
+                CornerRadius="10"
+                Padding="12,10">
+          <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <SelectableTextBlock x:Name="ContentText"
+                                 FontFamily="{StaticResource MonoFontFamily}"
+                                 FontSize="11.5"
+                                 LineHeight="18"
+                                 TextWrapping="Wrap"
+                                 Foreground="{StaticResource TextPrimaryBrush}" />
+          </ScrollViewer>
+        </Border>
+
+        <Grid Grid.Row="3" ColumnDefinitions="*,Auto,Auto">
+          <TextBlock Text="关掉技能只会让它不进系统提示，这个文件不会被改动。"
+                     Classes="caption"
+                     FontSize="10.5"
+                     TextWrapping="Wrap"
+                     VerticalAlignment="Center" />
+          <Button Grid.Column="1"
+                  Classes="ghost-action"
+                  Margin="12,0,0,0"
+                  Click="OnRevealClick"
+                  Content="在资源管理器中打开" />
+          <Button Grid.Column="2"
+                  Classes="chip"
+                  Margin="8,0,0,0"
+                  Content="关闭（Esc）"
+                  Click="OnCloseClick" />
+        </Grid>
+      </Grid>
+    </Border>
+  </Grid>
+</Window>

@@ -5,6 +5,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Markup.Xaml;
+using System.Globalization;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -91,8 +92,17 @@ public partial class SidebarView : UserControl
     /// </summary>
     private void OnSessionRowPointerEntered(object? sender, PointerEventArgs e)
     {
-        if (sender is not Control { DataContext: SessionItemViewModel item })
+        if (sender is not Control { DataContext: SessionItemViewModel item } row)
         {
+            return;
+        }
+
+        // 标题没被截断时不弹卡：信息卡会盖住对话正文，而"所属空间/更新时间"
+        // 现在行内和页头都能看到，只为一行看得全的标题去挡正文不划算。
+        if (!IsTitleTruncated(row, item))
+        {
+            CancelCardTimer();
+            item.IsCardOpen = false;
             return;
         }
 
@@ -123,6 +133,29 @@ public partial class SidebarView : UserControl
         {
             item.IsCardOpen = false;
         }
+    }
+
+    /// <summary>量一下标题全文的宽度，和实际可用宽度比——真的放不下才值得弹卡。</summary>
+    private static bool IsTitleTruncated(Control row, SessionItemViewModel item)
+    {
+        var title = row.GetVisualDescendants()
+            .OfType<TextBlock>()
+            .FirstOrDefault(block => block.Classes.Contains("row-title"));
+
+        if (title is null || title.Bounds.Width <= 0)
+        {
+            return false;
+        }
+
+        var formatted = new FormattedText(
+            item.DisplayTitle,
+            CultureInfo.CurrentCulture,
+            FlowDirection.LeftToRight,
+            new Typeface(title.FontFamily, title.FontStyle, title.FontWeight),
+            title.FontSize,
+            Brushes.Black);
+
+        return formatted.Width > title.Bounds.Width + 1;
     }
 
     private DispatcherTimer? _cardTimer;
@@ -220,6 +253,13 @@ public partial class SidebarView : UserControl
         {
             CloseFlyouts();
             item.OpenCommand.Execute(null);
+        }));
+
+        // 常用任务不该被新任务一路挤到看不见的地方
+        rows.Children.Add(MenuRow(item.PinLabel, ArcIcons.ArrowUp, () =>
+        {
+            CloseFlyouts();
+            item.TogglePin();
         }));
 
         var (renameCard, input) = BuildSessionRename(flyout, item);

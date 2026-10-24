@@ -140,6 +140,23 @@ internal static class Program
                 case "--context-tight":
                     AppLaunchOptions.ContextTight = true;
                     break;
+                case "--run-clock":
+                    AppLaunchOptions.RunClock = true;
+                    break;
+                case "--demo-pin":
+                    AppLaunchOptions.DemoPin = true;
+                    break;
+                case "--reading-ratio" when index + 1 < args.Length:
+                    if (double.TryParse(
+                            args[++index],
+                            System.Globalization.NumberStyles.Float,
+                            System.Globalization.CultureInfo.InvariantCulture,
+                            out var ratio))
+                    {
+                        AppLaunchOptions.ReadingRatio = ratio;
+                    }
+
+                    break;
                 case "--retry-confirm":
                     AppLaunchOptions.ShowRetryConfirm = true;
                     break;

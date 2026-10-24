@@ -27,10 +27,6 @@ public abstract partial class MessageViewModel : ObservableObject
 
     [ObservableProperty]
     private string dateHeaderText = string.Empty;
-
-    /// <summary>会话内查找当前停在这一条上。只做一层浅底，不改变任何排版。</summary>
-    [ObservableProperty]
-    private bool isSearchHit;
 }
 
 public sealed partial class UserMessageViewModel : MessageViewModel

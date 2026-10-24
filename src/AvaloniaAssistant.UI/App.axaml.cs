@@ -191,6 +191,12 @@ public partial class AssistantApp : Application
                             // 84%：越过 70% 的警示线，检查水位条和那行提示的间距
                             demoChat.ContextTokens = 108_000;
                         }
+
+                        if (AppLaunchOptions.RunClock)
+                        {
+                            // 「已经跑了一会儿」：状态词旁边那颗秒表平时只有真跑起来才有
+                            demoChat.ShowDemoRunning();
+                        }
                     }
 
                     break;

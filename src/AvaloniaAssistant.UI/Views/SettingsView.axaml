@@ -95,14 +95,32 @@
                        LineHeight="18" />
           </StackPanel>
 
-          <Grid ColumnDefinitions="*,*">
+          <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto">
             <arc:Input Label="Temperature"
-                       Text="{Binding Temperature, Mode=TwoWay}"
+                       Text="{Binding TemperatureText, Mode=TwoWay}"
                        Margin="0,0,8,0" />
             <arc:Input Grid.Column="1"
                        Label="Max tokens"
-                       Text="{Binding MaxTokens, Mode=TwoWay}"
+                       Text="{Binding MaxTokensText, Mode=TwoWay}"
                        Margin="8,0,0,0" />
+            <!-- 填错就写在字段下面：以前绑定静默失败，字段留着错值还照样提示「已保存」 -->
+            <TextBlock Grid.Row="1"
+                       Text="{Binding TemperatureError}"
+                       IsVisible="{Binding HasTemperatureError}"
+                       FontSize="10.5"
+                       LineHeight="15"
+                       Margin="2,4,8,0"
+                       TextWrapping="Wrap"
+                       Foreground="{StaticResource DangerBrush}" />
+            <TextBlock Grid.Row="1"
+                       Grid.Column="1"
+                       Text="{Binding MaxTokensError}"
+                       IsVisible="{Binding HasMaxTokensError}"
+                       FontSize="10.5"
+                       LineHeight="15"
+                       Margin="10,4,0,0"
+                       TextWrapping="Wrap"
+                       Foreground="{StaticResource DangerBrush}" />
           </Grid>
         </StackPanel>
 
@@ -121,14 +139,14 @@
                     Classes.active="{Binding IsWorkspaceSelected}"
                     Command="{Binding SetPermissionCommand}"
                     CommandParameter="workspace"
-                    Content="默认权限" />
+                    Content="工作区可写" />
             <Button Classes="chip"
                     Classes.active="{Binding IsFullAccessSelected}"
                     Click="OnFullAccessClick"
                     Content="完全访问" />
           </StackPanel>
 
-          <TextBlock Text="只读：只读工作区，不改文件、不执行命令。默认权限：工作区可读写，执行命令与调用 MCP 前先问你。完全访问：所有工具直接执行，不再逐次确认。"
+          <TextBlock Text="只读：只读工作区，不改文件、不执行命令。工作区可写：工作区内读写自由，执行命令与调用 MCP 前先问你。完全访问：所有工具直接执行，不再逐次确认。"
                      Classes="caption"
                      TextWrapping="Wrap"
                      LineHeight="18" />

@@ -22,6 +22,7 @@ public sealed partial class SessionItemViewModel : ObservableObject
 {
     private readonly Action<string> _open;
     private readonly Action<string> _delete;
+    private readonly Action<string> _togglePin;
     private readonly Func<string, string, Task<string?>> _rename;
 
     public SessionItemViewModel(
@@ -31,10 +32,12 @@ public sealed partial class SessionItemViewModel : ObservableObject
         Action<string> delete,
         Func<string, string, Task<string?>> rename,
         string matchSnippet = "",
-        string? displayTitle = null)
+        string? displayTitle = null,
+        Action<string>? togglePin = null)
     {
         Id = session.Id;
         Title = session.Title;
+        IsPinned = session.Pinned;
         DisplayTitle = string.IsNullOrWhiteSpace(displayTitle) ? session.Title : displayTitle;
         MatchSnippet = matchSnippet;
         TimeText = SessionText.RelativeTime(session.UpdatedAt);
@@ -49,11 +52,18 @@ public sealed partial class SessionItemViewModel : ObservableObject
         _open = open;
         _delete = delete;
         _rename = rename;
+        _togglePin = togglePin ?? (_ => { });
     }
 
     public string Id { get; }
 
     public string Title { get; }
+
+    /// <summary>置顶的常用任务。置顶只改排序，不改「更新于」。</summary>
+    public bool IsPinned { get; }
+
+    /// <summary>菜单里那行字：已经置顶的显示「取消置顶」。</summary>
+    public string PinLabel => IsPinned ? "取消置顶" : "置顶";
 
     /// <summary>列表里显示的名字。重名时会带日期或序号，存档标题不受影响。</summary>
     public string DisplayTitle { get; }
@@ -104,6 +114,9 @@ public sealed partial class SessionItemViewModel : ObservableObject
 
     /// <summary>「⋯」菜单里的删除，用户已经在菜单里点过一次，直接删。</summary>
     public void Remove() => _delete(Id);
+
+    /// <summary>置顶 / 取消置顶。</summary>
+    public void TogglePin() => _togglePin(Id);
 
     /// <summary>改名。成功返回 null，失败返回一句能直接展示的原因。</summary>
     public Task<string?> RenameAsync(string newTitle) => _rename(Id, newTitle);

@@ -22,7 +22,7 @@
 
     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
       <StackPanel Margin="96,16,96,24" Spacing="12">
-        <TextBlock Text="技能来自 SKILL.md，工具是本机能力。关掉的工具不会进入模型上下文；执行命令仍需逐次确认。"
+        <TextBlock Text="技能来自 SKILL.md，工具是本机能力。关掉的技能不进系统提示、关掉的工具不进模型上下文；执行命令仍需逐次确认。"
                    Classes="caption"
                    TextWrapping="Wrap"
                    LineHeight="19" />
@@ -100,7 +100,7 @@
           <ItemsControl.ItemTemplate>
             <DataTemplate>
               <Border Classes="tool-tile" Margin="0,0,12,12" ToolTip.Tip="{Binding Directory}">
-                <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="Auto,*">
+                <Grid RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="Auto,*">
                   <Border Width="34"
                           Height="34"
                           CornerRadius="10"
@@ -112,7 +112,7 @@
                                   VerticalAlignment="Center" />
                   </Border>
 
-                  <Grid Grid.Column="1" Margin="10,0,0,0" ColumnDefinitions="*,Auto">
+                  <Grid Grid.Column="1" Margin="10,0,0,0" ColumnDefinitions="*,Auto,Auto">
                     <TextBlock Text="{Binding Name}"
                                FontSize="13"
                                FontWeight="Medium"
@@ -123,17 +123,19 @@
                             CornerRadius="5"
                             Padding="5,1"
                             VerticalAlignment="Center">
-                      <Panel>
-                        <TextBlock Text="项目级"
-                                   IsVisible="{Binding IsProjectScope}"
-                                   FontSize="9"
-                                   Foreground="{StaticResource TextMutedBrush}" />
-                        <TextBlock Text="用户级"
-                                   IsVisible="{Binding !IsProjectScope}"
-                                   FontSize="9"
-                                   Foreground="{StaticResource TextMutedBrush}" />
-                      </Panel>
+                      <TextBlock Text="{Binding ScopeText}"
+                                 FontSize="9"
+                                 Foreground="{StaticResource TextMutedBrush}" />
                     </Border>
+                    <!-- 关掉的技能不进系统提示，但 SKILL.md 一个字都不动；下一轮生效 -->
+                    <arc:Switch Grid.Column="2"
+                                IsChecked="{Binding IsEnabled, Mode=TwoWay}"
+                                VerticalAlignment="Center"
+                                Margin="8,0,0,0"
+                                Opacity="0.9"
+                                RenderTransformOrigin="100%,50%"
+                                RenderTransform="scale(0.86)"
+                                ToolTip.Tip="关掉后这一轮不再把它放进系统提示（文件保留）" />
                   </Grid>
 
                   <TextBlock Grid.Row="1"
@@ -145,7 +147,18 @@
                              LineHeight="16"
                              TextWrapping="Wrap"
                              MaxLines="2"
-                             TextTrimming="CharacterEllipsis" />
+                             TextTrimming="CharacterEllipsis"
+                             ToolTip.Tip="{Binding Description}" />
+
+                  <Button Grid.Row="2"
+                          Grid.ColumnSpan="2"
+                          Classes="ghost-action"
+                          HorizontalAlignment="Left"
+                          Margin="0,8,0,0"
+                          Command="{Binding $parent[ItemsControl].DataContext.PreviewSkillCommand}"
+                          CommandParameter="{Binding}"
+                          Content="查看 SKILL.md"
+                          ToolTip.Tip="看这个技能的正文：触发条件、步骤、用到的工具" />
                 </Grid>
               </Border>
             </DataTemplate>

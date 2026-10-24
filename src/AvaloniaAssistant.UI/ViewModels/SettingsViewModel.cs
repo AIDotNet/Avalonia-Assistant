@@ -45,6 +45,10 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         Settings = host.Settings.Clone();
         _baseline = Settings.Clone();
 
+        // 直接写字段：走属性会触发校验和「有改动」，刚进页面就变成脏的
+        _temperatureText = Settings.Temperature.ToString("0.##", CultureInfo.InvariantCulture);
+        _maxTokensText = Settings.MaxTokens.ToString(CultureInfo.InvariantCulture);
+
         // Ctrl+滚轮在设置页也能用：档位高亮要跟着实际缩放走，不能停在进页面时的快照上。
         _host.FontScaleChanged += OnHostFontScaleChanged;
 
@@ -105,24 +109,91 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         }
     }
 
-    public double Temperature
+    /// <summary>
+    /// 数值字段用字符串接：以前直接绑 double / int，填错时绑定静默失败，
+    /// 字段里留着错的值，点保存照样弹「已保存」——用户以为存进去了。
+    /// </summary>
+    private string _temperatureText = string.Empty;
+
+    public string TemperatureText
     {
-        get => Settings.Temperature;
+        get => _temperatureText;
         set
         {
+            if (!SetProperty(ref _temperatureText, value))
+            {
+                return;
+            }
+
+            ValidateTemperature(value);
+        }
+    }
+
+    private string _maxTokensText = string.Empty;
+
+    public string MaxTokensText
+    {
+        get => _maxTokensText;
+        set
+        {
+            if (!SetProperty(ref _maxTokensText, value))
+            {
+                return;
+            }
+
+            ValidateMaxTokens(value);
+        }
+    }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasTemperatureError))]
+    [NotifyPropertyChangedFor(nameof(HasFieldErrors))]
+    private string? temperatureError;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasMaxTokensError))]
+    [NotifyPropertyChangedFor(nameof(HasFieldErrors))]
+    private string? maxTokensError;
+
+    public bool HasTemperatureError => !string.IsNullOrWhiteSpace(TemperatureError);
+
+    public bool HasMaxTokensError => !string.IsNullOrWhiteSpace(MaxTokensError);
+
+    /// <summary>有任一字段没填对：保存要拦下来，不能假装成功。</summary>
+    public bool HasFieldErrors => HasTemperatureError || HasMaxTokensError;
+
+    private void ValidateTemperature(string? text)
+    {
+        if (!double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value)
+            || value < 0
+            || value > 2)
+        {
+            TemperatureError = "填 0 到 2 之间的数，例如 0.7";
+            return;
+        }
+
+        TemperatureError = null;
+        if (Math.Abs(Settings.Temperature - value) > 0.0001)
+        {
             Settings.Temperature = value;
-            OnPropertyChanged();
             Touch();
         }
     }
 
-    public int MaxTokens
+    private void ValidateMaxTokens(string? text)
     {
-        get => Settings.MaxTokens;
-        set
+        if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
+            || value < 1
+            || value > 1_000_000)
+        {
+            MaxTokensError = "填 1 到 1000000 之间的整数";
+            return;
+        }
+
+        MaxTokensError = null;
+        if (Settings.MaxTokens != value)
         {
             Settings.MaxTokens = value;
-            OnPropertyChanged();
             Touch();
         }
     }
@@ -415,11 +486,25 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand]
-    private async Task SaveAsync()
+    private async Task SaveAsync() => await TrySaveAsync();
+
+    /// <summary>
+    /// 真正落盘。返回 false 表示没存（字段没填对 / 写盘失败），
+    /// 「保存并返回」要靠这个返回值决定要不要真的离开页面。
+    /// </summary>
+    private async Task<bool> TrySaveAsync()
     {
         if (IsSaving)
         {
-            return;
+            return false;
+        }
+
+        if (HasFieldErrors)
+        {
+            // 字段里有错就别提示「已保存」：用户会以为那份错的配置生效了
+            SavedText = "有参数没填对，先按提示改一下";
+            ShowToast("有参数没填对，还没保存", error: true);
+            return false;
         }
 
         IsSaving = true;
@@ -445,11 +530,13 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
             Touch();
             SavedText = $"已保存 · {DateTime.Now:HH:mm:ss}";
             ShowToast("设置已保存", error: false);
+            return true;
         }
         catch (Exception ex)
         {
             SavedText = "保存失败：" + ex.Message;
             ShowToast("保存失败，请重试", error: true);
+            return false;
         }
         finally
         {
@@ -502,8 +589,8 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private async Task SaveAndLeaveAsync()
     {
-        await SaveAsync();
-        if (!IsSaveError)
+        // 字段没填对时不要「保存失败也照样走人」——那样改动就静默丢了
+        if (await TrySaveAsync())
         {
             _host.GoBack();
         }

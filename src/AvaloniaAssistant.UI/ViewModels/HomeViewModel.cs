@@ -131,11 +131,15 @@ public sealed partial class HomeViewModel : ObservableObject
         ],
     };
 
+    /// <summary>
+    /// 模式写的是全局偏好：点一下影响的是之后所有新任务，不是这一条。
+    /// 以前只在下面换一句说明，看不出作用域，用户会以为它只对这次提问生效。
+    /// </summary>
     private static string HintFor(string mode) => mode switch
     {
-        WorkModeText.Development => "开发：先读代码再动手，改完自己跑一遍构建再回话。",
-        WorkModeText.Design => "设计：先对齐信息层级和规范，给到具体间距、字号和颜色。",
-        _ => "办公：先给结论再给细节，少用命令行，改文件前说清会改什么。",
+        WorkModeText.Development => "开发：先读代码再动手，改完自己跑一遍构建再回话。之后新建的任务默认用它。",
+        WorkModeText.Design => "设计：先对齐信息层级和规范，给到具体间距、字号和颜色。之后新建的任务默认用它。",
+        _ => "办公：先给结论再给细节，少用命令行，改文件前说清会改什么。之后新建的任务默认用它。",
     };
 
     public string Greeting

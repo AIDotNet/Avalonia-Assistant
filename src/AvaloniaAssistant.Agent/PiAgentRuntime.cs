@@ -275,6 +275,7 @@ public sealed class PiAgentRuntime : IAssistantRuntime
                 BaseUrl = settings.BaseUrl,
                 Protocol = settings.EffectiveProtocol,
                 DisabledTools = [.. settings.DisabledTools],
+                DisabledSkills = [.. settings.DisabledSkills],
             };
 
             lock (_sessions)
@@ -320,7 +321,7 @@ public sealed class PiAgentRuntime : IAssistantRuntime
             {
                 return new BeforeToolCallResult(
                     Block: true,
-                    Reason: $"当前是只读模式，已阻止「{label}」。需要修改时请把权限切换为「默认权限」或「完全访问」。");
+                    Reason: $"当前是只读模式，已阻止「{label}」。需要修改时请把权限切换为「工作区可写」或「完全访问」。");
             }
 
             // 完全访问直接放行：不弹确认、不问原因。
@@ -546,6 +547,8 @@ public sealed class PiAgentRuntime : IAssistantRuntime
 
         public required IReadOnlyList<string> DisabledTools { get; init; }
 
+        public required IReadOnlyList<string> DisabledSkills { get; init; }
+
         /// <summary>
         /// 会话复用条件：历史一致，且权限 / 模型 / 端点 / 协议 / 工具开关都没变。
         /// 权限变了必须重建——BeforeToolCall 闭包和内置工具集都是建会话时定下的；
@@ -558,6 +561,7 @@ public sealed class PiAgentRuntime : IAssistantRuntime
                && BaseUrl == settings.BaseUrl
                && Protocol == settings.EffectiveProtocol
                && DisabledTools.SequenceEqual(settings.DisabledTools)
+               && DisabledSkills.SequenceEqual(settings.DisabledSkills)
                && SameHistory(LastHistory, history);
     }
 }

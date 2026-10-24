@@ -88,7 +88,7 @@ public static class PermissionModeText
     {
         PermissionMode.ReadOnly => "只读",
         PermissionMode.FullAccess => "完全访问",
-        _ => "默认权限",
+        _ => "工作区可写",
     };
 
     public static string Detail(PermissionMode mode) => mode switch
@@ -139,6 +139,12 @@ public sealed class AssistantSettings
     public List<string> CollapsedWorkspaces { get; set; } = [];
 
     public List<string> DisabledTools { get; set; } = [];
+
+    /// <summary>
+    /// 被关掉的技能名。技能本体是磁盘上的 SKILL.md，这里只决定要不要让它进系统提示，
+    /// 不动文件——用户想彻底不要它，自己去目录删。
+    /// </summary>
+    public List<string> DisabledSkills { get; set; } = [];
 
     public string Mode { get; set; } = "office";
 
@@ -196,6 +202,7 @@ public sealed class AssistantSettings
         RecentWorkspaces = [.. RecentWorkspaces],
         CollapsedWorkspaces = [.. CollapsedWorkspaces],
         DisabledTools = [.. DisabledTools],
+        DisabledSkills = [.. DisabledSkills],
         Mode = Mode,
         StartupPage = StartupPage,
         LastSessionId = LastSessionId,

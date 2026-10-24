@@ -23,6 +23,19 @@ public sealed class ChatSession
 
     public string Mode { get; set; } = "office";
 
+    /// <summary>
+    /// 置顶。常用任务不该被新任务一路挤到看不见的地方。
+    /// 只影响侧栏排序，不改 <see cref="UpdatedAt"/>。
+    /// </summary>
+    public bool Pinned { get; set; }
+
+    /// <summary>
+    /// 上次读到哪儿：0 是顶部，1 是底部，负数表示没记录过。
+    /// 存比例而不是像素：换窗口宽度、换字号都会改变总高度，像素值一换就偏。
+    /// 旧存档没有这个字段，读出来是 -1，仍然按原来的「打开就到底部」处理。
+    /// </summary>
+    public double ReadingRatio { get; set; } = -1;
+
     public List<ChatEntry> Entries { get; set; } = [];
 }
 

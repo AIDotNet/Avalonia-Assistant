@@ -340,6 +340,10 @@ public partial class MainWindow : Window
         }
 
         SaveWindowState();
+
+        // 读完直接关窗：把当前任务的位置记下来，下次进来接着读
+        _viewModel.PersistReadingPosition();
+
         base.OnClosing(e);
     }
 
