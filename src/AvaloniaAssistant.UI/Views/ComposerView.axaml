@@ -278,6 +278,7 @@
                       Theme="{StaticResource ComposerTextarea}"
                       Text="{Binding Text, Mode=TwoWay}"
                       Placeholder="{Binding Placeholder}"
+                      AcceptsReturn="True"
                       IsResizable="False"
                       MinHeight="64"
                       MaxHeight="160"
@@ -298,7 +299,7 @@
           </StackPanel>
 
           <TextBlock Grid.Column="1"
-                     Text="Enter 发送 · @ 引用文件 · Ctrl+V 贴图"
+                     Text="Enter 发送 · Shift+Enter 换行 · @ 引用文件"
                      Classes="caption"
                      FontSize="10"
                      Margin="7,0,0,0"
@@ -355,6 +356,34 @@
       </Grid>
     </Border>
 
+    <!-- 没配模型服务：留在原地提示，不把人踢去设置页，也不动已经写好的字 -->
+    <Border IsVisible="{Binding HasSetupHint}"
+            Background="{StaticResource WarningSubtleBrush}"
+            BorderBrush="#EFD9B8"
+            BorderThickness="1"
+            CornerRadius="10"
+            Padding="11,8"
+            Margin="0,7,0,0">
+      <Grid ColumnDefinitions="Auto,*,Auto">
+        <arc:ArcGlyph Data="{x:Static arc:ArcIcons.CircleAlert}"
+                      Size="13"
+                      Foreground="{StaticResource WarningBrush}"
+                      VerticalAlignment="Center" />
+        <TextBlock Grid.Column="1"
+                   Text="{Binding SetupHint}"
+                   FontSize="11.5"
+                   LineHeight="17"
+                   TextWrapping="Wrap"
+                   Margin="7,0,8,0"
+                   VerticalAlignment="Center" />
+        <Button Grid.Column="2"
+                Classes="ghost-action"
+                Command="{Binding OpenSettingsCommand}"
+                Foreground="{StaticResource TextPrimaryBrush}"
+                Content="去设置" />
+      </Grid>
+    </Border>
+
     <TextBlock Text="{Binding VoiceError}"
                IsVisible="{Binding HasVoiceError}"
                Foreground="{StaticResource DangerBrush}"
@@ -364,7 +393,7 @@
 
     <Grid ColumnDefinitions="*,Auto" Margin="4,7,4,0">
       <StackPanel Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
-        <Button Classes="pill" Click="OnWorkspaceClick" ToolTip.Tip="{Binding WorkspacePath}">
+        <Button x:Name="WorkspaceButton" Classes="pill" Click="OnWorkspaceClick" ToolTip.Tip="{Binding WorkspacePath}">
           <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
             <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Folder}" Size="12" />
             <TextBlock Text="{Binding WorkspaceLabel}" FontSize="11.5" />

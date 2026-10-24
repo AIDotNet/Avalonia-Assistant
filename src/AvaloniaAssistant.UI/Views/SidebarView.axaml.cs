@@ -47,34 +47,108 @@ public partial class SidebarView : UserControl
 
         // 打开之后再挂「点外面收起」：刚开始展开时，打开它的那一下点击还在路上，
         // 提前挂上去会把菜单自己关掉，看着像点了没反应。
-        flyout.Opened += (_, _) => AttachDismiss(flyout, target);
+        flyout.Opened += (_, _) => FlyoutDismiss.Attach(flyout, target);
 
         _menuFlyout = flyout;
         flyout.ShowAt(target);
     }
 
     /// <summary>
-    /// 鼠标进到一条对话上：把信息卡打开。行内「时间淡出、⋯出现」交给 :pointerover 样式，
-    /// 这里只管卡片，不去碰 IsVisible，免得样式和代码抢同一份状态。
+    /// 鼠标进到一条对话上：等一会儿再开信息卡。只是路过侧栏也会弹一张卡出来盖住聊天区，
+    /// 所以给 450ms 的犹豫期，真的停下来了才显示。
     /// </summary>
     private void OnSessionRowPointerEntered(object? sender, PointerEventArgs e)
     {
-        if (sender is Control { DataContext: SessionItemViewModel item })
+        if (sender is not Control { DataContext: SessionItemViewModel item })
         {
-            item.IsCardOpen = true;
+            return;
         }
+
+        CancelCardTimer();
+        _cardTarget = item;
+        _cardTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(450) };
+        _cardTimer.Tick += (_, _) =>
+        {
+            var target = _cardTarget;
+            _cardTimer?.Stop();
+            _cardTimer = null;
+            if (target is not null)
+            {
+                target.IsCardOpen = true;
+            }
+        };
+        _cardTimer.Start();
     }
 
     /// <summary>
-    /// 鼠标离开这条对话：收掉信息卡。PointerEntered/Exited 是 Direct 路由，
-    /// 只是在行内部换到子控件上不会触发，所以卡片不会自己闪。
+    /// 鼠标离开这条对话：立刻收卡，不等。
+    /// PointerEntered/Exited 是 Direct 路由，只是在行内部换到子控件上不会触发，所以卡片不会自己闪。
     /// </summary>
     private void OnSessionRowPointerExited(object? sender, PointerEventArgs e)
     {
+        CancelCardTimer();
         if (sender is Control { DataContext: SessionItemViewModel item })
         {
             item.IsCardOpen = false;
         }
+    }
+
+    private DispatcherTimer? _cardTimer;
+    private SessionItemViewModel? _cardTarget;
+
+    private void CancelCardTimer()
+    {
+        _cardTimer?.Stop();
+        _cardTimer = null;
+        _cardTarget = null;
+    }
+
+    /// <summary>Ctrl+K：把侧栏打开，光标落到搜索框里。</summary>
+    private void OnSearchRequested(object? sender, EventArgs e)
+    {
+        if (_host is not null && !_host.IsSidebarVisible)
+        {
+            _host.IsSidebarVisible = true;
+        }
+
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                var box = this.FindControl<Control>("TaskSearch");
+                box?.Focus();
+                box?.GetVisualDescendants().OfType<TextBox>().FirstOrDefault()?.Focus();
+            },
+            DispatcherPriority.Input);
+    }
+
+    private MainWindowViewModel? _host;
+
+    protected override void OnDataContextChanged(EventArgs e)
+    {
+        if (_host is not null)
+        {
+            _host.SearchRequested -= OnSearchRequested;
+        }
+
+        _host = DataContext as MainWindowViewModel;
+        if (_host is not null)
+        {
+            _host.SearchRequested += OnSearchRequested;
+        }
+
+        base.OnDataContextChanged(e);
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        if (_host is not null)
+        {
+            _host.SearchRequested -= OnSearchRequested;
+            _host = null;
+        }
+
+        CancelCardTimer();
+        base.OnDetachedFromVisualTree(e);
     }
 
     /// <summary>
@@ -100,7 +174,7 @@ public partial class SidebarView : UserControl
         };
 
         flyout.Content = BuildSessionMenu(flyout, item);
-        flyout.Opened += (_, _) => AttachDismiss(flyout, target);
+        flyout.Opened += (_, _) => FlyoutDismiss.Attach(flyout, target);
 
         _menuFlyout = flyout;
         flyout.ShowAt(target);
@@ -471,66 +545,6 @@ public partial class SidebarView : UserControl
 
         return (card, input);
     }
-
-    /// <summary>
-    /// 当前主题下弹层自带的 light dismiss 不生效（点窗口别处不收起），这里自己接管：
-    /// 窗口里任何一次按下、或者按 Esc，都把弹层收起来。弹层关掉时解绑，避免越挂越多。
-    /// </summary>
-    private void AttachDismiss(Flyout flyout, Control owner)
-    {
-        if (TopLevel.GetTopLevel(this) is not { } topLevel)
-        {
-            return;
-        }
-
-        var openedAt = DateTime.UtcNow;
-
-        void OnPointerPressed(object? sender, PointerPressedEventArgs e)
-        {
-            // 打开弹层的那一下点击可能还在路上，别把它当「点外面」
-            if ((DateTime.UtcNow - openedAt).TotalMilliseconds < 200)
-            {
-                return;
-            }
-
-            if (e.Source is Visual source)
-            {
-                // 弹层自己也挂在另一个 TopLevel 上：它的点击不该把弹层关掉
-                if (TopLevel.GetTopLevel(source) is { } sourceTop && !ReferenceEquals(sourceTop, topLevel))
-                {
-                    return;
-                }
-
-                // 点在自己的「⋯」上交给 Click 处理，不然会先收起再弹出，看着像没反应
-                if (IsWithin(source, owner))
-                {
-                    return;
-                }
-            }
-
-            flyout.Hide();
-        }
-
-        void OnKeyDown(object? sender, KeyEventArgs e)
-        {
-            if (e.Key == Key.Escape)
-            {
-                flyout.Hide();
-            }
-        }
-
-        topLevel.AddHandler(InputElement.PointerPressedEvent, OnPointerPressed, RoutingStrategies.Tunnel, handledEventsToo: true);
-        topLevel.AddHandler(InputElement.KeyDownEvent, OnKeyDown, RoutingStrategies.Tunnel, handledEventsToo: true);
-
-        flyout.Closed += (_, _) =>
-        {
-            topLevel.RemoveHandler(InputElement.PointerPressedEvent, OnPointerPressed);
-            topLevel.RemoveHandler(InputElement.KeyDownEvent, OnKeyDown);
-        };
-    }
-
-    private static bool IsWithin(Visual source, Visual? owner)
-        => owner is not null && (source == owner || source.GetVisualAncestors().Contains(owner));
 
     private Button MenuRow(string text, Geometry icon, Action invoke, IBrush? accent = null)
     {

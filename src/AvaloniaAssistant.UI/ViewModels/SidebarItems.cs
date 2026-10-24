@@ -96,11 +96,7 @@ public sealed partial class WorkspaceItemViewModel : ObservableObject
         Func<string, Task> remove)
     {
         Path = path;
-        Name = string.IsNullOrWhiteSpace(path)
-            ? "未设置"
-            : System.IO.Path.GetFileName(path.TrimEnd(System.IO.Path.DirectorySeparatorChar)) is { Length: > 0 } name
-                ? name
-                : path;
+        Name = WorkspaceNaming.ShortName(path) is { Length: > 0 } name ? name : "未设置";
         _toggle = toggle;
         _newSession = newSession;
         _open = open;

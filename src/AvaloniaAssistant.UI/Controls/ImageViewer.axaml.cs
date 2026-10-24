@@ -32,6 +32,24 @@ public partial class ImageViewer : UserControl
     {
         AvaloniaXamlLoader.Load(this);
 
+        // 从别的 XAML 实例化时，构造函数里拿不到命名控件；Loaded 是最后一个可靠的时机。
+        Loaded += (_, _) => EnsureWired();
+    }
+
+    /// <summary>
+    /// 控件是从别的 XAML 里实例化的，这种情形下 <c>AvaloniaXamlLoader.Load</c> 的命名控件
+    /// 要等外层填充完才有值，构造函数里读 <c>Preview</c> 会拿到 null。
+    /// 所以接线推迟到进可视树之后再做一次。
+    /// </summary>
+    private void EnsureWired()
+    {
+        if (_wired || Preview is null || Viewport is null)
+        {
+            return;
+        }
+
+        _wired = true;
+
         // 先缩放再平移（TransformGroup 按声明顺序叠加），锚点换算见 SetScale
         Preview.RenderTransform = new TransformGroup { Children = { _scaleTransform, _translate } };
 
@@ -48,6 +66,9 @@ public partial class ImageViewer : UserControl
         };
     }
 
+    private bool _wired;
+
+
     /// <summary>关闭之后触发，宿主可以据此把焦点还给对话。</summary>
     public event EventHandler? Closed;
 
@@ -56,6 +77,12 @@ public partial class ImageViewer : UserControl
     /// <summary>遮罩弹出来。图放在 <paramref name="source"/>，副标题一般写尺寸和大小。</summary>
     public void Show(IImage source, string? caption = null)
     {
+        EnsureWired();
+        if (Preview is null)
+        {
+            return;
+        }
+
         Preview.Source = source;
         CaptionText.Text = caption ?? string.Empty;
 
@@ -225,6 +252,7 @@ public partial class ImageViewer : UserControl
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnAttachedToVisualTree(e);
+        EnsureWired();
         _topLevel = TopLevel.GetTopLevel(this);
         _topLevel?.AddHandler(KeyDownEvent, OnTopLevelKeyDown, RoutingStrategies.Tunnel);
     }

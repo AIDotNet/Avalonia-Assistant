@@ -14,6 +14,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private readonly ISessionStore _sessions;
     private readonly Dictionary<string, ChatSession> _sessionCache = new(StringComparer.Ordinal);
 
+    /// <summary>没发出去的草稿。按会话 id 存，页面被换走再回来还能接上。</summary>
+    private readonly Dictionary<string, string> _drafts = new(StringComparer.Ordinal);
+
+    /// <summary>搜索之后还剩几条任务，给「任务 (n)」用。</summary>
+    private int _visibleSessionCount;
+
     /// <summary>「任务」区是展开还是收起。null 表示用户还没动过，按有没有空间来定。</summary>
     private bool? _taskSectionExpanded;
 
@@ -72,12 +78,20 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public string VersionText => "v1.0.0";
 
     /// <summary>「任务」是全部任务的总入口：归了空间也还是任务，不从这里消失。</summary>
-    public string SessionCountText => $"任务 ({_sessionCache.Count})";
+    public string SessionCountText => IsSearching
+        ? $"任务 ({_visibleSessionCount})"
+        : $"任务 ({_sessionCache.Count})";
 
     /// <summary>「空间」标题右侧跟着条数，和「任务」保持一致；一个都没有时不挂个 0。</summary>
     public string WorkspaceCountText => HasWorkspaces ? $"空间 ({Workspaces.Count})" : "空间";
 
     public bool HasNoSessions => _sessionCache.Count == 0;
+
+    /// <summary>一条任务都没有（且没在搜索）时才提示「新建任务」。</summary>
+    public bool ShowEmptyTasksHint => _sessionCache.Count == 0 && !IsSearching;
+
+    /// <summary>搜索词没命中任何任务。</summary>
+    public bool ShowNoSearchResults => IsSearching && !HasSearchResults;
 
     /// <summary>
     /// 还没有空间时「任务」默认展开——第一眼就该看见刚建的任务；
@@ -97,6 +111,56 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public bool IsMcpSelected => CurrentPage is McpViewModel;
 
     public bool IsSettingsSelected => CurrentPage is SettingsViewModel;
+
+    /// <summary>Ctrl+K 让侧栏的搜索框拿焦点。宿主窗口发信号，侧栏自己接。</summary>
+    public event EventHandler? SearchRequested;
+
+    public void RequestSearch() => SearchRequested?.Invoke(this, EventArgs.Empty);
+
+    public string? TryGetDraft(string sessionId)
+        => _drafts.TryGetValue(sessionId, out var text) && !string.IsNullOrWhiteSpace(text) ? text : null;
+
+    public void SaveDraft(string sessionId, string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            _drafts.Remove(sessionId);
+        }
+        else
+        {
+            _drafts[sessionId] = text;
+        }
+    }
+
+    /// <summary>
+    /// 还没发过一句话的新任务没有稳定 id 可用，草稿单独放一格：
+    /// 从这里跳去设置、回来再「新建任务」，刚写的字还能接上。
+    /// </summary>
+    private string? _pendingDraft;
+
+    public void SavePendingDraft(string? text)
+        => _pendingDraft = string.IsNullOrWhiteSpace(text) ? null : text;
+
+    public string? TakePendingDraft()
+    {
+        var draft = _pendingDraft;
+        _pendingDraft = null;
+        return draft;
+    }
+
+    /// <summary>任务搜索词。列表按它过滤，「任务」计数跟着变。</summary>
+    [ObservableProperty]
+    private string sessionQuery = string.Empty;
+
+    partial void OnSessionQueryChanged(string value) => RebuildSidebar();
+
+    public bool IsSearching => !string.IsNullOrWhiteSpace(SessionQuery);
+
+    /// <summary>搜索之后还剩几条。没搜的时候恒为 true。</summary>
+    [ObservableProperty]
+    private bool hasSearchResults = true;
+
+    public string SearchEmptyText => $"没有匹配「{SessionQuery.Trim()}」的任务";
 
     [ObservableProperty]
     private object? currentPage;
@@ -230,6 +294,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     {
         await _sessions.DeleteAsync(sessionId);
         _sessionCache.Remove(sessionId);
+        _drafts.Remove(sessionId);
 
         if (CurrentPage is ChatViewModel chat && chat.Session.Id == sessionId)
         {
@@ -250,6 +315,85 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
 
         await SelectWorkspaceAsync(folder);
+    }
+
+    /// <summary>
+    /// 「新建工作空间」把目录建在这里：默认工作区 Workspace 的父级，
+    /// 也就是用户目录下的 AvaloniaAssistant。和默认工作区并排，找起来是同一个地方。
+    /// </summary>
+    public static string WorkspaceRoot { get; } =
+        System.IO.Path.GetDirectoryName(AppPaths.DefaultWorkspace)
+        ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+
+    /// <summary>
+    /// 建一个新目录并切过去。成功返回 null；失败返回一句能直接展示在浮层里的原因。
+    /// </summary>
+    public async Task<string?> CreateWorkspaceAsync(string name)
+    {
+        var trimmed = (name ?? string.Empty).Trim().TrimEnd('.');
+
+        if (trimmed.Length == 0)
+        {
+            return "名字不能为空";
+        }
+
+        // 「.」「..」不是文件名，拼出来会变成上一级目录
+        if (trimmed is "." or "..")
+        {
+            return "换个名字吧，这个不能当目录名";
+        }
+
+        if (trimmed.IndexOfAny(System.IO.Path.GetInvalidFileNameChars()) >= 0)
+        {
+            return "名字里不能有 \\ / : * ? \" < > |";
+        }
+
+        var target = System.IO.Path.Combine(WorkspaceRoot, trimmed);
+
+        if (Directory.Exists(target))
+        {
+            return "这里已经有同名文件夹，换个名字，或者直接打开它";
+        }
+
+        if (File.Exists(target))
+        {
+            return "这里已经有同名文件";
+        }
+
+        try
+        {
+            Directory.CreateDirectory(target);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException)
+        {
+            return "创建失败：" + ex.Message;
+        }
+
+        // 新建的排在最前面：列表有 6 条上限，排到队尾等于新建完看不见。
+        var settings = Settings;
+        settings.RecentWorkspaces.RemoveAll(path => SamePath(path, target));
+        settings.RecentWorkspaces.Insert(0, target);
+
+        await SelectWorkspaceAsync(target);
+        return null;
+    }
+
+    /// <summary>
+    /// 浮层里的「不使用工作空间」：只把当前工作区清空，之后新建的任务按普通对话处理。
+    /// 列表里的记录一条都不删，下次还能点回来。
+    /// </summary>
+    public async Task ClearWorkspaceAsync()
+    {
+        if (string.IsNullOrWhiteSpace(Settings.WorkspacePath))
+        {
+            return;
+        }
+
+        Settings.WorkspacePath = string.Empty;
+
+        Home.Refresh();
+        await ReloadWorkspacesAsync();
+        await SettingsProvider.SaveAsync(Settings);
     }
 
     public void SelectWorkspace(string folder) => _ = SelectWorkspaceAsync(folder);
@@ -479,15 +623,28 @@ public sealed partial class MainWindowViewModel : ObservableObject
     {
         var settings = Settings;
         var activeId = (CurrentPage as ChatViewModel)?.Session.Id;
+        var query = SessionQuery.Trim();
+
+        // 搜索只过滤「看得见的这一层」，不改磁盘、不改分组规则。
         var sessions = _sessionCache.Values
+            .Where(session => MatchesQuery(session, query))
             .OrderByDescending(session => session.UpdatedAt)
             .ToList();
+
+        _visibleSessionCount = sessions.Count;
+        HasSearchResults = sessions.Count > 0;
 
         var claimed = new HashSet<string>(StringComparer.Ordinal);
         var items = new List<WorkspaceItemViewModel>();
 
         foreach (var path in WorkspacePaths(settings))
         {
+            var matched = sessions.Where(session => SamePath(session.WorkspacePath, path)).ToList();
+            if (query.Length > 0 && matched.Count == 0 && !WorkspaceName(path).Contains(query, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
             var item = new WorkspaceItemViewModel(
                 path,
                 ToggleWorkspace,
@@ -498,10 +655,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
                 RemoveWorkspaceAsync)
             {
                 IsActive = SamePath(path, settings.WorkspacePath),
-                IsExpanded = !IsCollapsed(settings, path),
+                IsExpanded = !IsCollapsed(settings, path) || query.Length > 0,
             };
 
-            foreach (var session in sessions.Where(session => !claimed.Contains(session.Id) && SamePath(session.WorkspacePath, path)))
+            foreach (var session in matched.Where(session => !claimed.Contains(session.Id)))
             {
                 claimed.Add(session.Id);
                 item.Sessions.Add(CreateSessionItem(session, activeId, item.Name));
@@ -529,6 +686,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
         OnPropertyChanged(nameof(SessionCountText));
         OnPropertyChanged(nameof(HasNoSessions));
+        OnPropertyChanged(nameof(ShowEmptyTasksHint));
+        OnPropertyChanged(nameof(ShowNoSearchResults));
+        OnPropertyChanged(nameof(IsSearching));
+        OnPropertyChanged(nameof(SearchEmptyText));
         OnPropertyChanged(nameof(IsTaskSectionExpanded));
         OnPropertyChanged(nameof(HasWorkspaces));
         OnPropertyChanged(nameof(WorkspaceCountText));
@@ -571,8 +732,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
         return null;
     }
 
-    /// <summary>空间列表：按用户添加的先后排，当前工作区不在里面时补到最后。</summary>
-    private static List<string> WorkspacePaths(AssistantSettings settings)
+    /// <summary>空间列表：按用户添加的先后排，当前工作区不在里面时补到最后。侧栏和输入框浮层共用这一份。</summary>
+    internal static List<string> WorkspacePaths(AssistantSettings settings)
     {
         var paths = new List<string>();
         foreach (var path in settings.RecentWorkspaces)
@@ -592,7 +753,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         return paths.Take(MaxWorkspaces).ToList();
     }
 
-    private static bool SamePath(string? left, string? right)
+    internal static bool SamePath(string? left, string? right)
         => !string.IsNullOrWhiteSpace(left)
            && !string.IsNullOrWhiteSpace(right)
            && string.Equals(
@@ -704,6 +865,23 @@ public sealed partial class MainWindowViewModel : ObservableObject
         return System.IO.Path.GetFileName(session.WorkspacePath.TrimEnd(
             System.IO.Path.DirectorySeparatorChar,
             System.IO.Path.AltDirectorySeparatorChar));
+    }
+
+    private static string WorkspaceName(string path)
+        => System.IO.Path.GetFileName(path.TrimEnd(
+            System.IO.Path.DirectorySeparatorChar,
+            System.IO.Path.AltDirectorySeparatorChar));
+
+    /// <summary>搜索词命中标题或所属空间名。空词视为全通过。</summary>
+    private static bool MatchesQuery(ChatSession session, string query)
+    {
+        if (query.Length == 0)
+        {
+            return true;
+        }
+
+        return session.Title.Contains(query, StringComparison.OrdinalIgnoreCase)
+            || LooseWorkspaceName(session).Contains(query, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string GroupName(DateTimeOffset updatedAt)    {

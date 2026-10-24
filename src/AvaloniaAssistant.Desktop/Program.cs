@@ -81,6 +81,18 @@ internal static class Program
                 case "--composer-mention" when index + 1 < args.Length:
                     AppLaunchOptions.ComposerMention = args[++index];
                     break;
+                case "--workspace-picker":
+                    AppLaunchOptions.ShowWorkspacePicker = true;
+                    break;
+                case "--workspace-flyout":
+                    AppLaunchOptions.OpenWorkspaceFlyout = true;
+                    break;
+                case "--workspace-picker-query" when index + 1 < args.Length:
+                    AppLaunchOptions.WorkspacePickerQuery = args[++index];
+                    break;
+                case "--workspace-picker-create":
+                    AppLaunchOptions.WorkspacePickerCreate = true;
+                    break;
                 case "--data-dir" when index + 1 < args.Length:
                     AppPaths.UseRoot(args[++index]);
                     break;

@@ -145,4 +145,19 @@ public static class AppLaunchOptions
 
     /// <summary>开发用：预置一条资料引用，检查引用标签的版式。</summary>
     public static string? ComposerMention { get; set; }
+
+    /// <summary>
+    /// 开发用：把工作区浮层单独摆进一个窗口再截图。浮层挂在另一个 TopLevel 上，
+    /// 直接截主窗口是看不到它的。
+    /// </summary>
+    public static bool ShowWorkspacePicker { get; set; }
+
+    /// <summary>开发用：在主窗口里真的打开工作区浮层，让弹层自己出图。</summary>
+    public static bool OpenWorkspaceFlyout { get; set; }
+
+    /// <summary>开发用：工作区浮层截图时先填一段搜索词，检查过滤后的版式。</summary>
+    public static string? WorkspacePickerQuery { get; set; }
+
+    /// <summary>开发用：工作区浮层截图时直接切到「新建」态。</summary>
+    public static bool WorkspacePickerCreate { get; set; }
 }

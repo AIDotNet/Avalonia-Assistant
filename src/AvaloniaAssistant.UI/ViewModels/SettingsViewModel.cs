@@ -35,10 +35,14 @@ public sealed partial class SettingsViewModel : ObservableObject
 {
     private readonly MainWindowViewModel _host;
 
+    /// <summary>进页面时的快照。用来判断用户改过没有——之前改完点左上角返回，改动会静默消失。</summary>
+    private AssistantSettings _baseline;
+
     public SettingsViewModel(MainWindowViewModel host)
     {
         _host = host;
         Settings = host.Settings.Clone();
+        _baseline = Settings.Clone();
 
         Providers = new ObservableCollection<ProviderOptionViewModel>(
             ProviderPreset.All.Select(preset => new ProviderOptionViewModel(preset, SelectProvider)
@@ -60,6 +64,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         {
             Settings.ApiKey = value;
             OnPropertyChanged();
+            Touch();
         }
     }
 
@@ -70,6 +75,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         {
             Settings.BaseUrl = value;
             OnPropertyChanged();
+            Touch();
         }
     }
 
@@ -80,6 +86,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         {
             Settings.Model = value;
             OnPropertyChanged();
+            Touch();
         }
     }
 
@@ -90,6 +97,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         {
             Settings.Temperature = value;
             OnPropertyChanged();
+            Touch();
         }
     }
 
@@ -100,8 +108,28 @@ public sealed partial class SettingsViewModel : ObservableObject
         {
             Settings.MaxTokens = value;
             OnPropertyChanged();
+            Touch();
         }
     }
+
+    /// <summary>有没有还没保存的改动。返回按钮和底部提示都看它。</summary>
+    public bool HasUnsavedChanges =>
+        Settings.Provider != _baseline.Provider
+        || Settings.Permission != _baseline.Permission
+        || Settings.Protocol != _baseline.Protocol
+        || Settings.MaxTokens != _baseline.MaxTokens
+        || Math.Abs(Settings.Temperature - _baseline.Temperature) > 0.0001
+        || !string.Equals(Settings.ApiKey, _baseline.ApiKey, StringComparison.Ordinal)
+        || !string.Equals(Settings.BaseUrl, _baseline.BaseUrl, StringComparison.Ordinal)
+        || !string.Equals(Settings.Model, _baseline.Model, StringComparison.Ordinal)
+        || !string.Equals(Settings.WorkspacePath, _baseline.WorkspacePath, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>点了返回但还有改动：底部换成「保存并返回 / 放弃改动」，别一声不响地丢掉。</summary>
+    [ObservableProperty]
+    private bool showLeavePrompt;
+
+    private void Touch() => OnPropertyChanged(nameof(HasUnsavedChanges));
+
 
     public string WorkspacePath => Settings.WorkspacePath;
 
@@ -171,6 +199,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         OnPropertyChanged(nameof(BaseUrl));
         OnPropertyChanged(nameof(Model));
         NotifyProtocolChanged();
+        Touch();
     }
 
     [RelayCommand]
@@ -184,6 +213,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         };
 
         NotifyProtocolChanged();
+        Touch();
     }
 
     private void NotifyProtocolChanged()
@@ -207,6 +237,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         OnPropertyChanged(nameof(IsReadOnlySelected));
         OnPropertyChanged(nameof(IsWorkspaceSelected));
         OnPropertyChanged(nameof(IsFullAccessSelected));
+        Touch();
     }
 
     [RelayCommand]
@@ -222,6 +253,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         Settings.RecentWorkspaces.RemoveAll(path => string.Equals(path, folder, StringComparison.OrdinalIgnoreCase));
         Settings.RecentWorkspaces.Insert(0, folder);
         OnPropertyChanged(nameof(WorkspacePath));
+        Touch();
     }
 
     [RelayCommand]
@@ -247,6 +279,9 @@ public sealed partial class SettingsViewModel : ObservableObject
             }
 
             await _host.SettingsProvider.SaveAsync(Settings);
+            _baseline = Settings.Clone();
+            ShowLeavePrompt = false;
+            Touch();
             SavedText = $"已保存 · {DateTime.Now:HH:mm:ss}";
             ShowToast("设置已保存", error: false);
         }
@@ -287,6 +322,29 @@ public sealed partial class SettingsViewModel : ObservableObject
         Services.Ui.OpenExternal(DataFolder);
     }
 
+    /// <summary>改过东西就直接返回，等于把改动丢掉；先问一句，给「保存并返回」和「放弃」两条路。</summary>
     [RelayCommand]
-    private void Back() => _host.OpenHome();
+    private void Back()
+    {
+        if (HasUnsavedChanges)
+        {
+            ShowLeavePrompt = true;
+            return;
+        }
+
+        _host.OpenHome();
+    }
+
+    [RelayCommand]
+    private async Task SaveAndLeaveAsync()
+    {
+        await SaveAsync();
+        if (!IsSaveError)
+        {
+            _host.OpenHome();
+        }
+    }
+
+    [RelayCommand]
+    private void DiscardAndLeave() => _host.OpenHome();
 }

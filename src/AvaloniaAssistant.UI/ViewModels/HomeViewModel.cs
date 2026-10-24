@@ -22,7 +22,7 @@ public sealed partial class HomeViewModel : ObservableObject
     public HomeViewModel(MainWindowViewModel host)
     {
         _host = host;
-        Composer = new ComposerViewModel(host.Runtime, host.SettingsProvider, host.Picker, host.Voice, host.OpenSettingsAsync, host.FileSearch);
+        Composer = new ComposerViewModel(host);
         Composer.SendRequested += async (_, request) => await host.StartNewChatAsync(request);
 
         Cards =
@@ -47,9 +47,21 @@ public sealed partial class HomeViewModel : ObservableObject
         ];
 
         Mode = host.Settings.Mode;
+
+        // 输入框已经就地提示「还没配模型服务」时，顶部那条橙色横幅就别再叠一遍。
+        Composer.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(ComposerViewModel.HasSetupHint))
+            {
+                OnPropertyChanged(nameof(ShowSetupBanner));
+            }
+        };
     }
 
     public ComposerViewModel Composer { get; }
+
+    /// <summary>首页右上角的「工作区」和输入框下面那条挂的是同一个浮层。</summary>
+    public MainWindowViewModel Host => _host;
 
     public ObservableCollection<SuggestionCardViewModel> Cards { get; }
 
@@ -79,7 +91,7 @@ public sealed partial class HomeViewModel : ObservableObject
 
     public bool IsConfigured => _host.IsConfigured;
 
-    public bool ShowSetupBanner => !IsConfigured;
+    public bool ShowSetupBanner => !IsConfigured && !Composer.HasSetupHint;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsOffice))]
@@ -114,9 +126,6 @@ public sealed partial class HomeViewModel : ObservableObject
 
     [RelayCommand]
     private async Task OpenSettingsAsync() => await _host.OpenSettingsAsync();
-
-    [RelayCommand]
-    private async Task AddWorkspaceAsync() => await _host.AddWorkspaceAsync();
 
     public void Refresh()
     {

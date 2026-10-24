@@ -16,19 +16,10 @@
         <Button Classes="task"
                 Classes.active="{Binding IsActive}"
                 Command="{Binding OpenCommand}">
-          <Grid ColumnDefinitions="*,Auto">
-            <TextBlock Text="{Binding Title}"
-                       FontSize="12.5"
-                       VerticalAlignment="Center"
-                       TextTrimming="CharacterEllipsis" />
-            <TextBlock Grid.Column="1"
-                       Classes="row-time"
-                       Text="{Binding TimeText}"
-                       FontSize="10"
-                       Margin="8,0,0,0"
-                       VerticalAlignment="Center"
-                       Foreground="{StaticResource TextMutedBrush}" />
-          </Grid>
+          <TextBlock Text="{Binding Title}"
+                     FontSize="12.5"
+                     VerticalAlignment="Center"
+                     TextTrimming="CharacterEllipsis" />
         </Button>
 
         <Button Classes="icon row-more"
@@ -96,7 +87,7 @@
     </DataTemplate>
   </UserControl.Resources>
   <Border Background="{StaticResource SidebarBrush}" Padding="12,16,12,10">
-    <Grid RowDefinitions="Auto,Auto,*,Auto">
+    <Grid RowDefinitions="Auto,Auto,Auto,*,Auto">
       <Grid ColumnDefinitions="Auto,*,Auto">
         <controls:BrandMark Width="32" Height="32" VerticalAlignment="Center" />
         <StackPanel Grid.Column="1" Margin="9,0,0,0" VerticalAlignment="Center" Spacing="0">
@@ -134,7 +125,21 @@
         </StackPanel>
       </Button>
 
-      <ScrollViewer Grid.Row="2"
+      <!-- 任务一多，靠滚动找是不可能的；Ctrl+K 直接跳到这儿 -->
+      <arc:Input Grid.Row="2"
+                 x:Name="TaskSearch"
+                 Margin="0,8,0,0"
+                 Size="Small"
+                 Placeholder="搜索任务（Ctrl+K）"
+                 Text="{Binding SessionQuery, Mode=TwoWay}">
+        <arc:Input.Prefix>
+          <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Search}"
+                        Size="13"
+                        Foreground="{StaticResource TextMutedBrush}" />
+        </arc:Input.Prefix>
+      </arc:Input>
+
+      <ScrollViewer Grid.Row="3"
                     Margin="0,12,0,0"
                     VerticalScrollBarVisibility="Auto"
                     HorizontalScrollBarVisibility="Disabled">
@@ -219,7 +224,14 @@
                          FontSize="10.5"
                          Margin="0,2,0,4"
                          TextWrapping="Wrap"
-                         IsVisible="{Binding HasNoSessions}" />
+                         IsVisible="{Binding ShowEmptyTasksHint}" />
+
+              <TextBlock Text="{Binding SearchEmptyText}"
+                         Classes="caption"
+                         FontSize="10.5"
+                         Margin="0,2,0,4"
+                         TextWrapping="Wrap"
+                         IsVisible="{Binding ShowNoSearchResults}" />
 
               <ItemsControl ItemsSource="{Binding SessionGroups}">
                 <ItemsControl.ItemTemplate>
@@ -335,7 +347,7 @@
         </StackPanel>
       </ScrollViewer>
 
-      <Border Grid.Row="3"
+      <Border Grid.Row="4"
               Margin="0,10,0,0"
               Padding="8,8"
               CornerRadius="12"

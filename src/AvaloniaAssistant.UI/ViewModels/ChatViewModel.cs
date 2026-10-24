@@ -15,6 +15,9 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
     private readonly ISettingsProvider _settings;
     private CancellationTokenSource? _cts;
 
+    /// <summary>「本会话都允许」记住的工具名。只在这次对话里有效，不写进设置。</summary>
+    private readonly HashSet<string> _sessionAllowedTools = new(StringComparer.Ordinal);
+
     public ChatViewModel(MainWindowViewModel host, ChatSession? session)
     {
         _host = host;
@@ -27,13 +30,19 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
             Mode = host.Settings.Mode,
         };
 
-        Composer = new ComposerViewModel(_runtime, _settings, host.Picker, host.Voice, host.OpenSettingsAsync, host.FileSearch);
+        Composer = new ComposerViewModel(host);
         Composer.SendRequested += async (_, request) => await SendPromptAsync(request);
         Composer.StopRequested += (_, _) => Stop();
         Composer.PermissionChanged += OnPermissionChanged;
 
         Messages.CollectionChanged += OnMessagesChanged;
         _settings.Changed += OnSettingsChanged;
+
+        // 从设置页 / 首页转一圈回来，刚才没发出去的那段话还在。
+        if (host.TryGetDraft(Session.Id) is { Length: > 0 } draft)
+        {
+            Composer.Text = draft;
+        }
 
         LoadEntries();
     }
@@ -42,6 +51,18 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
 
     public void Dispose()
     {
+        // 页面被换走（去设置、回首页、开别的任务）时把没发出去的草稿留一份，
+        // 否则几十个字跟着 ChatViewModel 一起没了。
+        // 一句话都没发过的新任务还没有稳定 id，走单独的待用草稿位。
+        if (Session.Entries.Count == 0)
+        {
+            _host.SavePendingDraft(Composer.Text);
+        }
+        else
+        {
+            _host.SaveDraft(Session.Id, Composer.Text);
+        }
+
         _settings.Changed -= OnSettingsChanged;
         Composer.PermissionChanged -= OnPermissionChanged;
         Composer.Dispose();
@@ -85,11 +106,33 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
             var workspace = string.IsNullOrWhiteSpace(Session.WorkspacePath)
                 ? "普通任务"
                 : Path.GetFileName(Session.WorkspacePath.TrimEnd(Path.DirectorySeparatorChar));
-            return $"{workspace} · {_settings.Current.Model}";
+            return $"{workspace} · {_settings.Current.Model} · {WorkModeText.Describe(Session.Mode)}";
         }
     }
 
     public bool HasMessages => Messages.Count > 0;
+
+    /// <summary>用户当前是不是停在底部。由 ChatView 的滚动策略实时回写，审批和浮标都靠它判断。</summary>
+    public bool IsAtBottom { get; set; } = true;
+
+    /// <summary>停在上面时，底部飘一句「有新内容 / 有操作待确认」，点一下回到底部。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowFloatingHint))]
+    private string? floatingHint;
+
+    public bool ShowFloatingHint => !string.IsNullOrEmpty(FloatingHint);
+
+    [RelayCommand]
+    private void JumpToLatest()
+    {
+        FloatingHint = null;
+        RequestScroll(true);
+        Composer.RequestFocus();
+    }
+
+    /// <summary>用户自己滚回底部了，浮标就没必要再挂着。</summary>
+    public void ClearFloatingHint() => FloatingHint = null;
+
 
     public event EventHandler<bool>? ScrollToEndRequested;
 
@@ -274,6 +317,11 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
                     case AgentStreamEvent.TextDelta delta:
                         assistant.AppendText(delta.Delta);
                         StatusText = "正在回复…";
+                        if (!IsAtBottom)
+                        {
+                            FloatingHint = "有新内容，点这里回到底部";
+                        }
+
                         break;
 
                     case AgentStreamEvent.ThinkingDelta thinking:
@@ -337,8 +385,9 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
 
                         if (completed.StopReason == AgentStopReason.Aborted && string.IsNullOrWhiteSpace(assistant.Error))
                         {
-                            assistant.Error = "已停止生成。";
-                            assistantEntry.Error = assistant.Error;
+                            // 用户按停不是故障：走中性提示，不套危险色。
+                            assistant.IsStopped = true;
+                            assistantEntry.Stopped = true;
                         }
                         else if (completed.StopReason == AgentStopReason.Length)
                         {
@@ -362,7 +411,7 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
             stopReason = AgentStopReason.Aborted;
             if (assistant is not null)
             {
-                assistant.Error ??= "已停止生成。";
+                assistant.IsStopped = true;
             }
         }
         catch (Exception ex)
@@ -381,7 +430,14 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
                 assistant.Complete();
                 if (!assistant.HasText && !assistant.HasTools && assistant.Error is null)
                 {
-                    assistant.Error = stopReason == AgentStopReason.Aborted ? "已停止生成。" : "模型没有返回内容。";
+                    if (stopReason == AgentStopReason.Aborted)
+                    {
+                        assistant.IsStopped = true;
+                    }
+                    else
+                    {
+                        assistant.Error = "模型没有返回内容。";
+                    }
                 }
             }
 
@@ -390,6 +446,7 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
                 assistantEntry.Text = assistant?.Text ?? string.Empty;
                 assistantEntry.Reasoning = assistant?.Reasoning;
                 assistantEntry.Error = assistant?.Error;
+                assistantEntry.Stopped = assistant?.IsStopped ?? false;
                 assistantEntry.Model = assistant?.Model ?? assistantEntry.Model;
                 assistantEntry.InputTokens = assistant?.InputTokens ?? 0;
                 assistantEntry.OutputTokens = assistant?.OutputTokens ?? 0;
@@ -399,6 +456,11 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
             IsBusy = false;
             Composer.IsBusy = false;
             StatusText = stopReason == AgentStopReason.Aborted ? "已停止" : "完成";
+            if (IsAtBottom)
+            {
+                FloatingHint = null;
+            }
+
             RequestScroll(false);
 
             try
@@ -435,6 +497,7 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
                     };
                     assistant.RetryRequested = () => RetryFromAsync(assistant);
                     assistant.SetPersisted(entry.Text, entry.Reasoning);
+                    assistant.IsStopped = entry.Stopped;
 
                     foreach (var record in entry.ToolCalls)
                     {
@@ -466,7 +529,9 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
 
             if (entry.Kind == ChatEntryKind.User)
             {
-                history.Add(HistoryTurn.User(BuildModelPrompt(entry.Text, entry.Attachments)));
+                // 历史轮次不再重复注入工作模式：模式只对这一次提问生效，
+                // 每轮都塞一遍会白烧 token，还容易让模型以为模式中途变过。
+                history.Add(HistoryTurn.User(PromptComposer.Compose(entry.Text, entry.Attachments)));
             }
             else if (entry.Kind == ChatEntryKind.Assistant)
             {
@@ -481,8 +546,8 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
     /// 把引用的资料拼进发给模型的文本。气泡里只显示用户原话——
     /// 几千字的文档塞进用户消息，界面就没法看了。
     /// </summary>
-    private static string BuildModelPrompt(string text, IReadOnlyList<ChatAttachment> attachments)
-        => PromptComposer.Compose(text, attachments);
+    private string BuildModelPrompt(string text, IReadOnlyList<ChatAttachment> attachments)
+        => PromptComposer.Compose(text, attachments, mode: Session.Mode);
 
     private void RequestScroll(bool force) => ScrollToEndRequested?.Invoke(this, force);
 
@@ -504,6 +569,12 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
                 return true;
             }
 
+            // 这一轮里用户点过「本会话都允许」，同一个工具不再问第二遍。
+            if (owner._sessionAllowedTools.Contains(request.ToolName))
+            {
+                return true;
+            }
+
             var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             ApprovalMessageViewModel? card = null;
 
@@ -515,8 +586,16 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
                     request.Arguments,
                     request.Reason,
                     allowed => completion.TrySetResult(allowed));
+                card.AllowAlwaysRequested = () => owner._sessionAllowedTools.Add(request.ToolName);
                 owner.Messages.Add(card);
-                owner.RequestScroll(true);
+
+                // 用户正在上面读旧内容时不要抢滚动条，只在底部飘一句提示；
+                // 停在底部就照常跟到卡片。
+                owner.RequestScroll(owner.IsAtBottom);
+                if (!owner.IsAtBottom)
+                {
+                    owner.FloatingHint = "有操作等待你确认，点这里查看";
+                }
             });
 
             using var registration = cancellationToken.Register(() => completion.TrySetResult(false));

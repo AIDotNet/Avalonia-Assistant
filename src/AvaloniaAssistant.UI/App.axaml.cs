@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Input;
 using Avalonia.Markup.Xaml;
+using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.VisualTree;
 using AvaloniaAssistant.Abstractions;
@@ -122,6 +123,33 @@ public partial class AssistantApp : Application
                 return;
             }
 
+            // 验收用：打开真实的工作区浮层，让弹层自己出图——
+            // 它挂在另一个 TopLevel 上，截主窗口看不到它。
+            if (AppLaunchOptions.OpenWorkspaceFlyout)
+            {
+                await Task.Delay(400);
+                var composer = window.GetVisualDescendants().OfType<ComposerView>().FirstOrDefault();
+                var flyout = composer?.ShowWorkspaceFlyout();
+
+                await Task.Delay(700);
+                if (flyout?.Content is WorkspacePicker picker)
+                {
+                    picker.CaptureSelf(AppLaunchOptions.ScreenshotPath);
+                }
+
+                desktop.Shutdown();
+                return;
+            }
+
+            // 验收用：工作区浮层挂在另一个 TopLevel 上，截主窗口看不到它，
+            // 单独摆进一个无边框窗口再截，版式才是真实的。
+            if (AppLaunchOptions.ShowWorkspacePicker)
+            {
+                await CaptureWorkspacePickerAsync(viewModel, AppLaunchOptions.ScreenshotPath);
+                desktop.Shutdown();
+                return;
+            }
+
             var waitingForRun = !string.IsNullOrWhiteSpace(AppLaunchOptions.RunPrompt) || AppLaunchOptions.PressEnter;
             await Task.Delay(waitingForRun ? 4500 : 1600);
             Capture(window, AppLaunchOptions.ScreenshotPath);
@@ -137,6 +165,37 @@ public partial class AssistantApp : Application
                 desktop.Shutdown(-1);
             }
         }
+    }
+
+    private static async Task CaptureWorkspacePickerAsync(MainWindowViewModel viewModel, string path)
+    {
+        var picker = new WorkspacePickerViewModel(viewModel);
+
+        if (AppLaunchOptions.WorkspacePickerCreate)
+        {
+            picker.StartCreateCommand.Execute(null);
+        }
+        else if (!string.IsNullOrWhiteSpace(AppLaunchOptions.WorkspacePickerQuery))
+        {
+            picker.SearchText = AppLaunchOptions.WorkspacePickerQuery;
+        }
+
+        var preview = new Window
+        {
+            WindowDecorations = WindowDecorations.None,
+            SizeToContent = SizeToContent.WidthAndHeight,
+            CanResize = false,
+            ShowInTaskbar = false,
+            WindowStartupLocation = WindowStartupLocation.Manual,
+            Position = new PixelPoint(40, 40),
+            Background = Brushes.White,
+            Content = new WorkspacePicker { DataContext = picker },
+        };
+
+        preview.Show();
+        await Task.Delay(700);
+        Capture(preview, path);
+        preview.Close();
     }
 
     private static void Capture(Window window, string path)

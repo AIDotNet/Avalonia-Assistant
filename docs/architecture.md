@@ -151,11 +151,13 @@ MainWindow (1280×820)
         └── SettingsView    模型 / 权限 / 工作区 / 关于
 ```
 
-`ComposerView` 是独立控件，首页和会话页共用；它只依赖 `ComposerViewModel`，
-菜单（模型 / 权限 / 工作区）在 code-behind 里动态生成 `MenuFlyout`。
+`ComposerView` 是独立控件，首页和会话页共用；它只依赖 `ComposerViewModel`。
+模型和权限两个菜单在 code-behind 里动态生成 `MenuFlyout` / `Flyout`；工作区那条换成了独立控件
+`WorkspacePicker`（搜索 + 列表 + 新建 / 打开本地文件夹 / 不使用工作空间），首页右上角的「工作区」
+挂的是同一份，弹层装配收在 `WorkspacePickerPopup` 里。
 
-UI 的状态变更全部通过 ViewModel 命令；code-behind 只做三件事：
-输入框回车、动态菜单、消息列表自动滚动。
+UI 的状态变更全部通过 ViewModel 命令；code-behind 只做四件事：
+输入框回车、动态菜单、弹层挂载、消息列表自动滚动。
 
 ## 8. 扩展点
 

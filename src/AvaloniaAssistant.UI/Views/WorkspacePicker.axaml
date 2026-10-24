@@ -1,0 +1,181 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:arc="https://github.com/AIDotNet/TKCode.Arc"
+             x:Class="AvaloniaAssistant.UI.Views.WorkspacePicker"
+             Width="292">
+  <UserControl.Styles>
+    <!-- 列表行：整行可点。悬停和键盘选中用同一层浅底，当前工作区靠右边的勾区分 -->
+    <Style Selector="Button.ws-row">
+      <Setter Property="Transitions">
+        <Transitions>
+          <BrushTransition Property="Background" Duration="0:0:0.12" />
+        </Transitions>
+      </Setter>
+      <Setter Property="Height" Value="34" />
+      <Setter Property="Padding" Value="8,0" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+    </Style>
+    <Style Selector="Button.ws-row:pointerover">
+      <Setter Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+    </Style>
+    <!-- 声明顺序有讲究：放在 hover 后面，键盘选中才不会一碰鼠标就消失 -->
+    <Style Selector="Button.ws-row.selected">
+      <Setter Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+    </Style>
+
+    <!-- 分隔线下面那三行：和列表行同高同缩进，看着是一条直列 -->
+    <Style Selector="Button.ws-action">
+      <Setter Property="Transitions">
+        <Transitions>
+          <BrushTransition Property="Background" Duration="0:0:0.12" />
+        </Transitions>
+      </Setter>
+      <Setter Property="Height" Value="34" />
+      <Setter Property="Padding" Value="8,0" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Left" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="FontSize" Value="12.5" />
+      <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+    </Style>
+    <Style Selector="Button.ws-action:pointerover">
+      <Setter Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+    </Style>
+  </UserControl.Styles>
+
+  <Border Background="{StaticResource SurfaceBrush}"
+          BorderBrush="{StaticResource BorderStrongBrush}"
+          BorderThickness="1"
+          CornerRadius="12"
+          Padding="6"
+          BoxShadow="{StaticResource ComposerShadow}">
+    <Panel>
+      <!-- 列表态：搜索 + 工作区 + 三个动作 -->
+      <StackPanel Spacing="2" IsVisible="{Binding !IsCreating}">
+        <arc:SearchField x:Name="SearchBox"
+                         IsLabelVisible="False"
+                         FontSize="12.5"
+                         Placeholder="搜索工作空间"
+                         Text="{Binding SearchText, Mode=TwoWay}" />
+
+        <ScrollViewer MaxHeight="212"
+                      HorizontalScrollBarVisibility="Disabled"
+                      VerticalScrollBarVisibility="Auto">
+          <StackPanel Spacing="1">
+            <ItemsControl ItemsSource="{Binding Items}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Button Classes="ws-row"
+                          Classes.selected="{Binding IsSelected}"
+                          Command="{Binding $parent[ItemsControl].DataContext.ChooseCommand}"
+                          CommandParameter="{Binding}"
+                          ToolTip.Tip="{Binding ShortPath}">
+                    <Grid ColumnDefinitions="Auto,*,Auto">
+                      <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Folder}"
+                                    Size="14"
+                                    Foreground="{StaticResource TextSecondaryBrush}"
+                                    VerticalAlignment="Center" />
+                      <TextBlock Grid.Column="1"
+                                 Text="{Binding Name}"
+                                 FontSize="12.5"
+                                 Margin="9,0,6,0"
+                                 TextTrimming="CharacterEllipsis"
+                                 VerticalAlignment="Center" />
+                      <TextBlock Grid.Column="2"
+                                 Text="目录已不存在"
+                                 IsVisible="{Binding IsMissing}"
+                                 Classes="caption"
+                                 FontSize="10"
+                                 Margin="0,0,6,0"
+                                 VerticalAlignment="Center" />
+                      <arc:ArcGlyph Grid.Column="2"
+                                    Data="{x:Static arc:ArcIcons.Check}"
+                                    IsVisible="{Binding IsCurrent}"
+                                    Size="13"
+                                    Foreground="{StaticResource AccentBrush}"
+                                    VerticalAlignment="Center" />
+                    </Grid>
+                  </Button>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <TextBlock Text="{Binding EmptyText}"
+                       IsVisible="{Binding !HasItems}"
+                       Classes="caption"
+                       FontSize="11"
+                       LineHeight="17"
+                       TextWrapping="Wrap"
+                       Margin="9,6,9,7" />
+          </StackPanel>
+        </ScrollViewer>
+
+        <Border Height="1" Margin="3,3" Background="{StaticResource BorderBrush}" />
+
+        <Button Classes="ws-action" Command="{Binding StartCreateCommand}">
+          <StackPanel Orientation="Horizontal" Spacing="9">
+            <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Plus}"
+                          Size="14"
+                          Foreground="{StaticResource TextSecondaryBrush}" />
+            <TextBlock Text="新建工作空间" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+
+        <Button Classes="ws-action" Command="{Binding OpenFolderCommand}">
+          <StackPanel Orientation="Horizontal" Spacing="9">
+            <arc:ArcGlyph Data="{x:Static arc:ArcIcons.FolderOpen}"
+                          Size="14"
+                          Foreground="{StaticResource TextSecondaryBrush}" />
+            <TextBlock Text="打开本地文件夹" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+
+        <Button Classes="ws-action" Command="{Binding ClearWorkspaceCommand}">
+          <StackPanel Orientation="Horizontal" Spacing="9">
+            <arc:ArcGlyph Data="{x:Static arc:ArcIcons.CircleX}"
+                          Size="14"
+                          Foreground="{StaticResource TextSecondaryBrush}" />
+            <TextBlock Text="不使用工作空间" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+      </StackPanel>
+
+      <!-- 新建态：直接在同一个浮层里换内容，不再弹第二个窗口 -->
+      <StackPanel IsVisible="{Binding IsCreating}" Spacing="8" Margin="4,3,4,4">
+        <TextBlock Text="新建工作空间" FontSize="12.5" FontWeight="SemiBold" />
+        <arc:Input x:Name="CreateInput"
+                   IsLabelVisible="False"
+                   FontSize="12.5"
+                   Placeholder="给工作空间起个名字"
+                   Text="{Binding NewName, Mode=TwoWay}" />
+        <TextBlock Text="{Binding CreatePreview}"
+                   Classes="caption"
+                   FontSize="10.5"
+                   TextTrimming="CharacterEllipsis" />
+        <TextBlock Text="{Binding CreateError}"
+                   IsVisible="{Binding HasCreateError}"
+                   FontSize="11"
+                   LineHeight="16"
+                   TextWrapping="Wrap"
+                   Foreground="{StaticResource DangerBrush}" />
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="6">
+          <Button Classes="deny"
+                  Content="取消"
+                  Command="{Binding CancelCreateCommand}" />
+          <Button Classes="approve"
+                  Content="创建"
+                  Command="{Binding ConfirmCreateCommand}" />
+        </StackPanel>
+      </StackPanel>
+    </Panel>
+  </Border>
+</UserControl>

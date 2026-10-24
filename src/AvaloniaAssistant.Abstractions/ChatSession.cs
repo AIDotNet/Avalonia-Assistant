@@ -48,6 +48,9 @@ public sealed class ChatEntry
 
     public string? Error { get; set; }
 
+    /// <summary>这一轮是用户自己按停的，不是出错。存档里要分开，重新打开不能画成红色故障。</summary>
+    public bool Stopped { get; set; }
+
     public string? Model { get; set; }
 
     public long InputTokens { get; set; }

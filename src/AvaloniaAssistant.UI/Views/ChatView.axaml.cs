@@ -4,6 +4,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
+using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using AvaloniaAssistant.UI.ViewModels;
@@ -80,6 +81,16 @@ public partial class ChatView : UserControl
 
         ScheduleInitialScroll();
         base.OnDataContextChanged(e);
+    }
+
+    /// <summary>点一下用户贴的缩略图，铺开看大图。</summary>
+    private void OnThumbnailPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is Control { DataContext: Bitmap bitmap })
+        {
+            ImageViewerLayer.Show(bitmap, $"{bitmap.PixelSize.Width}×{bitmap.PixelSize.Height}");
+            e.Handled = true;
+        }
     }
 
     private void OnAttachedToVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
@@ -159,6 +170,7 @@ public partial class ChatView : UserControl
         {
             Trace($"scrollchanged offset={_scroll.Offset.Y:0} delta={e.OffsetDelta.Y:0} -> follow=false (drag={_draggingScrollBar})");
             _followOutput = false;
+            SyncFollowState();
         }
     }
 
@@ -172,6 +184,7 @@ public partial class ChatView : UserControl
         // 手一碰滚动条就交出控制权：拖动期间绝不能再写 Offset
         _draggingScrollBar = true;
         _followOutput = false;
+        SyncFollowState();
     }
 
     private void OnScrollPointerReleased(object? sender, PointerReleasedEventArgs e)
@@ -194,6 +207,7 @@ public partial class ChatView : UserControl
         _draggingScrollBar = false;
         // 拖回底部就继续跟随，拖到中间就停在那儿
         _followOutput = IsNearBottom();
+        SyncFollowState();
         Trace($"drag end offset={_scroll?.Offset.Y:0} follow={_followOutput}");
     }
 
@@ -207,10 +221,12 @@ public partial class ChatView : UserControl
         if (e.Delta.Y > 0)
         {
             _followOutput = false;
+            SyncFollowState();
         }
         else if (e.Delta.Y < 0 && IsNearBottom())
         {
             _followOutput = true;
+            SyncFollowState();
         }
     }
 
@@ -245,7 +261,26 @@ public partial class ChatView : UserControl
         _draggingScrollBar = false;
         _lastExtent = 0;
         _expectedOffsetY = double.NaN;
+        SyncFollowState();
         DispatcherTimer.RunOnce(ScrollToBottom, TimeSpan.FromMilliseconds(140));
+    }
+
+    /// <summary>
+    /// 把「在不在底部」告诉 VM。审批卡片要不要抢滚动、要不要飘「有新内容」，
+    /// 都取决于这个状态；之前它只活在视图里，外面完全不知道。
+    /// </summary>
+    private void SyncFollowState()
+    {
+        if (_viewModel is null)
+        {
+            return;
+        }
+
+        _viewModel.IsAtBottom = _followOutput;
+        if (_followOutput)
+        {
+            _viewModel.ClearFloatingHint();
+        }
     }
 
     private void OnScrollToEndRequested(object? sender, bool force)
@@ -253,6 +288,7 @@ public partial class ChatView : UserControl
         if (force && !_draggingScrollBar)
         {
             _followOutput = true;
+            SyncFollowState();
         }
 
         Trace($"scrollrequest force={force} follow={_followOutput} drag={_draggingScrollBar}");

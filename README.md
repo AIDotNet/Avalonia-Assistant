@@ -23,6 +23,8 @@ Windows 桌面 AI 助理。Agent 循环用 [pi.net](https://github.com/AIDotNet/
 - **会话留在本机**：一个会话一个 JSON 文件，第一句话一发出就落盘（不用等回复跑完）。
   侧栏「任务」列全部任务、按今天 / 昨天 / 最近 7 天分组，「空间」只是按目录再归一次类——
   归了空间的任务在「任务」里照样看得见。
+- **工作区一点就换**：输入框下面那条点开是「搜索 + 工作区列表」，当前那个打勾；
+  新建工作空间、打开本地文件夹、不使用工作空间都在这一个浮层里，首页右上角是同一个。
 - **Markdown**：标题、列表、表格、行内代码、代码块高亮。
 - **语音输入**：NAudio 录音 + `/audio/transcriptions` 转写（端点需支持）。
 - **技能页**：卡片式浏览，按分类筛选、关键词搜索，开关与导入都持久化。
@@ -274,6 +276,18 @@ dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --pag
 ```
 
 `--page chat` 会加载一份内存里的示例会话（不写入 `sessions/`），用来检查消息、工具卡、表格渲染。
+
+弹层（Popup / Flyout）挂在另一个 TopLevel 上，截主窗口是看不到的，单独有两个入口：
+
+```bash
+# 把工作区浮层摆进一个无边框窗口再截，检查列表 / 新建 / 搜索三种版式
+dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --workspace-picker
+dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --workspace-picker --workspace-picker-create
+dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --workspace-picker --workspace-picker-query banana
+
+# 在主窗口里真的打开浮层，让弹层自己出图（含 Flyout 外壳和真实定位）
+dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --workspace-flyout
+```
 
 还提供一个开发用的自动发送参数，用来跑真实的端到端链路：
 

@@ -33,24 +33,22 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
 
     private bool _indexed;
 
-    public ComposerViewModel(
-        IAssistantRuntime runtime,
-        ISettingsProvider settings,
-        IFilePicker picker,
-        IVoiceInput voice,
-        Func<Task> openSettings,
-        WorkspaceFileSearch fileSearch)
+    public ComposerViewModel(MainWindowViewModel host)
     {
-        _runtime = runtime;
-        _settings = settings;
-        _picker = picker;
-        _voice = voice;
-        _openSettings = openSettings;
-        _fileSearch = fileSearch;
+        Host = host;
+        _runtime = host.Runtime;
+        _settings = host.SettingsProvider;
+        _picker = host.Picker;
+        _voice = host.Voice;
+        _openSettings = host.OpenSettingsAsync;
+        _fileSearch = host.FileSearch;
         _settingsChanged = (_, _) => Refresh();
         RefreshModels();
         _settings.Changed += _settingsChanged;
     }
+
+    /// <summary>工作区浮层要读整份设置和空间列表，都挂在主窗口 VM 上。</summary>
+    public MainWindowViewModel Host { get; }
 
     public event EventHandler<PromptRequest>? SendRequested;
 
@@ -117,6 +115,13 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
     [NotifyPropertyChangedFor(nameof(HasVoiceError))]
     private string? voiceError;
 
+    /// <summary>没配模型服务时的就地提示。不跳页、不清空输入。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSetupHint))]
+    private string? setupHint;
+
+    public bool HasSetupHint => !string.IsNullOrWhiteSpace(SetupHint);
+
     public bool HasVoiceError => !string.IsNullOrWhiteSpace(VoiceError);
 
     public string MicTooltip => IsRecording ? "停止并转写" : "语音输入";
@@ -166,13 +171,18 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
     /// <summary>完全访问时在输入框下方给一条常驻提醒。</summary>
     public bool ShowFullAccessNotice => _settings.Current.Permission == PermissionMode.FullAccess;
 
-    public string WorkspaceLabel => ShortWorkspace(_settings.Current.WorkspacePath);
+    public string WorkspaceLabel
+    {
+        get
+        {
+            var name = WorkspaceNaming.ShortName(_settings.Current.WorkspacePath);
+            return name.Length > 0 ? name : "普通任务";
+        }
+    }
 
     public string WorkspacePath => _settings.Current.WorkspacePath;
 
     public bool IsConfigured => !string.IsNullOrWhiteSpace(_settings.Current.ApiKey);
-
-    public IReadOnlyList<string> RecentWorkspaces => _settings.Current.RecentWorkspaces;
 
     [RelayCommand(CanExecute = nameof(CanSend))]
     private async Task SendAsync()
@@ -190,9 +200,14 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
 
         if (!IsConfigured)
         {
-            _ = _openSettings();
+            // 以前这里直接切到设置页：页面一换，ChatViewModel 连同刚打的两百字一起被 Dispose。
+            // 现在留在原地提示，文字不动，用户自己决定什么时候去配。
+            SetupHint = "还没配模型服务：先在设置里填 API Key，这段文字会留在这里。";
+            RequestFocus();
             return;
         }
+
+        SetupHint = null;
 
         if (value.Length == 0)
         {
@@ -219,6 +234,7 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
             CloseMention();
 
             SendRequested?.Invoke(this, new PromptRequest(value, attachments, images));
+            RequestFocus();
         }
         finally
         {
@@ -276,6 +292,15 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
         }
 
         MentionQuery = match.Groups[1].Value;
+
+        // 先把浮层开出来再去找：第一次按 @ 要扫一遍工作区，几百毫秒里什么都不显示，
+        // 人只会以为这个键没反应。
+        ShowMention = true;
+        MentionIndex = -1;
+        MentionEmptyText = "正在查找…";
+        MentionItems.Clear();
+        OnPropertyChanged(nameof(HasMentionItems));
+
         _ = RefreshMentionAsync();
     }
 
@@ -551,6 +576,11 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void Stop() => StopRequested?.Invoke(this, EventArgs.Empty);
 
+    /// <summary>提示条上的「去设置」。用户主动点的，跳走之后草稿由宿主接住。</summary>
+    [RelayCommand]
+    private async Task OpenSettingsAsync() => await _openSettings();
+
+
     public void CancelRecording()
     {
         if (!IsRecording)
@@ -613,33 +643,9 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
         Text = string.IsNullOrWhiteSpace(Text)
             ? $"请阅读这个文件并帮我处理：{file}"
             : $"{Text.TrimEnd()}\n\n文件：{file}";
-    }
 
-    [RelayCommand]
-    private async Task PickWorkspaceAsync()
-    {
-        var folder = await _picker.PickFolderAsync("选择工作区");
-        if (string.IsNullOrWhiteSpace(folder))
-        {
-            return;
-        }
-
-        await SetWorkspaceAsync(folder);
-    }
-
-    public async Task SetWorkspaceAsync(string folder)
-    {
-        SetWorkspace(folder);
-        await _settings.SaveAsync(_settings.Current);
-    }
-
-    public void SetWorkspace(string folder)
-    {
-        var settings = _settings.Current;
-        settings.WorkspacePath = folder;
-        settings.RecentWorkspaces.RemoveAll(path => string.Equals(path, folder, StringComparison.OrdinalIgnoreCase));
-        settings.RecentWorkspaces.Insert(0, folder);
-        Refresh();
+        // 选完文件光标应该还在输入框末尾，不该停在纸夹按钮上。
+        RequestFocus();
     }
 
     public void RequestFocus() => FocusRequested?.Invoke(this, EventArgs.Empty);
@@ -654,6 +660,7 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
         _settings.Current.Model = modelId;
         Refresh();
         await _settings.SaveAsync(_settings.Current);
+        RequestFocus();
     }
 
     public async Task SetPermissionAsync(PermissionMode permission)
@@ -667,6 +674,7 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
         Refresh();
         PermissionChanged?.Invoke(this, permission);
         await _settings.SaveAsync(_settings.Current);
+        RequestFocus();
     }
 
     /// <summary>浮层里的「只用只读」快捷入口。</summary>
@@ -684,6 +692,13 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
         // 工作区或设置变了，下次 @ 要重新扫盘，别拿上一个工作区的文件
         _indexed = false;
         RefreshModels();
+
+        // 配好了就把「还没配模型服务」的提示收掉。
+        if (IsConfigured)
+        {
+            SetupHint = null;
+        }
+
         OnPropertyChanged(nameof(ModelLabel));
         OnPropertyChanged(nameof(PermissionLabel));
         OnPropertyChanged(nameof(Permission));
@@ -712,17 +727,5 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
         {
             Models.Insert(0, new ModelOption(current, current, "当前配置", string.Empty));
         }
-    }
-
-    private static string ShortWorkspace(string path)
-    {
-        if (string.IsNullOrWhiteSpace(path))
-        {
-            return "普通任务";
-        }
-
-        var trimmed = path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        var name = Path.GetFileName(trimmed);
-        return string.IsNullOrWhiteSpace(name) ? trimmed : name;
     }
 }

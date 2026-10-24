@@ -257,6 +257,18 @@ public sealed partial class AssistantMessageViewModel : MessageViewModel
     [NotifyPropertyChangedFor(nameof(ShowActions))]
     private string? error;
 
+    /// <summary>用户主动停止。和 <see cref="Error"/> 分开：停止不是故障，不能画成红框。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasStopNote))]
+    [NotifyPropertyChangedFor(nameof(ShowActions))]
+    private bool isStopped;
+
+    /// <summary>复制按钮的回执。点完变「已复制」，一会儿自己复原。</summary>
+    [ObservableProperty]
+    private string copyLabel = "复制";
+
+    private DispatcherTimer? _copyTimer;
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowActions))]
     [NotifyPropertyChangedFor(nameof(ShowTyping))]
@@ -284,6 +296,8 @@ public sealed partial class AssistantMessageViewModel : MessageViewModel
 
     public bool HasError => !string.IsNullOrWhiteSpace(Error);
 
+    public bool HasStopNote => IsStopped;
+
     public bool HasTools => Tools.Count > 0;
 
     public bool HasTokens => InputTokens > 0 || OutputTokens > 0;
@@ -294,7 +308,8 @@ public sealed partial class AssistantMessageViewModel : MessageViewModel
     /// 只有回复真的结束了才挂操作菜单。失败、被中断、或者整轮只调了工具没出文字时，
     /// 用户更需要「重试」，所以不把没有正文当成不显示的理由。
     /// </summary>
-    public bool ShowActions => !IsStreaming && (HasText || HasError || HasTools);
+    public bool ShowActions => !IsStreaming && (HasText || HasError || HasTools || IsStopped);
+
 
     public string TokenText => $"输入 {Format(InputTokens)} · 输出 {Format(OutputTokens)}";
 
@@ -333,7 +348,23 @@ public sealed partial class AssistantMessageViewModel : MessageViewModel
     private void ToggleReasoning() => IsReasoningOpen = !IsReasoningOpen;
 
     [RelayCommand]
-    private async Task CopyAsync() => await Services.Ui.CopyTextAsync(Text);
+    private async Task CopyAsync()
+    {
+        await Services.Ui.CopyTextAsync(Text);
+
+        // 复制没有回执，用户会以为没点上，再点一次。
+        CopyLabel = "已复制";
+        _copyTimer?.Stop();
+        _copyTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1.6) };
+        _copyTimer.Tick += (_, _) =>
+        {
+            _copyTimer?.Stop();
+            _copyTimer = null;
+            CopyLabel = "复制";
+        };
+        _copyTimer.Start();
+    }
+
 
     [RelayCommand]
     private Task RetryAsync() => RetryRequested?.Invoke() ?? Task.CompletedTask;
@@ -412,11 +443,32 @@ public sealed partial class ApprovalMessageViewModel : MessageViewModel
 
     public bool ShowActions => !IsResolved;
 
+    /// <summary>「本会话都允许 run_command」的按钮文案，带上工具名，别让人误以为是全局开关。</summary>
+    public string AlwaysLabel => $"本会话都允许 {ToolName}";
+
+    /// <summary>「本会话都允许这个工具」。怎么记住由宿主决定，卡片只负责发起。</summary>
+    public Action? AllowAlwaysRequested { get; set; }
+
     [RelayCommand]
     private void Allow() => Resolve(true);
 
     [RelayCommand]
+    private void AllowAlways()
+    {
+        if (IsResolved)
+        {
+            return;
+        }
+
+        IsResolved = true;
+        ResolutionText = $"本会话都允许 {ToolName}";
+        AllowAlwaysRequested?.Invoke();
+        _resolve(true);
+    }
+
+    [RelayCommand]
     private void Deny() => Resolve(false);
+
 
     public void Resolve(bool allowed)
     {

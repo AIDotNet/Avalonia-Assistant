@@ -170,7 +170,30 @@
 
     <Border Grid.Row="2" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0" Padding="28,12">
       <Grid ColumnDefinitions="*,Auto">
+        <!-- 有改动又点了返回：给两条明确的路，不静默丢弃 -->
+        <StackPanel Orientation="Horizontal"
+                    Spacing="8"
+                    VerticalAlignment="Center"
+                    IsVisible="{Binding ShowLeavePrompt}">
+          <arc:ArcGlyph Data="{x:Static arc:ArcIcons.CircleAlert}"
+                        Size="13"
+                        Foreground="{StaticResource WarningBrush}"
+                        VerticalAlignment="Center" />
+          <TextBlock Text="改动还没保存"
+                     FontSize="11.5"
+                     Foreground="{StaticResource WarningBrush}"
+                     VerticalAlignment="Center" />
+          <Button Classes="ghost-action"
+                  Command="{Binding SaveAndLeaveCommand}"
+                  Foreground="{StaticResource TextPrimaryBrush}"
+                  Content="保存并返回" />
+          <Button Classes="ghost-action"
+                  Command="{Binding DiscardAndLeaveCommand}"
+                  Content="放弃改动" />
+        </StackPanel>
+
         <TextBlock Text="{Binding SavedText}"
+                   IsVisible="{Binding !ShowLeavePrompt}"
                    Classes="caption"
                    Foreground="{Binding SaveToastBrush}"
                    VerticalAlignment="Center"

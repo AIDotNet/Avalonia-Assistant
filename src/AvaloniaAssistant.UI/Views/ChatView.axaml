@@ -3,12 +3,27 @@
              xmlns:arc="https://github.com/AIDotNet/TKCode.Arc"
              xmlns:vm="using:AvaloniaAssistant.UI.ViewModels"
              xmlns:views="using:AvaloniaAssistant.UI.Views"
+             xmlns:controls="using:AvaloniaAssistant.UI.Controls"
              x:Class="AvaloniaAssistant.UI.Views.ChatView">
 
   <UserControl.Styles>
     <!-- 消息列表的滚动条常驻显示：自动隐藏时只剩一条 2~3px 的细线，鼠标根本抓不住 -->
     <Style Selector="ScrollViewer.message-list /template/ ScrollBar">
       <Setter Property="AllowAutoHide" Value="False" />
+    </Style>
+
+    <!-- 停在上面看历史时的浮标：有新内容 / 有操作待确认，点一下回到底部 -->
+    <Style Selector="Button.jump-latest">
+      <Setter Property="Height" Value="30" />
+      <Setter Property="Padding" Value="12,0" />
+      <Setter Property="CornerRadius" Value="15" />
+      <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+      <Setter Property="BorderBrush" Value="{StaticResource BorderStrongBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+    </Style>
+    <Style Selector="Button.jump-latest:pointerover">
+      <Setter Property="Background" Value="{StaticResource SurfaceMutedBrush}" />
     </Style>
 
     <!-- 工具调用压成一行：一次任务十几次调用，卡片会把人埋掉 -->
@@ -56,7 +71,10 @@
                 <Border CornerRadius="10"
                         ClipToBounds="True"
                         BorderBrush="{StaticResource BorderBrush}"
-                        BorderThickness="1">
+                        BorderThickness="1"
+                        Cursor="Hand"
+                        ToolTip.Tip="点开看大图"
+                        PointerPressed="OnThumbnailPressed">
                   <Image Source="{Binding}" Width="120" Stretch="Uniform" />
                 </Border>
               </DataTemplate>
@@ -78,6 +96,13 @@
                        MaxWidth="420"
                        TextTrimming="CharacterEllipsis" />
           </StackPanel>
+
+          <!-- 时间戳：隔一天回来，得知道这轮是什么时候跑的 -->
+          <TextBlock Text="{Binding TimeText}"
+                     Classes="caption"
+                     FontSize="9.5"
+                     HorizontalAlignment="Right"
+                     Margin="0,0,4,0" />
         </StackPanel>
       </Grid>
     </DataTemplate>
@@ -202,12 +227,20 @@
                        Foreground="{StaticResource DangerBrush}" />
           </Border>
 
+          <!-- 用户按停不是故障：中性一行说明，不套危险色 -->
+          <TextBlock IsVisible="{Binding HasStopNote}"
+                     Text="已停止生成"
+                     Classes="caption"
+                     FontSize="11"
+                     Foreground="{StaticResource TextMutedBrush}"
+                     Margin="0,1,0,0" />
+
           <!-- 回复的操作菜单：复制要有内容才出现，重试只在这条回复真的结束（含失败/中断）后才出现 -->
           <StackPanel IsVisible="{Binding ShowActions}" Orientation="Horizontal" Spacing="2" Margin="0,1,0,0">
             <Button Classes="ghost-action"
                     Command="{Binding CopyCommand}"
                     IsVisible="{Binding HasText}"
-                    Content="复制" />
+                    Content="{Binding CopyLabel}" />
             <Button Classes="ghost-action"
                     Command="{Binding RetryCommand}"
                     ToolTip.Tip="重新生成这条回复（会丢弃它之后的内容）"
@@ -216,6 +249,11 @@
                        IsVisible="{Binding HasTokens}"
                        Classes="caption"
                        FontSize="10"
+                       Margin="8,0,0,0"
+                       VerticalAlignment="Center" />
+            <TextBlock Text="{Binding TimeText}"
+                       Classes="caption"
+                       FontSize="9.5"
                        Margin="8,0,0,0"
                        VerticalAlignment="Center" />
           </StackPanel>
@@ -266,10 +304,20 @@
                                    Foreground="{StaticResource TextSecondaryBrush}" />
             </ScrollViewer>
           </Border>
-          <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding ShowActions}" Margin="0,2,0,0">
+          <Grid ColumnDefinitions="Auto,Auto,*,Auto" IsVisible="{Binding ShowActions}" Margin="0,2,0,0">
             <Button Classes="approve" Command="{Binding AllowCommand}" Content="允许一次" />
-            <Button Classes="deny" Command="{Binding DenyCommand}" Content="拒绝" />
-          </StackPanel>
+            <Button Grid.Column="1"
+                    Classes="deny"
+                    Margin="8,0,0,0"
+                    Command="{Binding DenyCommand}"
+                    Content="拒绝" />
+            <Button Grid.Column="3"
+                    Classes="ghost-action"
+                    VerticalAlignment="Center"
+                    Command="{Binding AllowAlwaysCommand}"
+                    ToolTip.Tip="这个工具在本次对话里不再逐次询问"
+                    Content="{Binding AlwaysLabel}" />
+          </Grid>
           <TextBlock Text="{Binding ResolutionText}"
                      IsVisible="{Binding !ShowActions}"
                      Classes="caption"
@@ -316,19 +364,36 @@
       </Grid>
     </Border>
 
-    <ScrollViewer x:Name="MessagesScroll"
-                  Grid.Row="1"
-                  Classes="message-list"
-                  VerticalScrollBarVisibility="Auto"
-                  HorizontalScrollBarVisibility="Disabled">
-      <ItemsControl ItemsSource="{Binding Messages}"
-                    MaxWidth="840"
-                    Margin="26,22,26,10"
-                    />
-    </ScrollViewer>
+    <!-- 消息区 + 回到底部的浮标：用户滚上去看历史时，新内容不该悄悄长在下面 -->
+    <Panel Grid.Row="1">
+      <ScrollViewer x:Name="MessagesScroll"
+                    Classes="message-list"
+                    VerticalScrollBarVisibility="Auto"
+                    HorizontalScrollBarVisibility="Disabled">
+        <ItemsControl ItemsSource="{Binding Messages}"
+                      MaxWidth="840"
+                      Margin="26,22,26,10"
+                      />
+      </ScrollViewer>
+
+      <Button Classes="jump-latest"
+              IsVisible="{Binding ShowFloatingHint}"
+              Command="{Binding JumpToLatestCommand}"
+              HorizontalAlignment="Center"
+              VerticalAlignment="Bottom"
+              Margin="0,0,0,14">
+        <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+          <arc:ArcGlyph Data="{x:Static arc:ArcIcons.ArrowDown}" Size="12" VerticalAlignment="Center" />
+          <TextBlock Text="{Binding FloatingHint}" FontSize="11.5" VerticalAlignment="Center" />
+        </StackPanel>
+      </Button>
+    </Panel>
 
     <Border Grid.Row="2" Padding="26,8,26,14" Background="{StaticResource SurfaceBrush}">
       <views:ComposerView DataContext="{Binding Composer}" MaxWidth="840" />
     </Border>
+
+    <!-- 点开大图：平时 IsVisible=False，不占布局也不吃事件 -->
+    <controls:ImageViewer x:Name="ImageViewerLayer" Grid.RowSpan="3" />
   </Grid>
 </UserControl>

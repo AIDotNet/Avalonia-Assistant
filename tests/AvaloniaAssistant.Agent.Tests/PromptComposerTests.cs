@@ -211,4 +211,57 @@ public sealed class PromptComposerTests
         Assert.Equal("周报.md", attachment.Name);
         Assert.Equal("本周把资料库做完了", attachment.Text);
     }
+
+    [Fact]
+    public void WorkModeReachesTheModel()
+    {
+        // 办公/开发/设计以前只改界面高亮，模型完全收不到，等于一个假开关。
+        var prompt = PromptComposer.Compose("把这个接口改一下", null, mode: WorkModeText.Development);
+
+        Assert.Contains("当前工作模式：开发", prompt);
+        Assert.Contains("先读现有代码", prompt);
+        Assert.Contains("把这个接口改一下", prompt);
+    }
+
+    [Fact]
+    public void OfficeModeIsTheDefaultWording()
+    {
+        var prompt = PromptComposer.Compose("写份周报", null, mode: WorkModeText.Office);
+
+        Assert.Contains("当前工作模式：办公", prompt);
+        Assert.Contains("以文档、表格、汇报材料为主要产出", prompt);
+    }
+
+    [Fact]
+    public void WithoutModeThePromptStaysExactlyAsTyped()
+    {
+        Assert.Equal("原话", PromptComposer.Compose("原话", null));
+        Assert.Equal("原话", PromptComposer.Compose("原话", null, mode: null));
+        Assert.Equal("原话", PromptComposer.Compose("原话", null, mode: "   "));
+    }
+
+    [Fact]
+    public void StoppedRunIsNotSerializedAsAnError()
+    {
+        // 用户按停不是故障：存档里单独记一个 stopped，重新打开不能画成红色错误。
+        var session = new ChatSession
+        {
+            Entries =
+            [
+                new ChatEntry
+                {
+                    Kind = ChatEntryKind.Assistant,
+                    Text = "先看这一段",
+                    Stopped = true,
+                },
+            ],
+        };
+
+        var json = JsonSerializer.Serialize(session, AssistantJson.Options);
+        var restored = JsonSerializer.Deserialize<ChatSession>(json, AssistantJson.Options);
+
+        var entry = Assert.Single(restored!.Entries);
+        Assert.True(entry.Stopped);
+        Assert.Null(entry.Error);
+    }
 }
