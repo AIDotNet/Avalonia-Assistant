@@ -193,6 +193,9 @@ internal static class Program
                 case "--verify-approval-bg":
                     AppLaunchOptions.VerifyApprovalBackground = true;
                     break;
+                case "--verify-sidebar":
+                    AppLaunchOptions.VerifySidebar = true;
+                    break;
                 case "--retry-confirm":
                     AppLaunchOptions.ShowRetryConfirm = true;
                     break;

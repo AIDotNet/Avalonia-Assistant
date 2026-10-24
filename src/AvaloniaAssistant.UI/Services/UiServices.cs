@@ -383,6 +383,9 @@ public static class AppLaunchOptions
     /// <summary>开发用：一条会话卡在审批上并切到后台，验收窗口标题仍然看得见。</summary>
     public static bool VerifyApprovalBackground { get; set; }
 
+    /// <summary>开发用：保存一轮后检查侧栏行对象有没有被换掉（N8 的核心）。</summary>
+    public static bool VerifySidebar { get; set; }
+
     /// <summary>摆出「重跑会删掉后面几轮」的确认弹窗，检查版式与红色主按钮。</summary>
     public static bool ShowRetryConfirm { get; set; }
 

@@ -716,13 +716,20 @@ public sealed partial class MainWindowViewModel : ObservableObject
         _sessionCache[session.Id] = session;
 
         // 正在聊的这一轮要看得见：空间被收起时自动展开，别让新对话存进去却找不到。
-        await ExpandWorkspaceAsync(session);
+        var expanded = await ExpandWorkspaceAsync(session);
 
         await _sessions.SaveAsync(session);
 
         // 以前这里再走一次 LoadAllAsync：每轮结束把所有会话文件重读一遍，只为刷侧栏。
-        // 会话对象已经在 _sessionCache 里，直接重建列表即可，别把磁盘拖进来。
-        await Ui.OnUiAsync(RebuildSidebar);
+        // 现在会话对象在 _sessionCache 里，而且只刷新被保存的这一条——
+        // 整表重建会把每一行的对象换掉，正在看的悬停卡会被掐断、列表也会闪。
+        await Ui.OnUiAsync(() =>
+        {
+            if (expanded || !TryRefreshSession(session))
+            {
+                RebuildSidebar();
+            }
+        });
 
         // 高亮只跟着「用户正在看的那条」走：后台任务跑完不该把侧栏选中项抢过去。
         await SetActiveSessionAsync(ActiveChatId);
@@ -747,15 +754,16 @@ public sealed partial class MainWindowViewModel : ObservableObject
     }
 
     /// <summary>会话落在哪个空间，就把那个空间展开。</summary>
-    private async Task ExpandWorkspaceAsync(ChatSession session)
+    private async Task<bool> ExpandWorkspaceAsync(ChatSession session)
     {
         if (string.IsNullOrWhiteSpace(session.WorkspacePath) || !IsCollapsed(Settings, session.WorkspacePath))
         {
-            return;
+            return false;
         }
 
         SetCollapsed(Settings, session.WorkspacePath, false);
         await SettingsProvider.SaveAsync(Settings);
+        return true;
     }
 
     public async Task DeleteSessionAsync(string sessionId)
@@ -1238,6 +1246,88 @@ public sealed partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(HasWorkspaces));
         OnPropertyChanged(nameof(WorkspaceSectionText));
         OnPropertyChanged(nameof(ShowWorkspaceEmptyHint));
+    }
+
+    /// <summary>
+    /// 保存完一轮只刷新这一条。整表重建会把每一行的对象都换掉，挂在行上的悬停卡会被掐断。
+    /// 以下情况退回整表重建：正在搜索（过滤和正文片段要重算）、这条还没进侧栏、目标分组还不存在。
+    /// </summary>
+    private bool TryRefreshSession(ChatSession session)
+    {
+        if (IsSearching)
+        {
+            return false;
+        }
+
+        var targetHeader = session.Pinned ? "置顶" : GroupName(session.UpdatedAt);
+        var group = SessionGroups.FirstOrDefault(candidate => candidate.Header == targetHeader);
+        var current = SessionGroups.FirstOrDefault(candidate => candidate.Items.Any(item => item.Id == session.Id));
+        if (group is null || current is null)
+        {
+            return false;
+        }
+
+        var displayTitles = BuildDisplayTitles();
+
+        // 跨了日期分组（昨天 → 今天）：这一行要搬到新组，旧组空了就整组去掉
+        if (!ReferenceEquals(current, group))
+        {
+            var moving = current.Items.First(item => item.Id == session.Id);
+            current.Items.Remove(moving);
+            if (current.Items.Count == 0)
+            {
+                SessionGroups.Remove(current);
+            }
+
+            group.Items.Add(moving);
+        }
+
+        // 行对象不换，只改字段；时间变了在同组里挪到该在的位置
+        foreach (var item in group.Items.Where(item => item.Id == session.Id).ToList())
+        {
+            item.Apply(session, displayTitles.GetValueOrDefault(session.Id, session.Title));
+            Reposition(group.Items, item);
+        }
+
+        foreach (var workspace in Workspaces)
+        {
+            foreach (var row in workspace.Sessions.Where(item => item.Id == session.Id).ToList())
+            {
+                row.Apply(session, displayTitles.GetValueOrDefault(session.Id, session.Title));
+                Reposition(workspace.Sessions, row);
+            }
+        }
+
+        // 改名可能让它和别的任务重名/不再重名：显示名按最新对照表统一刷，仍不动行对象
+        foreach (var item in AllSessionItems())
+        {
+            var expected = displayTitles.GetValueOrDefault(item.Id, item.Title);
+            if (!string.Equals(item.DisplayTitle, expected, StringComparison.Ordinal))
+            {
+                item.DisplayTitle = expected;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>时间变了，同组里按 UpdatedAt 倒序重排：只挪这一条，不动别人。</summary>
+    private static void Reposition(ObservableCollection<SessionItemViewModel> items, SessionItemViewModel item)
+    {
+        var index = items.IndexOf(item);
+        if (index < 0)
+        {
+            return;
+        }
+
+        items.RemoveAt(index);
+        var insert = 0;
+        while (insert < items.Count && items[insert].UpdatedAt >= item.UpdatedAt)
+        {
+            insert++;
+        }
+
+        items.Insert(insert, item);
     }
 
     private SessionItemViewModel CreateSessionItem(

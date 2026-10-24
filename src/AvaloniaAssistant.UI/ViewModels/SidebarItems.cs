@@ -36,11 +36,8 @@ public sealed partial class SessionItemViewModel : ObservableObject
         Action<string>? togglePin = null)
     {
         Id = session.Id;
-        Title = session.Title;
-        IsPinned = session.Pinned;
-        DisplayTitle = string.IsNullOrWhiteSpace(displayTitle) ? session.Title : displayTitle;
+        Apply(session, displayTitle);
         MatchSnippet = matchSnippet;
-        TimeText = SessionText.RelativeTime(session.UpdatedAt);
         WorkspaceName = string.IsNullOrWhiteSpace(workspaceName) ? "普通对话" : workspaceName;
         ModeText = session.Mode switch
         {
@@ -48,7 +45,6 @@ public sealed partial class SessionItemViewModel : ObservableObject
             "design" => "设计",
             _ => "办公",
         };
-        UpdatedText = "更新于 " + session.UpdatedAt.LocalDateTime.ToString("yyyy/MM/dd HH:mm");
         _open = open;
         _delete = delete;
         _rename = rename;
@@ -57,16 +53,20 @@ public sealed partial class SessionItemViewModel : ObservableObject
 
     public string Id { get; }
 
-    public string Title { get; }
+    [ObservableProperty]
+    private string title = string.Empty;
 
     /// <summary>置顶的常用任务。置顶只改排序，不改「更新于」。</summary>
-    public bool IsPinned { get; }
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PinLabel))]
+    private bool isPinned;
 
     /// <summary>菜单里那行字：已经置顶的显示「取消置顶」。</summary>
     public string PinLabel => IsPinned ? "取消置顶" : "置顶";
 
     /// <summary>列表里显示的名字。重名时会带日期或序号，存档标题不受影响。</summary>
-    public string DisplayTitle { get; }
+    [ObservableProperty]
+    private string displayTitle = string.Empty;
 
     /// <summary>搜索命中在正文里的那一句。只有搜正文命中时才有，标题命中时留空。</summary>
     public string MatchSnippet { get; }
@@ -74,13 +74,32 @@ public sealed partial class SessionItemViewModel : ObservableObject
     public bool HasMatchSnippet => !string.IsNullOrWhiteSpace(MatchSnippet);
 
     /// <summary>默认显示在行尾，鼠标移到这一行时让位给「⋯」。</summary>
-    public string TimeText { get; }
+    [ObservableProperty]
+    private string timeText = string.Empty;
 
     public string WorkspaceName { get; }
 
     public string ModeText { get; }
 
-    public string UpdatedText { get; }
+    [ObservableProperty]
+    private string updatedText = string.Empty;
+
+    /// <summary>这一行对应的最后更新时间。同组里按它倒序排，保存后要按新时间挪位置。</summary>
+    public DateTimeOffset UpdatedAt { get; private set; }
+
+    /// <summary>
+    /// 用最新的会话状态刷新这一行。每轮保存都调它，不再整表重建——
+    /// 重建会把行对象全部换掉，挂在行上的悬停卡（450ms 定时器）会被掐断。
+    /// </summary>
+    public void Apply(ChatSession session, string? displayTitle)
+    {
+        Title = session.Title;
+        DisplayTitle = string.IsNullOrWhiteSpace(displayTitle) ? session.Title : displayTitle;
+        IsPinned = session.Pinned;
+        UpdatedAt = session.UpdatedAt;
+        TimeText = SessionText.RelativeTime(session.UpdatedAt);
+        UpdatedText = "更新于 " + session.UpdatedAt.LocalDateTime.ToString("yyyy/MM/dd HH:mm");
+    }
 
     [ObservableProperty]
     private bool isActive;

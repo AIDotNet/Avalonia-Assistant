@@ -317,6 +317,51 @@ public partial class AssistantApp : Application
                     + $" / 同一实例：{ReferenceEquals(page, returnTarget)}");
             }
 
+            // 验收用：保存一轮之后，侧栏那一行的对象还该是同一个（N8）
+            if (AppLaunchOptions.VerifySidebar)
+            {
+                viewModel.LoadDemoSidebar();
+                viewModel.LoadDemoChat();
+
+                if (viewModel.CurrentPage is ChatViewModel current)
+                {
+                    var flat = viewModel.SessionGroups.SelectMany(group => group.Items).ToList();
+                    var item = flat.First(candidate => candidate.Id == current.Session.Id);
+                    var witness = flat.First(candidate => candidate.Id != current.Session.Id);
+
+                    current.Session.Title = "整理电脑配置清单（改过名）";
+                    current.Session.UpdatedAt = DateTimeOffset.Now;
+                    await viewModel.SaveSessionAsync(current.Session);
+
+                    var after = viewModel.SessionGroups.SelectMany(group => group.Items)
+                        .First(candidate => candidate.Id == current.Session.Id);
+                    var witnessAfter = viewModel.SessionGroups.SelectMany(group => group.Items)
+                        .First(candidate => candidate.Id == witness.Id);
+
+                    var workspaceRow = viewModel.Workspaces
+                        .SelectMany(workspace => workspace.Sessions)
+                        .FirstOrDefault(row => row.Id == current.Session.Id);
+
+                    Console.WriteLine(
+                        $"[verify-sidebar] 同一行对象={ReferenceEquals(item, after)}"
+                        + $" 标题={after.Title} 见证行未换={ReferenceEquals(witness, witnessAfter)}"
+                        + $" 位于第一组第 {viewModel.SessionGroups[0].Items.IndexOf(after) + 1} 行"
+                        + $" 空间那一行也同步={workspaceRow?.Title == after.Title}");
+
+                    // 跨天：改到昨天，应该整行搬到「昨天」组，对象还是同一个
+                    current.Session.UpdatedAt = DateTimeOffset.Now.AddDays(-1);
+                    await viewModel.SaveSessionAsync(current.Session);
+
+                    var movedGroup = viewModel.SessionGroups
+                        .FirstOrDefault(group => group.Items.Any(row => row.Id == current.Session.Id));
+                    var moved = movedGroup?.Items.First(row => row.Id == current.Session.Id);
+
+                    Console.WriteLine(
+                        $"[verify-sidebar] 跨天落组={movedGroup?.Header ?? "(丢了)"}"
+                        + $" 同一行对象={ReferenceEquals(item, moved)}");
+                }
+            }
+
             // 验收用：会话卡在审批上并切到后台，标题还认不认得出「等你确认」
             if (AppLaunchOptions.VerifyApprovalBackground)
             {
