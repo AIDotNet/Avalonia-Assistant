@@ -202,10 +202,13 @@ public sealed partial class ModelProfileViewModel : ObservableObject
 
     public bool IsMessagesProtocolSelected => Profile.EffectiveProtocol == AgentProtocol.AnthropicMessages;
 
-    /// <summary>没手动选过协议时补一句「跟随服务商推荐」，避免以为是写死的。</summary>
-    public string ProtocolHint => Profile.Protocol is null
-        ? ProtocolCatalog.For(Profile.EffectiveProtocol).Description + "（当前跟随服务商推荐）"
-        : ProtocolCatalog.For(Profile.EffectiveProtocol).Description;
+    /// <summary>
+    /// 协议这一行的标签。没手动选过就直说「跟随预设」——
+    /// 以前把这个状态塞在说明文字末尾，窄一点就折成孤零零一行「荐）」。
+    /// </summary>
+    public string ProtocolLabel => Profile.Protocol is null ? "协议 · 跟随预设" : "协议";
+
+    public string ProtocolHint => ProtocolCatalog.For(Profile.EffectiveProtocol).Description;
 
     [ObservableProperty]
     private bool isSelected;
@@ -264,6 +267,7 @@ public sealed partial class ModelProfileViewModel : ObservableObject
         OnPropertyChanged(nameof(IsChatProtocolSelected));
         OnPropertyChanged(nameof(IsResponsesProtocolSelected));
         OnPropertyChanged(nameof(IsMessagesProtocolSelected));
+        OnPropertyChanged(nameof(ProtocolLabel));
         OnPropertyChanged(nameof(ProtocolHint));
         OnPropertyChanged(nameof(Summary));
         OnPropertyChanged(nameof(ContextWindowHint));

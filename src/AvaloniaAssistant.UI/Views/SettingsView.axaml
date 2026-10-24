@@ -39,7 +39,7 @@
 
     <Grid Grid.Row="1" RowDefinitions="Auto,*">
       <!-- 分两栏：模型那摊东西和日常偏好互不打扰，切过去只换内容，保存条一直在 -->
-      <Border Padding="96,18,96,0">
+      <Border Padding="72,18,72,0">
         <arc:SegmentedControl AutomationProperties.Name="设置分区"
                               HorizontalAlignment="Left"
                               SelectedValue="{Binding SelectedSection, Mode=TwoWay}">
@@ -48,8 +48,8 @@
         </arc:SegmentedControl>
       </Border>
 
-      <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-        <StackPanel Margin="96,16,96,26" Spacing="20">
+      <ScrollViewer x:Name="PageScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="72,16,72,26" Spacing="20">
 
           <!-- ============ 模型设置 ============ -->
           <StackPanel Spacing="14" IsVisible="{Binding IsModelSection}">
@@ -64,6 +64,9 @@
             <Grid ColumnDefinitions="268,*" ColumnSpacing="16">
               <!-- 左：配好的模型。点一行在右边编辑；「使用中」是输入框当前在用的那一套 -->
               <StackPanel Spacing="6">
+                <ScrollViewer MaxHeight="392"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
                 <ItemsControl ItemsSource="{Binding Profiles}">
                   <ItemsControl.ItemTemplate>
                     <DataTemplate>
@@ -94,6 +97,7 @@
                     </DataTemplate>
                   </ItemsControl.ItemTemplate>
                 </ItemsControl>
+                </ScrollViewer>
 
                 <Button Classes="ghost-action"
                         HorizontalAlignment="Left"
@@ -110,13 +114,13 @@
 
               <!-- 右：选中那套的详细配置 -->
               <Border Grid.Column="1" Classes="card" Padding="18,16">
-                <StackPanel Spacing="14" IsVisible="{Binding HasSelectedProfile}">
+                <StackPanel Spacing="10" IsVisible="{Binding HasSelectedProfile}">
                   <arc:Input Label="名称"
                              Placeholder="例如 公司网关"
                              Text="{Binding SelectedProfile.Name, Mode=TwoWay}"
-                             Description="留空就显示模型名；同一家配两套时靠它区分。" />
+                             Description="留空就显示模型名。" />
 
-                  <StackPanel Spacing="8">
+                  <StackPanel Spacing="7">
                     <TextBlock Text="服务商预设"
                                FontSize="11"
                                FontWeight="Medium"
@@ -124,7 +128,8 @@
                     <ItemsControl ItemsSource="{Binding Providers}">
                       <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
-                          <StackPanel Orientation="Horizontal" />
+                          <!-- 缩放 125% 时四个 chip 一行放不下，换行比裁掉「自定义」好 -->
+                          <WrapPanel Orientation="Horizontal" />
                         </ItemsPanelTemplate>
                       </ItemsControl.ItemsPanel>
                       <ItemsControl.ItemTemplate>
@@ -133,20 +138,21 @@
                                   Classes.active="{Binding IsSelected}"
                                   Command="{Binding SelectCommand}"
                                   Content="{Binding Name}"
-                                  Margin="0,0,8,0" />
+                                  Padding="12,0"
+                                  Margin="0,0,6,6" />
                         </DataTemplate>
                       </ItemsControl.ItemTemplate>
                     </ItemsControl>
-                    <TextBlock Text="换预设会把地址、模型和协议一起换成该服务商的默认值；公司网关、代理这类自建端点选「自定义」。"
+                    <TextBlock Text="换预设会覆盖地址、模型和协议；自建网关选「自定义」。"
                                Classes="caption"
-                               FontSize="10.5"
+                               FontSize="11"
                                LineHeight="17"
                                TextWrapping="Wrap" />
                   </StackPanel>
 
                   <Border Height="1" Background="{StaticResource BorderBrush}" />
 
-                  <StackPanel Spacing="10">
+                  <StackPanel Spacing="9">
                     <TextBlock Text="连接"
                                FontSize="11"
                                FontWeight="Medium"
@@ -155,52 +161,29 @@
                     <arc:Input Label="Base URL"
                                Placeholder="https://api.deepseek.com/v1"
                                Text="{Binding SelectedProfile.BaseUrl, Mode=TwoWay}"
-                               Description="填到 /v1 为止，末尾的斜杠可有可无。" />
+                               Description="填到 /v1 为止，末尾斜杠可有可无。" />
 
                     <arc:PasswordField Label="API Key"
                                        Placeholder="sk-..."
                                        Text="{Binding SelectedProfile.ApiKey, Mode=TwoWay}"
-                                       Description="只保存在本机 settings.json；点右边的眼睛可以核对。"
+                                       Description="只保存在本机 settings.json。"
                                        ShowPasswordText="显示密钥"
                                        HidePasswordText="隐藏密钥" />
                   </StackPanel>
 
                   <Border Height="1" Background="{StaticResource BorderBrush}" />
 
-                  <StackPanel Spacing="10">
+                  <StackPanel Spacing="9">
                     <TextBlock Text="模型与协议"
                                FontSize="11"
                                FontWeight="Medium"
                                Foreground="{StaticResource TextMutedBrush}" />
 
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                      <Button Classes="chip"
-                              Classes.active="{Binding SelectedProfile.IsChatProtocolSelected}"
-                              Command="{Binding SelectedProfile.SetProtocolCommand}"
-                              CommandParameter="chat"
-                              Content="Chat Completions" />
-                      <Button Classes="chip"
-                              Classes.active="{Binding SelectedProfile.IsResponsesProtocolSelected}"
-                              Command="{Binding SelectedProfile.SetProtocolCommand}"
-                              CommandParameter="responses"
-                              Content="Responses" />
-                      <Button Classes="chip"
-                              Classes.active="{Binding SelectedProfile.IsMessagesProtocolSelected}"
-                              Command="{Binding SelectedProfile.SetProtocolCommand}"
-                              CommandParameter="messages"
-                              Content="Anthropic Messages" />
-                    </StackPanel>
-                    <TextBlock Text="{Binding SelectedProfile.ProtocolHint}"
-                               Classes="caption"
-                               FontSize="10.5"
-                               TextWrapping="Wrap"
-                               LineHeight="17" />
-
                     <Grid ColumnDefinitions="*,*" ColumnSpacing="16">
                       <arc:Input Label="模型"
                                  Placeholder="deepseek-flash"
                                  Text="{Binding SelectedProfile.ModelId, Mode=TwoWay}"
-                                 Description="端点上的 model 字段，不是显示名。" />
+                                 Description="端点上的 model 字段。" />
                       <arc:Input Grid.Column="1"
                                  Label="上下文窗口"
                                  Placeholder="留空自动"
@@ -208,6 +191,41 @@
                                  Description="{Binding SelectedProfile.ContextWindowHint}"
                                  ErrorMessage="{Binding SelectedProfile.ContextWindowError}" />
                     </Grid>
+
+                    <StackPanel Spacing="7">
+                      <TextBlock Text="{Binding SelectedProfile.ProtocolLabel}"
+                                 FontSize="11"
+                                 FontWeight="Medium"
+                                 Foreground="{StaticResource TextMutedBrush}" />
+                      <WrapPanel Orientation="Horizontal">
+                        <Button Classes="chip"
+                                Classes.active="{Binding SelectedProfile.IsChatProtocolSelected}"
+                                Command="{Binding SelectedProfile.SetProtocolCommand}"
+                                CommandParameter="chat"
+                                Content="Chat"
+                                Padding="12,0"
+                                Margin="0,0,6,6" />
+                        <Button Classes="chip"
+                                Classes.active="{Binding SelectedProfile.IsResponsesProtocolSelected}"
+                                Command="{Binding SelectedProfile.SetProtocolCommand}"
+                                CommandParameter="responses"
+                                Content="Responses"
+                                Padding="12,0"
+                                Margin="0,0,6,6" />
+                        <Button Classes="chip"
+                                Classes.active="{Binding SelectedProfile.IsMessagesProtocolSelected}"
+                                Command="{Binding SelectedProfile.SetProtocolCommand}"
+                                CommandParameter="messages"
+                                Content="Messages"
+                                Padding="12,0"
+                                Margin="0,0,6,6" />
+                      </WrapPanel>
+                      <TextBlock Text="{Binding SelectedProfile.ProtocolHint}"
+                                 Classes="caption"
+                                 FontSize="11"
+                                 TextWrapping="Wrap"
+                                 LineHeight="17" />
+                    </StackPanel>
                   </StackPanel>
 
                   <Border Height="1" Background="{StaticResource BorderBrush}" />
@@ -224,7 +242,7 @@
                             Content="删除这一套" />
                     <TextBlock Text="改完点右下角保存"
                                Classes="caption"
-                               FontSize="10.5"
+                               FontSize="11"
                                VerticalAlignment="Center" />
                   </StackPanel>
                 </StackPanel>
@@ -256,6 +274,14 @@
 
           <!-- ============ 系统设置 ============ -->
           <StackPanel Spacing="14" IsVisible="{Binding IsSystemSection}">
+            <StackPanel Spacing="4">
+              <TextBlock Text="系统" FontSize="15" FontWeight="SemiBold" />
+              <TextBlock Text="权限决定工具能做什么；工作区、缩放和启动页都是本机偏好。"
+                         Classes="caption"
+                         TextWrapping="Wrap"
+                         LineHeight="18" />
+            </StackPanel>
+
             <Border Classes="card" Padding="18,16">
               <StackPanel Spacing="10">
                 <TextBlock Text="权限与工作区" FontSize="13" FontWeight="SemiBold" />

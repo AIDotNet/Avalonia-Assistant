@@ -95,7 +95,7 @@ dotnet run --project src/AvaloniaAssistant.Desktop
 
 首次启动进入首页，点右上角「设置」或提示条里的「去设置」：
 
-1. 在「模型」里配一套：名称（可留空，留空就显示模型名）、Base URL、API Key、模型名；
+1. 进「模型设置」配一套：名称（可留空，留空就显示模型名）、Base URL、API Key、模型名；
 2. 服务商预设只负责带默认值（DeepSeek / OpenAI / Anthropic / 自定义），协议按端点选
    Chat Completions / Responses / Anthropic Messages；
 3. 需要多个渠道就点左边「+ 添加模型」继续加：每套有各自的地址、Key 和协议，互不影响；

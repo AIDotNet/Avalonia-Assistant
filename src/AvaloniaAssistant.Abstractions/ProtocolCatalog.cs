@@ -16,19 +16,19 @@ public static class ProtocolCatalog
     public static readonly ProtocolOption Chat = new(
         AgentProtocol.OpenAiCompatible,
         "Chat Completions",
-        "OpenAI /chat/completions。兼容面最广：vLLM、Ollama、One-API 和多数公司网关都走这个。",
+        "OpenAI /chat/completions，兼容面最广：vLLM、Ollama、One-API 和多数公司网关。",
         "openai-completions");
 
     public static readonly ProtocolOption Responses = new(
         AgentProtocol.OpenAiResponses,
         "Responses",
-        "OpenAI /responses。官方新接口，支持 reasoning；只有官方端点或真正代理了 Responses 的网关可用。",
+        "OpenAI /responses，支持 reasoning；只有官方端点或代理了 Responses 的网关可用。",
         "openai-responses");
 
     public static readonly ProtocolOption Messages = new(
         AgentProtocol.AnthropicMessages,
         "Anthropic Messages",
-        "Claude /messages。消息结构、工具 schema、流式事件都和 OpenAI 不同，两边不能混用。",
+        "Claude /messages，消息结构、工具 schema、流式事件都和 OpenAI 不同。",
         "anthropic-messages");
 
     public static readonly IReadOnlyList<ProtocolOption> All = [Chat, Responses, Messages];
