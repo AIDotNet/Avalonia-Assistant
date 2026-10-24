@@ -50,6 +50,6 @@
     这套界面整体是暖灰纸面（#F4F4F2 / #FFFFFF / #1D1D1B），所以不用荧光笔那种亮黄：
     弱一档的沙色打底，当前命中压深一档，扫一眼分得出「这一处」和「其它几处」。
   -->
-  <Color x:Key="Md.SearchHighlightBackground">#F4E3C6</Color>
-  <Color x:Key="Md.SearchCurrentBackground">#EDC58A</Color>
+  <Color x:Key="Md.SearchHighlightBackground">#F2E8D8</Color>
+  <Color x:Key="Md.SearchCurrentBackground">#E6D2B2</Color>
 </ResourceDictionary>
