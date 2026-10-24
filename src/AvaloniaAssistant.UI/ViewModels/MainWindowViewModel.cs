@@ -9,7 +9,9 @@ namespace AvaloniaAssistant.UI.ViewModels;
 
 public sealed partial class MainWindowViewModel : ObservableObject
 {
-    private const int MaxWorkspaces = 6;
+    /// <summary>工作区记录上限。到顶时浮层要把「新建 / 打开」置灰并说明原因，
+    /// 以前是直接 Take(6) 静默丢掉第 7 个。</summary>
+    public const int MaxWorkspaceCount = 6;
 
     private readonly ISessionStore _sessions;
     private readonly Dictionary<string, ChatSession> _sessionCache = new(StringComparer.Ordinal);
@@ -96,10 +98,24 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     public bool HasRunningChats => RunningChatCount > 0;
 
-    /// <summary>标题栏直接说"还在跑几个"，用户切到别的窗口也能从任务栏看出来。</summary>
-    public string WindowTitle => RunningChatCount == 0
-        ? "Avalonia Assistant"
-        : $"Avalonia Assistant — 正在执行（{RunningChatCount}）";
+    /// <summary>当前这条任务有工具在等用户点头。整轮已经被阻塞，标题上也要能看见。</summary>
+    public bool HasPendingApproval => CurrentPage is ChatViewModel chat && chat.HasPendingApproval;
+
+    /// <summary>标题栏直接说"还在跑几个 / 有操作等你确认"，用户切到别的窗口也能从任务栏看出来。</summary>
+    public string WindowTitle
+    {
+        get
+        {
+            if (RunningChatCount > 0)
+            {
+                return $"Avalonia Assistant — 正在执行（{RunningChatCount}）";
+            }
+
+            return HasPendingApproval
+                ? "Avalonia Assistant — 有操作待确认"
+                : "Avalonia Assistant";
+        }
+    }
 
     /// <summary>「任务」是全部任务的总入口：归了空间也还是任务，不从这里消失。</summary>
     public string SessionCountText => IsSearching
@@ -258,12 +274,21 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     private void OnChatPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (e.PropertyName != nameof(ChatViewModel.IsBusy) || sender is not ChatViewModel chat)
+        if (sender is not ChatViewModel chat)
         {
             return;
         }
 
-        SetRunningFlag(chat.Session.Id, chat.IsBusy);
+        if (e.PropertyName == nameof(ChatViewModel.IsBusy))
+        {
+            SetRunningFlag(chat.Session.Id, chat.IsBusy);
+        }
+        else if (e.PropertyName == nameof(ChatViewModel.HasPendingApproval))
+        {
+            // 审批卡出现/消失时标题也要跟着变，不能等下一轮跑完才刷
+            OnPropertyChanged(nameof(HasPendingApproval));
+            OnPropertyChanged(nameof(WindowTitle));
+        }
     }
 
     private void SetRunningFlag(string sessionId, bool running)
@@ -1083,7 +1108,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             paths.Add(settings.WorkspacePath);
         }
 
-        return paths.Take(MaxWorkspaces).ToList();
+        return paths.Take(MaxWorkspaceCount).ToList();
     }
 
     internal static bool SamePath(string? left, string? right)

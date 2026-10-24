@@ -419,6 +419,24 @@
     <Setter Property="Background" Value="{StaticResource SurfaceMutedBrush}" />
   </Style>
 
+  <!-- 卡片右上角的「直接开始」：平时只是一枚灰色箭头，hover 才亮起来。
+       它和卡身是两个动作，所以必须是独立的按钮，不能只是一个图标。 -->
+  <Style Selector="Button.card-run">
+    <Setter Property="Width" Value="26" />
+    <Setter Property="Height" Value="26" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.card-run:pointerover">
+    <Setter Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+  </Style>
+
   <!-- 工作区的「+」「⋯」平时藏起来，鼠标进这一行才露出来，免得侧栏一直挂着一排图标。
        顺序有讲究：Avalonia 按声明顺序应用样式，后声明的会盖掉前面那条，
        所以默认值必须写在 hover 规则前面——写反了图标就永远出不来。 -->

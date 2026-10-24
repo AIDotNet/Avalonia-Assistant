@@ -291,6 +291,28 @@
 
                   <!-- 展开的细节不再套一层卡片，只缩进一档，跟正文同一条竖线 -->
                   <StackPanel IsVisible="{Binding IsExpanded}" Margin="20,3,0,6" Spacing="4">
+                    <!-- 目标物可直达：路径去资源管理器、网址去浏览器、命令只给复制 -->
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                      <Button Classes="ghost-action"
+                              Command="{Binding OpenTargetCommand}"
+                              IsVisible="{Binding CanOpenTarget}"
+                              ToolTip.Tip="{Binding Target}">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                          <arc:ArcGlyph Data="{x:Static arc:ArcIcons.ArrowUpRight}" Size="10" />
+                          <TextBlock Text="{Binding OpenTargetHint}" FontSize="10.5" />
+                        </StackPanel>
+                      </Button>
+                      <Button Classes="ghost-action"
+                              Command="{Binding CopyTargetCommand}"
+                              IsVisible="{Binding ShowCopyTarget}"
+                              ToolTip.Tip="复制这次操作的对象">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                          <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Copy}" Size="10" />
+                          <TextBlock Text="复制目标" FontSize="10.5" />
+                        </StackPanel>
+                      </Button>
+                    </StackPanel>
+
                     <TextBlock Text="参数" Classes="section-title" FontSize="10" />
                     <ScrollViewer MaxHeight="140" VerticalScrollBarVisibility="Auto">
                       <SelectableTextBlock Text="{Binding Arguments}"
@@ -299,7 +321,19 @@
                                            TextWrapping="Wrap"
                                            Foreground="{StaticResource TextSecondaryBrush}" />
                     </ScrollViewer>
-                    <TextBlock Text="结果" Classes="section-title" FontSize="10" IsVisible="{Binding HasResult}" Margin="0,4,0,0" />
+
+                    <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding HasResult}" Margin="0,4,0,0">
+                      <TextBlock Text="结果" Classes="section-title" FontSize="10" VerticalAlignment="Center" />
+                      <Button Grid.Column="1"
+                              Classes="ghost-action"
+                              Command="{Binding CopyResultCommand}"
+                              ToolTip.Tip="复制这次工具的结果">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                          <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Copy}" Size="10" />
+                          <TextBlock Text="复制结果" FontSize="10.5" />
+                        </StackPanel>
+                      </Button>
+                    </Grid>
                     <ScrollViewer MaxHeight="200" IsVisible="{Binding HasResult}" VerticalScrollBarVisibility="Auto">
                       <SelectableTextBlock Text="{Binding Result}"
                                            FontFamily="{StaticResource MonoFontFamily}"
@@ -602,7 +636,7 @@
             BorderBrush="{StaticResource BorderBrush}"
             BorderThickness="0,0,0,1"
             Padding="18,12,16,12">
-      <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+      <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto">
         <Button Classes="icon" Command="{Binding BackCommand}" ToolTip.Tip="返回首页" Margin="0,0,6,0">
           <arc:ArcGlyph Data="{x:Static arc:ArcIcons.ChevronLeft}" Size="16" />
         </Button>
@@ -611,7 +645,7 @@
           <TextBlock Text="{Binding HeaderSubtitle}" Classes="caption" FontSize="10.5" />
         </StackPanel>
         <!-- 停止已经在输入框里（运行中发送键会变成停止键），重试挂在每条回复下面，
-             顶栏只留查找和状态，避免同一个动作出现两处入口。 -->
+             顶栏只留查找、导出和状态，避免同一个动作出现两处入口。 -->
         <Button Grid.Column="2"
                 Classes="icon"
                 Margin="0,0,6,0"
@@ -619,7 +653,14 @@
                 ToolTip.Tip="在对话里查找（Ctrl+F）">
           <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Search}" Size="14" />
         </Button>
-        <Border Grid.Column="3"
+        <Button Grid.Column="3"
+                Classes="icon"
+                Margin="0,0,6,0"
+                Command="{Binding ExportCommand}"
+                ToolTip.Tip="导出为 Markdown">
+          <arc:ArcGlyph Data="{x:Static arc:ArcIcons.FileText}" Size="14" />
+        </Button>
+        <Border Grid.Column="4"
                 Background="{StaticResource SurfaceMutedBrush}"
                 CornerRadius="11"
                 Padding="10,4"
@@ -785,7 +826,74 @@
     </Panel>
 
     <Border Grid.Row="3" Padding="26,8,26,14" Background="{StaticResource SurfaceBrush}">
-      <views:ComposerView DataContext="{Binding Composer}" MaxWidth="840" />
+      <StackPanel MaxWidth="840" HorizontalAlignment="Center">
+        <!-- 上下文水位：低于 40% 不出现；超过 70% 提示会开始压缩早期内容 -->
+        <StackPanel IsVisible="{Binding ShowContextMeter}" Margin="2,0,2,6" Spacing="3">
+          <Grid ColumnDefinitions="*,Auto">
+            <!-- 自绘水位：轨道 720 + 填充按比例，ProgressBar 在当前主题里 3px 高看不见 -->
+            <Border Height="4"
+                    Width="720"
+                    CornerRadius="2"
+                    Background="{StaticResource SurfaceMutedBrush}"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Center"
+                    ClipToBounds="True">
+              <Border Width="{Binding ContextMeterWidth}"
+                      Background="{Binding ContextMeterBrush}"
+                      CornerRadius="2"
+                      HorizontalAlignment="Left" />
+            </Border>
+            <TextBlock Grid.Column="1"
+                       Text="{Binding ContextUsageText}"
+                       FontSize="9.5"
+                       Margin="8,0,0,0"
+                       Foreground="{StaticResource TextMutedBrush}"
+                       VerticalAlignment="Center" />
+          </Grid>
+          <TextBlock IsVisible="{Binding IsContextTight}"
+                     Text="上下文快满了：再聊几轮会压缩早期内容，模型可能记不住前面的细节。"
+                     FontSize="10"
+                     Foreground="{StaticResource TextMutedBrush}"
+                     TextWrapping="Wrap" />
+        </StackPanel>
+
+        <!-- 等待确认常驻条：不管滚到哪儿、焦点在哪，这里都能看见还有操作等着 -->
+        <Border IsVisible="{Binding HasPendingApproval}"
+                Background="{StaticResource WarningSubtleBrush}"
+                BorderBrush="#EBCFA4"
+                BorderThickness="1"
+                CornerRadius="10"
+                Padding="12,7"
+                Margin="0,0,0,8">
+          <Button Background="Transparent"
+                  BorderThickness="0"
+                  Padding="0"
+                  HorizontalAlignment="Stretch"
+                  HorizontalContentAlignment="Stretch"
+                  Command="{Binding JumpToApprovalCommand}"
+                  ToolTip.Tip="回到那张确认卡片">
+            <Grid ColumnDefinitions="Auto,*,Auto" VerticalAlignment="Center">
+              <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Shield}"
+                            Size="13"
+                            Foreground="{StaticResource WarningBrush}"
+                            VerticalAlignment="Center" />
+              <TextBlock Grid.Column="1"
+                         Text="{Binding PendingApprovalText}"
+                         FontSize="11.5"
+                         Margin="8,0,8,0"
+                         TextTrimming="CharacterEllipsis"
+                         VerticalAlignment="Center" />
+              <TextBlock Grid.Column="2"
+                         Text="查看"
+                         FontSize="11"
+                         Foreground="{StaticResource TextSecondaryBrush}"
+                         VerticalAlignment="Center" />
+            </Grid>
+          </Button>
+        </Border>
+
+        <views:ComposerView DataContext="{Binding Composer}" MaxWidth="840" />
+      </StackPanel>
     </Border>
 
     <!-- 点开大图：平时 IsVisible=False，不占布局也不吃事件 -->

@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Text;
+using Avalonia.Media;
 using AvaloniaAssistant.Abstractions;
 using AvaloniaAssistant.UI.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -208,6 +209,91 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
 
     /// <summary>用户自己滚回底部了，浮标就没必要再挂着。</summary>
     public void ClearFloatingHint() => FloatingHint = null;
+
+    /// <summary>
+    /// 有工具调用在等确认。整轮 Agent 已经阻塞在这儿，
+    /// 光在消息流里插一张卡不够——用户滚上去或切走就看不见了。
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasPendingApproval))]
+    private string? pendingApprovalText;
+
+    public bool HasPendingApproval => !string.IsNullOrWhiteSpace(PendingApprovalText);
+
+    /// <summary>
+    /// 上下文用量估算。数值来自上一轮 RunCompleted 的输入 + 输出 token：
+    /// 下一轮要把这些重新发一遍，所以它约等于"当前上下文有多满"。
+    /// 模型真实窗口不在本地，128k 是保守值（和 CodingSessionFactory 的估算保持一致）。
+    /// </summary>
+    private const long EstimatedContextWindow = 128_000;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ContextUsageRatio))]
+    [NotifyPropertyChangedFor(nameof(ContextMeterWidth))]
+    [NotifyPropertyChangedFor(nameof(ContextUsageText))]
+    [NotifyPropertyChangedFor(nameof(ShowContextMeter))]
+    [NotifyPropertyChangedFor(nameof(IsContextTight))]
+    [NotifyPropertyChangedFor(nameof(ContextMeterBrush))]
+    private long contextTokens;
+
+    public double ContextUsageRatio => Math.Clamp(ContextTokens / (double)EstimatedContextWindow, 0, 1);
+
+    /// <summary>
+    /// 水位条的填充宽度。轨道固定 720（输入框 840 减去右侧百分比文字），
+    /// 不用 ProgressBar：Arc 主题下 3px 高的进度条渲染不出来，自绘两段 Border 更可控。
+    /// </summary>
+    public double ContextMeterWidth => Math.Max(4, 720 * ContextUsageRatio);
+
+    /// <summary>低于 40% 不显示：常态下多一条横线只会变成噪声。</summary>
+    public bool ShowContextMeter => ContextTokens > EstimatedContextWindow * 0.4;
+
+    /// <summary>超过 70% 提示会开始压缩早期内容。</summary>
+    public bool IsContextTight => ContextTokens > EstimatedContextWindow * 0.7;
+
+    public string ContextUsageText
+        => $"{ContextTokens / 1000d:0.#}k / 128k · {ContextUsageRatio:P0}";
+
+    public IBrush ContextMeterBrush => IsContextTight
+        ? new SolidColorBrush(Color.Parse("#B3261E"))
+        : new SolidColorBrush(Color.Parse("#8A8A82"));
+
+    [RelayCommand]
+    private void JumpToApproval()
+    {
+        FloatingHint = null;
+        RequestScroll(true);
+    }
+
+    /// <summary>把这条会话导成 Markdown：粘进文档、发给同事都不用再排版。</summary>
+    [RelayCommand]
+    private async Task ExportAsync()
+    {
+        if (!HasMessages)
+        {
+            StatusText = "还没有内容可以导出";
+            return;
+        }
+
+        var path = await _host.Picker.PickSaveFileAsync(
+            "导出会话",
+            SessionExport.SuggestFileName(Session.Title) + ".md",
+            "md");
+
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return;
+        }
+
+        try
+        {
+            await File.WriteAllTextAsync(path, SessionExport.ToMarkdown(Session), Encoding.UTF8);
+            StatusText = "已导出";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            StatusText = "导出失败：" + ex.Message;
+        }
+    }
 
     // ---- 会话内查找 ----
 
@@ -536,6 +622,12 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
+    /// 需要用户点头的动作（目前只有「重跑会删掉后面几轮」）走这里。
+    /// VM 不认识窗口，由 ChatView 把弹窗接上；没接的时候按「不确认」处理，宁可不删。
+    /// </summary>
+    public Func<string, string, string, bool, Task<bool>>? ConfirmAsync { get; set; }
+
+    /// <summary>
     /// 从某条回复重来：截掉它和它后面的一切，用同一轮的用户提问重跑。
     /// 重试挂在回复下面，点哪条就从哪轮开始，而不是永远重跑最后一轮。
     /// </summary>
@@ -565,6 +657,28 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
         if (userIndex < 0)
         {
             return;
+        }
+
+        // 只有「这条之后还有提问」时才会真的丢东西，这时候才拦一下。
+        // 最后一条回复的重试是无损的，弹窗只会变成纯摩擦。
+        var laterTurns = Messages.Skip(userIndex + 1).Count(item => item is UserMessageViewModel);
+        if (laterTurns > 0)
+        {
+            if (ConfirmAsync is null)
+            {
+                return;
+            }
+
+            var confirmed = await ConfirmAsync(
+                "从这里重跑？",
+                $"会先删掉这条提问之后的 {laterTurns} 轮对话，再重新回答。删掉的内容不能恢复。",
+                "重跑并删除",
+                true);
+
+            if (!confirmed)
+            {
+                return;
+            }
         }
 
         var userMessage = (UserMessageViewModel)Messages[userIndex];
@@ -795,6 +909,7 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
                         assistant.Model = completed.Model ?? assistant.Model;
                         assistant.InputTokens = completed.InputTokens;
                         assistant.OutputTokens = completed.OutputTokens;
+                        ContextTokens = completed.InputTokens + completed.OutputTokens;
                         assistantEntry.Model = assistant.Model;
                         assistantEntry.InputTokens = completed.InputTokens;
                         assistantEntry.OutputTokens = completed.OutputTokens;
@@ -849,6 +964,20 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
         {
             if (assistant is not null)
             {
+                // 按停时 ToolFinished 不会再来。不在这里收尾的话，那一行会永远写着「运行中」，
+                // 而用户刚按完停止，正盯着屏幕看它到底停没停。
+                foreach (var tool in assistant.Tools.Where(item => item.IsRunning))
+                {
+                    tool.Abort();
+
+                    var record = assistantEntry?.ToolCalls.FirstOrDefault(item => item.Id == tool.Id);
+                    if (record is not null)
+                    {
+                        record.Aborted = true;
+                        record.DurationMs = tool.DurationMs;
+                    }
+                }
+
                 assistant.Complete();
                 if (!assistant.HasText && !assistant.HasTools && assistant.Error is null)
                 {
@@ -970,6 +1099,13 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
                     {
                         var tool = new ToolCallViewModel(record.Id, record.Name, record.Label, record.Arguments);
                         tool.Finish(record.Result, record.IsError, record.DurationMs);
+
+                        // 重新打开会话时也要记得这一轮是被停掉的，不能显示成「完成」
+                        if (record.Aborted)
+                        {
+                            tool.MarkAborted(record.DurationMs);
+                        }
+
                         assistant.Tools.Add(tool);
                     }
 
@@ -982,6 +1118,11 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
                     break;
             }
         }
+
+        // 打开旧会话时把水位接上，别让用户以为这条会话是空的
+        ContextTokens = Session.Entries.LastOrDefault(entry => entry.Kind == ChatEntryKind.Assistant) is { } latest
+            ? latest.InputTokens + latest.OutputTokens
+            : 0;
     }
 
     /// <summary>
@@ -1238,6 +1379,7 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
                     owner.Composer.SessionAllowedCount = owner._sessionAllowedTools.Count;
                 };
                 owner.Messages.Add(card);
+                owner.PendingApprovalText = $"等待你确认：{request.Label}";
 
                 // 用户正在上面读旧内容时不要抢滚动条，只在底部飘一句提示；
                 // 停在底部就照常跟到卡片。
@@ -1254,6 +1396,7 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
             if (card is not null)
             {
                 await Ui.OnUiAsync(card.Cancel);
+                await Ui.OnUiAsync(() => owner.PendingApprovalText = null);
             }
 
             return allowed;

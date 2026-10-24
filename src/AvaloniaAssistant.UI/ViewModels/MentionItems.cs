@@ -122,7 +122,7 @@ public sealed partial class MentionItemViewModel : ObservableObject
             // 读不到大小不影响引用本身，发送时还会再检查一次存在性
         }
 
-        return new MentionItemViewModel
+        var item = new MentionItemViewModel
         {
             Id = "file:" + fullPath,
             Name = name,
@@ -133,6 +133,9 @@ public sealed partial class MentionItemViewModel : ObservableObject
             TileBackground = style.Background,
             IconBrush = style.Foreground,
         };
+
+        item.RefreshExists();
+        return item;
     }
 
     public string Id { get; private init; } = string.Empty;
@@ -152,6 +155,29 @@ public sealed partial class MentionItemViewModel : ObservableObject
 
     /// <summary>副标题：完整相对路径，重名文件靠它区分。</summary>
     public string Detail => Path;
+
+    /// <summary>
+    /// 引用的是路径，不是内容快照。文件随时可能被挪走或删掉，
+    /// 以前要等发出去、模型回一句「没有这个文件」才知道。
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DetailOrMissing))]
+    private bool isMissing;
+
+    public string DetailOrMissing => IsMissing ? "文件已不存在，可能被移动或删除" : Detail;
+
+    /// <summary>发送前对一次盘。没有绝对路径的项（理论上不存在）按「在」处理。</summary>
+    public bool RefreshExists()
+    {
+        if (string.IsNullOrWhiteSpace(FullPath))
+        {
+            IsMissing = false;
+            return true;
+        }
+
+        IsMissing = !File.Exists(FullPath);
+        return !IsMissing;
+    }
 
     public IBrush TileBackground { get; private init; } = FileTypeStyle.Tint("#F2F2EF");
 

@@ -9,6 +9,70 @@ using CommunityToolkit.Mvvm.Input;
 namespace AvaloniaAssistant.UI.ViewModels;
 
 /// <summary>
+/// MCP 卡片 + 这一次真实握手的结果。配置本身还是 <see cref="McpServerInfo"/>，
+/// 这里只多带三样东西：检测中 / 连上了没有 / 失败原因。
+/// </summary>
+public sealed partial class McpServerCardViewModel : ObservableObject
+{
+    public McpServerCardViewModel(McpServerInfo info)
+    {
+        Name = info.Name;
+        Target = info.Target;
+        IsProjectScope = info.IsProjectScope;
+    }
+
+    public string Name { get; }
+
+    public string Target { get; }
+
+    public bool IsProjectScope { get; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(StatusText))]
+    [NotifyPropertyChangedFor(nameof(StatusBrush))]
+    [NotifyPropertyChangedFor(nameof(ShowRetry))]
+    private bool isChecking;
+
+    /// <summary>null = 还没探测过。不要默认成「连接失败」，那是在冤枉它。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(StatusText))]
+    [NotifyPropertyChangedFor(nameof(StatusBrush))]
+    private bool? connected;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(StatusText))]
+    private string? detail;
+
+    public string StatusText => IsChecking
+        ? "检测中…"
+        : Detail is null
+            ? "未检测"
+            : Connected == true
+                ? Detail
+                : "连接失败：" + Shorten(Detail);
+
+    /// <summary>两列卡片、两行文字：截到四十字左右，剩下的留给悬停。</summary>
+    private static string Shorten(string text)
+        => text.Length <= 40 ? text : text[..40] + "…";
+
+    public IBrush StatusBrush => IsChecking || Connected is null
+        ? Brush.Parse("#8A8A82")
+        : Connected == true
+            ? Brush.Parse("#2E7D32")
+            : Brush.Parse("#B3261E");
+
+    public bool ShowRetry => !IsChecking;
+
+    public void Apply(McpProbeResult result)
+    {
+        Connected = result.Ok;
+        Detail = result.Ok
+            ? result.ToolCount == 0 ? "已连接，但没有暴露工具（检查 exposure）" : $"已连接 · {result.ToolCount} 个工具"
+            : result.Detail;
+    }
+}
+
+/// <summary>
 /// MCP 服务端管理页。与技能页平级：技能管 SKILL.md，这里管 mcp.json，
 /// 写入后清掉会话缓存，下一个会话就能连上新服务端。
 /// 添加有两路：整段粘贴标准 JSON（主路径，多服务端一次进去），或者填三个框的表单。
@@ -39,7 +103,7 @@ public sealed partial class McpViewModel : ObservableObject
         Refresh();
     }
 
-    public ObservableCollection<McpServerInfo> Servers { get; } = [];
+    public ObservableCollection<McpServerCardViewModel> Servers { get; } = [];
 
     public bool HasServers => Servers.Count > 0;
 
@@ -100,12 +164,53 @@ public sealed partial class McpViewModel : ObservableObject
         Servers.Clear();
         foreach (var server in capabilities.McpServers)
         {
-            Servers.Add(server);
+            Servers.Add(new McpServerCardViewModel(server));
         }
 
         OnPropertyChanged(nameof(HasServers));
         OnPropertyChanged(nameof(CountText));
         OnPropertyChanged(nameof(ConfigPathText));
+
+        // 配置刚变过：上一轮的「已连接」不能再挂着，重新真连一次
+        _ = ProbeAllAsync();
+    }
+
+    // ---- 连接状态 ----
+
+    /// <summary>
+    /// 串行探测：一次只起一个进程，避免三个 npx 同时下载把机器拖住。
+    /// 页面打开和导入之后各跑一遍，状态才会反映「刚刚写的配置」。
+    /// </summary>
+    private async Task ProbeAllAsync()
+    {
+        foreach (var server in Servers.ToList())
+        {
+            await ProbeAsync(server);
+        }
+    }
+
+    [RelayCommand]
+    private async Task ProbeAsync(McpServerCardViewModel? server)
+    {
+        if (server is null || server.IsChecking)
+        {
+            return;
+        }
+
+        server.IsChecking = true;
+        try
+        {
+            var result = await _host.Runtime.ProbeMcpServerAsync(server.Name);
+            server.Apply(result);
+        }
+        catch (Exception ex)
+        {
+            server.Apply(McpProbeResult.Failed(ex.Message));
+        }
+        finally
+        {
+            server.IsChecking = false;
+        }
     }
 
     // ---- 导入 JSON ----
@@ -260,7 +365,7 @@ public sealed partial class McpViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void Remove(McpServerInfo? server)
+    private void Remove(McpServerCardViewModel? server)
     {
         if (server is null || string.IsNullOrWhiteSpace(_configPathRaw))
         {

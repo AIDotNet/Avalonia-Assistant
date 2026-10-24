@@ -121,7 +121,16 @@
 
         <Border Height="1" Margin="3,3" Background="{StaticResource BorderBrush}" />
 
-        <Button Classes="ws-action" Command="{Binding StartCreateCommand}">
+        <TextBlock Text="{Binding AddLimitHint}"
+                   IsVisible="{Binding ShowAddLimit}"
+                   Classes="caption"
+                   FontSize="10.5"
+                   TextWrapping="Wrap"
+                   Margin="10,4,10,4" />
+
+        <Button Classes="ws-action"
+                Command="{Binding StartCreateCommand}"
+                IsEnabled="{Binding CanAddWorkspace}">
           <StackPanel Orientation="Horizontal" Spacing="9">
             <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Plus}"
                           Size="14"
@@ -130,7 +139,9 @@
           </StackPanel>
         </Button>
 
-        <Button Classes="ws-action" Command="{Binding OpenFolderCommand}">
+        <Button Classes="ws-action"
+                Command="{Binding OpenFolderCommand}"
+                IsEnabled="{Binding CanAddWorkspace}">
           <StackPanel Orientation="Horizontal" Spacing="9">
             <arc:ArcGlyph Data="{x:Static arc:ArcIcons.FolderOpen}"
                           Size="14"

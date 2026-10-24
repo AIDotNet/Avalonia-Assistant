@@ -61,6 +61,12 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
 
     public event EventHandler? FocusRequested;
 
+    /// <summary>
+    /// 发送前的二次确认（目前只用于「有引用找不到」）。由 ComposerView 接上弹窗；
+    /// 没接的时候按「仍然发送」处理，不拦用户。
+    /// </summary>
+    public Func<string, string, string, string, Task<bool>>? ConfirmAsync { get; set; }
+
     public event EventHandler? StopRequested;
 
     /// <summary>权限档位变化。对话页据此插一条提示，让用户知道确认行为变了。</summary>
@@ -329,6 +335,39 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
         // 但用户按 Enter 那一刻的意图不能跟着变。
         var queue = IsBusy;
 
+        // 引用是路径不是快照：文件可能在引用之后被挪走。发之前对一次盘，
+        // 别等模型回一句「没有这个文件」——那时候用户已经以为资料给了。
+        foreach (var reference in References)
+        {
+            reference.RefreshExists();
+        }
+
+        var missing = References.Where(item => item.IsMissing).ToList();
+        if (missing.Count > 0 && ConfirmAsync is not null)
+        {
+            var names = string.Join("、", missing.Take(3).Select(item => item.Name));
+            if (missing.Count > 3)
+            {
+                names += $" 等 {missing.Count} 个";
+            }
+
+            var remove = await ConfirmAsync(
+                $"{missing.Count} 个引用找不到",
+                $"{names} 已经被移动或删除。移除这些引用之后再发？也可以仍然发送，模型会收到「文件不存在」的说明。",
+                "移除后发送",
+                "仍然发送");
+
+            if (remove)
+            {
+                foreach (var item in missing)
+                {
+                    References.Remove(item);
+                }
+
+                OnPropertyChanged(nameof(HasReferences));
+            }
+        }
+
         // 引用的是工作区文件时，正文要现场读：文件可能刚被改过，索引里的旧内容不作数。
         IsSending = true;
         try
@@ -565,6 +604,8 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
             return false;
         }
 
+        // @ 的候选来自扫盘索引，文件可能在这之间被删；统一在这里对一次
+        item.RefreshExists();
         References.Add(item);
         OnPropertyChanged(nameof(HasReferences));
         SendCommand.NotifyCanExecuteChanged();
@@ -777,19 +818,77 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
                 return;
             }
 
-            IsRecording = false;
-            var text = await _voice.StopAndTranscribeAsync();
-            if (!string.IsNullOrWhiteSpace(text))
-            {
-                Text = string.IsNullOrWhiteSpace(Text) ? text : $"{Text.TrimEnd()} {text}";
-            }
+            await StopRecordingAndTranscribeAsync();
         }
         catch (Exception ex)
         {
             IsRecording = false;
-            VoiceError = ex.Message;
+            VoiceError = DescribeVoiceError(ex);
         }
     }
+
+    /// <summary>
+    /// 录音上限。超过两分钟转写会更慢、更容易失败，收益也不大；
+    /// 自动停下并把已经录到的转出来，比让用户一直录到爆更合理。
+    /// </summary>
+    private static readonly TimeSpan MaxRecordingDuration = TimeSpan.FromMinutes(2);
+
+    private async Task StopRecordingAndTranscribeAsync()
+    {
+        if (!IsRecording)
+        {
+            return;
+        }
+
+        IsRecording = false;
+        var text = await _voice.StopAndTranscribeAsync();
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            VoiceError = "这段录音里没有识别到说话声：靠近麦克风再说一次，或直接用键盘输入。";
+            return;
+        }
+
+        Text = string.IsNullOrWhiteSpace(Text) ? text : $"{Text.TrimEnd()} {text}";
+    }
+
+    /// <summary>
+    /// 把转写的原始异常翻成一句能照做的话。以前这里直接显示 ex.Message，
+    /// 在不支持 /audio/transcriptions 的端点上，用户看到的是一串英文堆栈。
+    /// </summary>
+    private static string DescribeVoiceError(Exception ex)
+    {
+        var raw = ex.Message ?? string.Empty;
+
+        if (Contains(raw, "404", "not found", "unsupported", "audio/transcriptions", "transcription"))
+        {
+            return "这个端点不支持语音转写（/audio/transcriptions）。换一个支持的服务商，或直接用键盘输入。";
+        }
+
+        if (Contains(raw, "401", "unauthorized", "invalid api key", "api key"))
+        {
+            return "转写用的 Key 没通过：去设置里确认 Key 和端点是不是同一家。";
+        }
+
+        if (Contains(raw, "麦克风", "microphone", "MMDevice", "device not found", "access is denied", "0x80070005", "拒绝访问"))
+        {
+            return "没拿到麦克风：可能被别的程序占用，或系统设置里关掉了这个应用的麦克风权限。";
+        }
+
+        if (Contains(raw, "timeout", "timed out", "taskcanceled", "超时"))
+        {
+            return "转写超时了：检查网络或代理，再录一次（这次可以短一点）。";
+        }
+
+        if (Contains(raw, "no speech", "silence", "empty", "没有检测到"))
+        {
+            return "这段录音里没有识别到说话声：靠近麦克风再说一次。";
+        }
+
+        return "语音没转成：" + raw;
+    }
+
+    private static bool Contains(string text, params string[] keys)
+        => keys.Any(key => text.Contains(key, StringComparison.OrdinalIgnoreCase));
 
     [RelayCommand]
     private async Task AttachAsync()
@@ -886,7 +985,26 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
         _recordingStartedAt = DateTimeOffset.Now;
         _recordingTicker?.Stop();
         _recordingTicker = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
-        _recordingTicker.Tick += (_, _) => UpdateActivity();
+        _recordingTicker.Tick += async (_, _) =>
+        {
+            if (DateTimeOffset.Now - _recordingStartedAt >= MaxRecordingDuration)
+            {
+                StopRecordingTicker();
+                try
+                {
+                    await StopRecordingAndTranscribeAsync();
+                }
+                catch (Exception ex)
+                {
+                    IsRecording = false;
+                    VoiceError = DescribeVoiceError(ex);
+                }
+
+                return;
+            }
+
+            UpdateActivity();
+        };
         _recordingTicker.Start();
     }
 
@@ -902,7 +1020,10 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
         if (IsRecording)
         {
             var elapsed = DateTimeOffset.Now - _recordingStartedAt;
-            ActivityText = $"正在录音 {elapsed:mm\\:ss} · 再点麦克风结束，Esc 取消";
+            var left = MaxRecordingDuration - elapsed;
+            ActivityText = left <= TimeSpan.FromSeconds(20)
+                ? $"正在录音 {elapsed:mm\\:ss} · 还剩 {Math.Max(0, (int)left.TotalSeconds)} 秒自动转写"
+                : $"正在录音 {elapsed:mm\\:ss} / 最长 2:00 · 再点麦克风结束，Esc 取消";
         }
         else if (IsSending)
         {

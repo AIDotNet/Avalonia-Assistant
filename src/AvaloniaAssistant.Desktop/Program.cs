@@ -130,6 +130,15 @@ internal static class Program
                 case "--press-escape":
                     AppLaunchOptions.PressEscape = true;
                     break;
+                case "--approval-wait":
+                    AppLaunchOptions.ApprovalWait = true;
+                    break;
+                case "--context-tight":
+                    AppLaunchOptions.ContextTight = true;
+                    break;
+                case "--retry-confirm":
+                    AppLaunchOptions.ShowRetryConfirm = true;
+                    break;
                 case "--scale" when index + 1 < args.Length:
                     if (double.TryParse(
                             args[++index],

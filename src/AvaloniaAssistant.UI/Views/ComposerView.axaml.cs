@@ -64,6 +64,10 @@ public partial class ComposerView : UserControl
         if (oldViewModel is not null)
         {
             oldViewModel.FocusRequested += OnFocusRequested;
+
+            // 引用失效的确认：Composer 不认识窗口，弹窗在这里接
+            oldViewModel.ConfirmAsync = (title, message, confirmLabel, cancelLabel) =>
+                ConfirmDialog.ShowAsync(this, title, message, confirmLabel, cancelLabel);
         }
 
         base.OnDataContextChanged(e);

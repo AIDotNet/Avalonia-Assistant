@@ -43,7 +43,7 @@
 
     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
       <StackPanel Margin="96,16,96,24" Spacing="12">
-        <TextBlock Text="MCP 服务端给模型接外部工具。配置写在 mcp.json，新加的条目在下一个会话启动时连接；工具名是 mcp__&lt;服务端&gt;__&lt;工具&gt;。"
+        <TextBlock Text="MCP 服务端给模型接外部工具。配置写在 mcp.json，新加的条目在下一个会话启动时连接；工具名是 mcp__&lt;服务端&gt;__&lt;工具&gt;。下面每张卡的状态是页面真的起一次进程握手的结果——配置在，不代表连得上。"
                    Classes="caption"
                    TextWrapping="Wrap"
                    LineHeight="19" />
@@ -185,10 +185,11 @@
           </StackPanel>
         </Border>
 
+        <!-- 两张一行：MCP 卡片要放下 target 和连接状态，三列会把失败原因挤成一条省略号 -->
         <ItemsControl ItemsSource="{Binding Servers}" Margin="0,0,-12,0">
           <ItemsControl.ItemsPanel>
             <ItemsPanelTemplate>
-              <UniformGrid Columns="3" />
+              <UniformGrid Columns="2" />
             </ItemsPanelTemplate>
           </ItemsControl.ItemsPanel>
           <ItemsControl.ItemTemplate>
@@ -242,14 +243,43 @@
                                   Foreground="{StaticResource TextMutedBrush}" />
                   </Button>
 
-                  <TextBlock Grid.Row="1"
-                             Grid.ColumnSpan="3"
-                             Margin="0,9,0,0"
-                             Text="{Binding Target}"
-                             FontFamily="{StaticResource MonoFontFamily}"
-                             FontSize="10.5"
-                             Foreground="{StaticResource TextMutedBrush}"
-                             TextTrimming="CharacterEllipsis" />
+                  <StackPanel Grid.Row="1"
+                              Grid.ColumnSpan="3"
+                              Margin="0,9,0,0"
+                              Spacing="4">
+                    <TextBlock Text="{Binding Target}"
+                               FontFamily="{StaticResource MonoFontFamily}"
+                               FontSize="10.5"
+                               Foreground="{StaticResource TextMutedBrush}"
+                               TextTrimming="CharacterEllipsis" />
+
+                    <!-- 配置在 ≠ 连上了。这一行是真起进程握手之后的结果 -->
+                    <Grid ColumnDefinitions="Auto,*,Auto" ToolTip.Tip="{Binding Detail}">
+                      <Border Width="6"
+                              Height="6"
+                              CornerRadius="3"
+                              Background="{Binding StatusBrush}"
+                              VerticalAlignment="Center"
+                              Margin="0,0,6,0" />
+                      <TextBlock Grid.Column="1"
+                                 Text="{Binding StatusText}"
+                                 FontSize="10.5"
+                                 Foreground="{StaticResource TextMutedBrush}"
+                                 TextWrapping="Wrap"
+                                 MaxLines="2"
+                                 VerticalAlignment="Center" />
+                      <Button Grid.Column="2"
+                              Classes="ghost-action"
+                              Content="重试"
+                              FontSize="10"
+                              Padding="4,0"
+                              Margin="8,0,0,0"
+                              Command="{Binding $parent[ItemsControl].DataContext.ProbeCommand}"
+                              CommandParameter="{Binding}"
+                              IsVisible="{Binding ShowRetry}"
+                              ToolTip.Tip="重新起一次进程做握手" />
+                    </Grid>
+                  </StackPanel>
                 </Grid>
               </Border>
             </DataTemplate>

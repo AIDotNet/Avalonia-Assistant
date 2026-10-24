@@ -114,6 +114,11 @@
       <Setter Property="CornerRadius" Value="7" />
       <Setter Property="Padding" Value="7,3,4,3" />
     </Style>
+    <!-- 文件被挪走或删掉：chip 立刻变红，不用等模型回一句「没有这个文件」 -->
+    <Style Selector="Border.ref-chip.missing">
+      <Setter Property="Background" Value="{StaticResource DangerSubtleBrush}" />
+      <Setter Property="BorderBrush" Value="{StaticResource DangerBrush}" />
+    </Style>
     <Style Selector="Button.ref-remove">
       <Setter Property="Width" Value="16" />
       <Setter Property="Height" Value="16" />
@@ -222,7 +227,9 @@
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
               <DataTemplate>
-                <Border Classes="ref-chip" ToolTip.Tip="{Binding Detail}">
+                <Border Classes="ref-chip"
+                        Classes.missing="{Binding IsMissing}"
+                        ToolTip.Tip="{Binding DetailOrMissing}">
                   <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
                     <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Paperclip}"
                                   Size="11"

@@ -102,6 +102,29 @@ public partial class AssistantApp : Application
                 }
             }
 
+            // 重跑确认：只在「这条之后还有内容」时出现，单独摆出来检查版式
+            if (AppLaunchOptions.ShowRetryConfirm)
+            {
+                var preview = ConfirmDialog.CreatePreview(
+                    "从这里重跑？",
+                    "会先删掉这条提问之后的 17 轮对话，再重新回答。删掉的内容不能恢复。",
+                    "重跑并删除",
+                    "取消",
+                    dangerous: true);
+                preview.Show();
+                await Task.Delay(500);
+
+                if (!string.IsNullOrWhiteSpace(AppLaunchOptions.ScreenshotPath))
+                {
+                    Capture(preview, AppLaunchOptions.ScreenshotPath);
+                    preview.Close();
+                    desktop.Shutdown();
+                    return;
+                }
+
+                preview.Close();
+            }
+
             switch (AppLaunchOptions.Page)
             {
                 case "chat":
@@ -132,6 +155,18 @@ public partial class AssistantApp : Application
                         if (AppLaunchOptions.ApprovalDemo)
                         {
                             demoChat.AddDemoApproval();
+                        }
+
+                        if (AppLaunchOptions.ApprovalWait)
+                        {
+                            // 常驻条只在 gate 真挂起时出现，截图模式没有 gate，这里直接摆出来
+                            demoChat.PendingApprovalText = "等待你确认：执行命令 dotnet build";
+                        }
+
+                        if (AppLaunchOptions.ContextTight)
+                        {
+                            // 84%：越过 70% 的警示线，检查水位条和那行提示的间距
+                            demoChat.ContextTokens = 108_000;
                         }
                     }
 
@@ -311,7 +346,11 @@ public partial class AssistantApp : Application
             }
 
             var waitingForRun = !string.IsNullOrWhiteSpace(AppLaunchOptions.RunPrompt) || AppLaunchOptions.PressEnter;
-            await Task.Delay(waitingForRun ? 4500 : 1600);
+
+            // MCP 页的探测是真实起进程（本机已缓存的 npx 约 6 秒），
+            // 按普通页面等 1.6 秒只会截到「检测中…」。
+            var waitingForMcpProbe = string.Equals(AppLaunchOptions.Page, "mcp", StringComparison.OrdinalIgnoreCase);
+            await Task.Delay(waitingForRun ? 4500 : waitingForMcpProbe ? 9000 : 1600);
 
             // 拖放层要等页面真正进可视树之后再摆，否则 FindControl 还是空的
             if (AppLaunchOptions.ComposerDrop)

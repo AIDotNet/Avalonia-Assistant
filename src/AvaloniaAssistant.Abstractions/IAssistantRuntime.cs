@@ -28,6 +28,14 @@ public interface IAssistantRuntime
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// 真去起一次进程并握手，回答「配置在，它到底连上没有」。
+    /// MCP 页用它显示状态；探测失败不影响后续会话自己的连接。
+    /// </summary>
+    Task<McpProbeResult> ProbeMcpServerAsync(
+        string serverName,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// 丢弃缓存中的会话，下次运行重新装配。装了新技能 / 改了 MCP 配置后调用，
     /// 否则要等应用重启才生效。
     /// </summary>

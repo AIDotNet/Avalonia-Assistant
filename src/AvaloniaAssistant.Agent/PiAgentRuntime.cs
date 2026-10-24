@@ -53,6 +53,33 @@ public sealed class PiAgentRuntime : IAssistantRuntime
         CancellationToken cancellationToken = default)
         => ConnectionProbe.TestAsync(settings, cancellationToken);
 
+    /// <inheritdoc />
+    public Task<McpProbeResult> ProbeMcpServerAsync(
+        string serverName,
+        CancellationToken cancellationToken = default)
+    {
+        var capabilities = CapabilityScanner.Scan(_settings.Current);
+
+        // 同名时项目级优先，和 Pi 加载 .pi 的覆盖关系保持一致
+        var server = capabilities.McpServers.FirstOrDefault(item => item.Name == serverName && item.IsProjectScope)
+                     ?? capabilities.McpServers.FirstOrDefault(item => item.Name == serverName);
+
+        if (server is null)
+        {
+            return Task.FromResult(McpProbeResult.Failed("配置里找不到这个服务端，可能刚被删掉"));
+        }
+
+        var configPath = server.IsProjectScope
+            ? capabilities.McpConfigPath
+            : Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                ".pi",
+                "agent",
+                "mcp.json");
+
+        return McpProber.ProbeAsync(configPath, serverName, cancellationToken);
+    }
+
     public AgentCapabilities Capabilities => CapabilityScanner.Scan(_settings.Current);
 
     public async IAsyncEnumerable<AgentStreamEvent> RunAsync(

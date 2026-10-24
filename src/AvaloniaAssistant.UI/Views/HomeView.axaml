@@ -128,34 +128,43 @@
           </ItemsControl.ItemsPanel>
           <ItemsControl.ItemTemplate>
             <DataTemplate>
-              <Button Classes="card-button"
-                      Margin="0,0,12,12"
-                      Command="{Binding $parent[ItemsControl].DataContext.UseCardCommand}"
-                      CommandParameter="{Binding}">
-                <Border Classes="card" Padding="14" Height="96">
-                  <Grid ColumnDefinitions="Auto,*,Auto">
-                    <Border Width="34" Height="34" CornerRadius="10" Background="{StaticResource SurfaceMutedBrush}" VerticalAlignment="Top">
-                      <arc:ArcGlyph Data="{Binding Icon}"
-                                    Size="17"
-                                    Foreground="{StaticResource TextSecondaryBrush}"
-                                    HorizontalAlignment="Center"
-                                    VerticalAlignment="Center" />
-                    </Border>
-                    <StackPanel Grid.Column="1" Margin="11,1,8,0" Spacing="4">
-                      <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="Medium" />
-                      <TextBlock Text="{Binding Subtitle}"
-                                 Classes="caption"
-                                 TextWrapping="Wrap"
-                                 LineHeight="17" />
-                    </StackPanel>
-                    <arc:ArcGlyph Grid.Column="2"
-                                  Data="{x:Static arc:ArcIcons.ArrowUpRight}"
-                                  Size="14"
-                                  Foreground="{StaticResource TextMutedBrush}"
-                                  VerticalAlignment="Top" />
-                  </Grid>
-                </Border>
-              </Button>
+              <!-- 卡身 = 填入输入框，可以改完再发；右上角箭头才是「直接开始」。
+                   以前整张卡都是「点了就跑」，想改一个词都没机会。 -->
+              <Grid Margin="0,0,12,12">
+                <Button Classes="card-button"
+                        Command="{Binding $parent[ItemsControl].DataContext.FillCardCommand}"
+                        CommandParameter="{Binding}"
+                        ToolTip.Tip="填入输入框，可以改完再发">
+                  <Border Classes="card" Padding="14" Height="96">
+                    <Grid ColumnDefinitions="Auto,*">
+                      <Border Width="34" Height="34" CornerRadius="10" Background="{StaticResource SurfaceMutedBrush}" VerticalAlignment="Top">
+                        <arc:ArcGlyph Data="{Binding Icon}"
+                                      Size="17"
+                                      Foreground="{StaticResource TextSecondaryBrush}"
+                                      HorizontalAlignment="Center"
+                                      VerticalAlignment="Center" />
+                      </Border>
+                      <StackPanel Grid.Column="1" Margin="11,1,8,0" Spacing="4">
+                        <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="Medium" Padding="0,0,26,0" />
+                        <TextBlock Text="{Binding Subtitle}"
+                                   Classes="caption"
+                                   TextWrapping="Wrap"
+                                   LineHeight="17" />
+                      </StackPanel>
+                    </Grid>
+                  </Border>
+                </Button>
+
+                <Button Classes="card-run"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Top"
+                        Margin="0,7,7,0"
+                        Command="{Binding $parent[ItemsControl].DataContext.RunCardCommand}"
+                        CommandParameter="{Binding}"
+                        ToolTip.Tip="直接开始：新建任务并消耗一次请求">
+                  <arc:ArcGlyph Data="{x:Static arc:ArcIcons.ArrowUpRight}" Size="12" />
+                </Button>
+              </Grid>
             </DataTemplate>
           </ItemsControl.ItemTemplate>
         </ItemsControl>

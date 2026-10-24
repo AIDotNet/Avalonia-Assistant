@@ -138,8 +138,11 @@ public sealed partial class ToolCallViewModel : ObservableObject
         _ => ArcIcons.Zap,
     };
 
-    /// <summary>成功时不占地方显示「完成」，只有还在跑或者失败了才需要状态。</summary>
-    public bool ShowStatus => IsRunning || IsError;
+    /// <summary>成功时不占地方显示「完成」，只有还在跑、被停掉或者失败了才需要状态。</summary>
+    public bool ShowStatus => IsRunning || IsError || IsAborted;
+
+    /// <summary>开始时间：被按停时用它算出「跑到第几秒被停的」，比留空诚实。</summary>
+    private readonly long _startedAt = Environment.TickCount64;
 
     [ObservableProperty]
     private string arguments;
@@ -167,6 +170,13 @@ public sealed partial class ToolCallViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(ShowStatus))]
     private bool isRunning = true;
 
+    /// <summary>被用户按停、这一轮没跑完。和 IsError 分开：停止是中性事实，不是故障。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(StatusText))]
+    [NotifyPropertyChangedFor(nameof(StatusBrush))]
+    [NotifyPropertyChangedFor(nameof(ShowStatus))]
+    private bool isAborted;
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ExpandHint))]
     private bool isExpanded;
@@ -174,13 +184,52 @@ public sealed partial class ToolCallViewModel : ObservableObject
     /// <summary>行尾的箭头只是提示，鼠标悬停时还要有一句话说明点开能看什么。</summary>
     public string ExpandHint => IsExpanded ? "收起参数与结果" : "展开查看参数与结果";
 
-    public string StatusText => IsRunning ? "运行中" : IsError ? "失败" : "完成";
+    /// <summary>目标是不是一个网址：网址直接开浏览器，不要拿去资源管理器里找。</summary>
+    public bool IsUrl => Target.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+        || Target.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// 只把绝对路径当成可定位的目标。工具经常传相对路径，那要结合工作区才能解析，
+    /// 这里猜一个大概率会定位错——宁可不给按钮，也不把用户带到错目录。
+    /// </summary>
+    public bool IsRootedPath => !IsUrl && Target.Length > 0 && Path.IsPathRooted(Target);
+
+    public bool CanOpenTarget => IsUrl || IsRootedPath;
+
+    /// <summary>命令、查询词这类没法「打开」的目标，至少给一键复制。</summary>
+    public bool ShowCopyTarget => Target.Length > 0 && !CanOpenTarget;
+
+    public string OpenTargetHint => IsUrl ? "在浏览器中打开" : "在资源管理器中定位";
+
+    /// <summary>一段灰字没人知道能点，展开区里给一条明确的动作。</summary>
+    [RelayCommand]
+    private void OpenTarget()
+    {
+        if (IsUrl)
+        {
+            Services.Ui.OpenExternal(Target);
+        }
+        else if (IsRootedPath)
+        {
+            Services.Ui.RevealInExplorer(Target);
+        }
+    }
+
+    [RelayCommand]
+    private async Task CopyTargetAsync() => await Services.Ui.CopyTextAsync(Target);
+
+    [RelayCommand]
+    private async Task CopyResultAsync() => await Services.Ui.CopyTextAsync(Result ?? string.Empty);
+
+    public string StatusText => IsRunning ? "运行中" : IsAborted ? "已中断" : IsError ? "失败" : "完成";
 
     public IBrush StatusBrush => IsRunning
         ? new SolidColorBrush(Color.Parse("#8A8A82"))
         : IsError
             ? new SolidColorBrush(Color.Parse("#B3261E"))
-            : new SolidColorBrush(Color.Parse("#2E7D32"));
+            : IsAborted
+                ? new SolidColorBrush(Color.Parse("#8A8A82"))
+                : new SolidColorBrush(Color.Parse("#2E7D32"));
 
     public string DurationText => DurationMs is null ? string.Empty : $"{DurationMs} ms";
 
@@ -199,6 +248,28 @@ public sealed partial class ToolCallViewModel : ObservableObject
         {
             IsExpanded = true;
         }
+    }
+
+    /// <summary>
+    /// 用户按停时收尾：这一行不能永远写「运行中」。
+    /// 耗时算到按下停止那一刻，状态走中性灰——停止不是失败。
+    /// </summary>
+    public void Abort()
+    {
+        if (!IsRunning)
+        {
+            return;
+        }
+
+        MarkAborted(Math.Max(0, Environment.TickCount64 - _startedAt));
+    }
+
+    /// <summary>从存档恢复「这一轮被停过」时用，耗时就取当时记下的值。</summary>
+    public void MarkAborted(long? durationMs)
+    {
+        DurationMs = durationMs;
+        IsRunning = false;
+        IsAborted = true;
     }
 
     private static string ExtractTarget(string arguments)

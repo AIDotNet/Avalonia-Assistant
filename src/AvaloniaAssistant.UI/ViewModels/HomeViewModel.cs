@@ -190,8 +190,21 @@ public sealed partial class HomeViewModel : ObservableObject
         await _host.SettingsProvider.SaveAsync(_host.Settings);
     }
 
+    /// <summary>
+    /// 卡片正文：只把提示词填进输入框，和人自己打的一样。
+    /// 以前整张卡是「点了就跑」，想先把「下载目录」改成自己的路径都做不到，
+    /// 而且右上角画的还是 ↗（通用语义是打开），与实际行为正好相反。
+    /// </summary>
     [RelayCommand]
-    private async Task UseCardAsync(SuggestionCardViewModel card)
+    private void FillCard(SuggestionCardViewModel card)
+    {
+        Composer.Text = card.Prompt;
+        Composer.RequestFocus();
+    }
+
+    /// <summary>卡片右上角那颗箭头：明确地「直接开始」，会新建任务并消耗一次请求。</summary>
+    [RelayCommand]
+    private async Task RunCardAsync(SuggestionCardViewModel card)
         => await _host.StartNewChatAsync(card.Prompt);
 
     [RelayCommand]

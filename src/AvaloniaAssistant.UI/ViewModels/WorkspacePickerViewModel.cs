@@ -61,6 +61,16 @@ public sealed partial class WorkspacePickerViewModel : ObservableObject
 
     public bool HasItems => Items.Count > 0;
 
+    /// <summary>
+    /// 还能不能再加一个。到上限时按钮置灰并说明——以前是加完看不见，
+    /// 用户以为「点了没反应」，其实是被 Take(6) 丢掉了。
+    /// </summary>
+    public bool CanAddWorkspace => _all.Count < MainWindowViewModel.MaxWorkspaceCount;
+
+    public bool ShowAddLimit => !CanAddWorkspace;
+
+    public string AddLimitHint => $"最多 {MainWindowViewModel.MaxWorkspaceCount} 个工作空间，先在侧栏移除一个再加。";
+
     /// <summary>当前是「普通任务」：工作区那条是空的，浮层最下面那行打勾。</summary>
     public bool IsPlainTask => string.IsNullOrWhiteSpace(_host.Settings.WorkspacePath);
 
@@ -154,6 +164,8 @@ public sealed partial class WorkspacePickerViewModel : ObservableObject
 
         OnPropertyChanged(nameof(HasItems));
         OnPropertyChanged(nameof(EmptyText));
+        OnPropertyChanged(nameof(CanAddWorkspace));
+        OnPropertyChanged(nameof(ShowAddLimit));
     }
 
     private void SyncSelection()
@@ -207,6 +219,11 @@ public sealed partial class WorkspacePickerViewModel : ObservableObject
     [RelayCommand]
     private void StartCreate()
     {
+        if (!CanAddWorkspace)
+        {
+            return;
+        }
+
         CreateError = null;
         NewName = string.Empty;
         IsCreating = true;
@@ -236,6 +253,11 @@ public sealed partial class WorkspacePickerViewModel : ObservableObject
     [RelayCommand]
     private async Task OpenFolderAsync()
     {
+        if (!CanAddWorkspace)
+        {
+            return;
+        }
+
         Close();
         await _host.AddWorkspaceAsync();
     }

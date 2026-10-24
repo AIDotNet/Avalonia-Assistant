@@ -88,6 +88,10 @@ public partial class ChatView : UserControl
             _viewModel.ScrollToEndRequested += OnScrollToEndRequested;
             _viewModel.ScrollToMessageRequested += OnScrollToMessageRequested;
             _viewModel.PropertyChanged += OnViewModelPropertyChanged;
+
+            // 重跑会删掉后面几轮，先把话说清楚再动手
+            _viewModel.ConfirmAsync = (title, message, confirmLabel, dangerous) =>
+                ConfirmDialog.ShowAsync(this, title, message, confirmLabel, "取消", dangerous);
         }
 
         ScheduleInitialScroll();

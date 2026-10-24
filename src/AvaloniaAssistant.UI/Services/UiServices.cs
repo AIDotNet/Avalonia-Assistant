@@ -16,6 +16,9 @@ public interface IFilePicker
 
     /// <summary>多选。返回空数组表示用户取消了。</summary>
     Task<IReadOnlyList<string>> PickFilesAsync(string title, string? pattern = null);
+
+    /// <summary>另存为。扩展名不带点，例如 <c>md</c>。</summary>
+    Task<string?> PickSaveFileAsync(string title, string suggestedName, string extension);
 }
 
 public sealed class StorageFilePicker : IFilePicker
@@ -79,6 +82,25 @@ public sealed class StorageFilePicker : IFilePicker
             .Where(path => !string.IsNullOrWhiteSpace(path))
             .Select(path => path!)
             .ToList();
+    }
+
+    public async Task<string?> PickSaveFileAsync(string title, string suggestedName, string extension)
+    {
+        var topLevel = GetTopLevel();
+        if (topLevel is null)
+        {
+            return null;
+        }
+
+        var file = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = title,
+            SuggestedFileName = suggestedName,
+            DefaultExtension = extension.TrimStart('.'),
+            FileTypeChoices = [new FilePickerFileType("Markdown") { Patterns = ["*.md"] }],
+        });
+
+        return file?.TryGetLocalPath();
     }
 
     private static TopLevel? GetTopLevel()
@@ -303,6 +325,15 @@ public static class AppLaunchOptions
 
     /// <summary>开发用：对当前焦点控件发一次 Esc，验证审批卡的键盘拒绝。</summary>
     public static bool PressEscape { get; set; }
+
+    /// <summary>摆出「有工具在等确认」的常驻条，检查它和输入框的间距。</summary>
+    public static bool ApprovalWait { get; set; }
+
+    /// <summary>把上下文用量调到 84%，检查水位条和警示文案。</summary>
+    public static bool ContextTight { get; set; }
+
+    /// <summary>摆出「重跑会删掉后面几轮」的确认弹窗，检查版式与红色主按钮。</summary>
+    public static bool ShowRetryConfirm { get; set; }
 
     /// <summary>是否用了隔离数据目录（--data-dir）。隔离时截图可以放心读写设置，不碰真实数据。</summary>
     public static bool IsolatedData { get; set; }

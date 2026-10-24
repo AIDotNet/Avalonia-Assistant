@@ -206,6 +206,9 @@ public sealed class ToolCallRecord
 
     public bool IsError { get; set; }
 
+    /// <summary>这一轮被用户按停时，这个工具还没跑完。和失败分开记：停止不是故障。</summary>
+    public bool Aborted { get; set; }
+
     public long? DurationMs { get; set; }
 }
 

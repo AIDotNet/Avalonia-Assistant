@@ -27,6 +27,14 @@
                    TextWrapping="Wrap"
                    LineHeight="19" />
 
+        <!-- 开关改了会重建会话，长会话的上下文要重放一遍。这个因果关系必须写在开关旁边 -->
+        <TextBlock Text="开关下一轮生效。改动会重建会话上下文——长会话可能因此变慢、变贵。"
+                   Classes="caption"
+                   FontSize="10.5"
+                   Foreground="{StaticResource TextMutedBrush}"
+                   TextWrapping="Wrap"
+                   Margin="0,-6,0,0" />
+
         <Border IsVisible="{Binding HasNotice}"
                 Background="{Binding NoticeBackground}"
                 CornerRadius="8"
