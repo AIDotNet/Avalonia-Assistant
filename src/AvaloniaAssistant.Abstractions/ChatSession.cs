@@ -71,6 +71,12 @@ public sealed class ChatAttachment
     /// <summary>展示与引用用的相对路径。</summary>
     public string? Path { get; set; }
 
+    /// <summary>
+    /// 绝对路径。界面上「在资源管理器中显示」要用它；
+    /// 旧存档没有这个字段，读出来为空时退回 <see cref="Path"/>。
+    /// </summary>
+    public string? FullPath { get; set; }
+
     /// <summary>文件从哪来，目前只有 <c>workspace</c>。</summary>
     public string Source { get; set; } = "workspace";
 
@@ -92,6 +98,71 @@ public sealed class ChatAttachment
     public bool HasText => !string.IsNullOrEmpty(Text);
 
     public string DisplayPath => string.IsNullOrWhiteSpace(Path) ? Name : Path!;
+
+    /// <summary>文件大小，给气泡里那枚引用标签用。</summary>
+    [JsonIgnore]
+    public string DisplaySize => Size switch
+    {
+        >= 1024 * 1024 => $"{Size / 1024.0 / 1024.0:0.#} MB",
+        >= 1024 => $"{Size / 1024.0:0.#} KB",
+        > 0 => $"{Size} B",
+        _ => string.Empty,
+    };
+
+    /// <summary>
+    /// 引用标签下面那行小字：多大、读了多少行、有没有被截断或读失败。
+    /// 以前只显示文件名，用户以为模型看完了整份日志。
+    /// </summary>
+    [JsonIgnore]
+    public string Caption
+    {
+        get
+        {
+            var parts = new List<string>(4);
+            if (DisplaySize.Length > 0)
+            {
+                parts.Add(DisplaySize);
+            }
+
+            if (LineCount > 0)
+            {
+                parts.Add($"{LineCount} 行");
+            }
+
+            if (!string.IsNullOrWhiteSpace(Error))
+            {
+                parts.Add("读取失败");
+            }
+            else if (!HasText)
+            {
+                parts.Add("无正文");
+            }
+            else if (Truncated)
+            {
+                parts.Add("已截断");
+            }
+
+            return string.Join(" · ", parts);
+        }
+    }
+
+    /// <summary>悬停提示：完整路径 + 失败原因 / 截断说明。</summary>
+    [JsonIgnore]
+    public string Detail
+    {
+        get
+        {
+            var path = FullPath ?? DisplayPath;
+            if (!string.IsNullOrWhiteSpace(Error))
+            {
+                return $"{path}{Environment.NewLine}{Error}";
+            }
+
+            return Truncated
+                ? $"{path}{Environment.NewLine}只读了前 {LineCount} 行，后面的内容没有交给模型。"
+                : path;
+        }
+    }
 }
 
 /// <summary>

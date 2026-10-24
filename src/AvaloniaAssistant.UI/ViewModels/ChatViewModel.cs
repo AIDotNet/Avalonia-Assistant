@@ -65,6 +65,7 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
         }
 
         LoadEntries();
+        RefreshDateHeaders();
     }
 
     public ChatSession Session { get; }
@@ -797,6 +798,19 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
         }
     }
 
+    /// <summary>仅用于 --screenshot：摆一张待确认的授权卡，检查快捷键提示和按钮版式。</summary>
+    public void AddDemoApproval()
+    {
+        Messages.Add(new ApprovalMessageViewModel(
+            "run_command",
+            "执行命令",
+            "{\n  \"command\": \"dotnet build\"\n}",
+            "run_command 会用 shell 执行命令，需要你确认。",
+            _ => { }));
+
+        RequestScroll(true);
+    }
+
     private void LoadEntries()
     {
         foreach (var entry in Session.Entries)
@@ -804,6 +818,7 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
             switch (entry.Kind)
             {
                 case ChatEntryKind.User:
+                    ResolveAttachmentPaths(entry);
                     Messages.Add(new UserMessageViewModel(entry.Text, entry.Attachments, entry.Images) { CreatedAt = entry.CreatedAt });
                     break;
 
@@ -847,8 +862,36 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
         }
     }
 
-    private static IReadOnlyList<HistoryTurn> BuildHistory(IEnumerable<ChatEntry> entries)
+    /// <summary>
+    /// 旧存档只记了相对路径。打开会话时补一次绝对路径，
+    /// 否则「在资源管理器中显示」只能靠当前进程目录去猜。
+    /// </summary>
+    private void ResolveAttachmentPaths(ChatEntry entry)
     {
+        if (entry.Attachments.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var attachment in entry.Attachments)
+        {
+            if (!string.IsNullOrWhiteSpace(attachment.FullPath) || string.IsNullOrWhiteSpace(attachment.Path))
+            {
+                continue;
+            }
+
+            var candidate = Path.IsPathRooted(attachment.Path)
+                ? attachment.Path
+                : Path.Combine(Session.WorkspacePath ?? string.Empty, attachment.Path);
+
+            if (File.Exists(candidate))
+            {
+                attachment.FullPath = candidate;
+            }
+        }
+    }
+
+    private static IReadOnlyList<HistoryTurn> BuildHistory(IEnumerable<ChatEntry> entries)    {
         var history = new List<HistoryTurn>();
         foreach (var entry in entries)
         {
@@ -885,6 +928,7 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
     {
         OnPropertyChanged(nameof(HasMessages));
         RefreshContinueAvailability();
+        RefreshDateHeaders();
 
         var addedUserMessage = e.NewItems?.OfType<UserMessageViewModel>().Any() == true;
         RequestScroll(addedUserMessage);
@@ -959,6 +1003,82 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
                 await RetryFromAsync(message);
                 break;
         }
+    }
+
+    /// <summary>
+    /// 跨天的消息之间插一条日期。只是给消息打个标记，不往 Messages 里加条目——
+    /// 消息和存档条目一一对应，多一个条目会把重试的轮次定位算错。
+    /// </summary>
+    private void RefreshDateHeaders()
+    {
+        DateTime? previous = null;
+        foreach (var message in Messages)
+        {
+            var date = message.CreatedAt.LocalDateTime.Date;
+            var show = previous != date;
+            message.ShowDateHeader = show;
+            if (show)
+            {
+                message.DateHeaderText = DescribeDate(date);
+            }
+
+            previous = date;
+        }
+    }
+
+    /// <summary>
+    /// 用键盘回答最后一张待审批卡。返回 false 表示当前没有待确认的卡片，
+    /// 按键应该继续交回输入框，别把 Esc 吞掉。
+    /// </summary>
+    public bool TryAnswerApproval(bool allow, bool always)
+    {
+        var card = Messages.OfType<ApprovalMessageViewModel>().LastOrDefault(item => item.ShowActions);
+        if (card is null)
+        {
+            return false;
+        }
+
+        if (!allow)
+        {
+            card.DenyCommand.Execute(null);
+        }
+        else if (always)
+        {
+            card.AllowAlwaysCommand.Execute(null);
+        }
+        else
+        {
+            card.AllowCommand.Execute(null);
+        }
+
+        return true;
+    }
+
+    private static string DescribeDate(DateTime date)
+    {
+        var today = DateTime.Today;
+        if (date == today)
+        {
+            return "今天";
+        }
+
+        if (date == today.AddDays(-1))
+        {
+            return "昨天";
+        }
+
+        var weekday = date.DayOfWeek switch
+        {
+            DayOfWeek.Monday => "周一",
+            DayOfWeek.Tuesday => "周二",
+            DayOfWeek.Wednesday => "周三",
+            DayOfWeek.Thursday => "周四",
+            DayOfWeek.Friday => "周五",
+            DayOfWeek.Saturday => "周六",
+            _ => "周日",
+        };
+
+        return $"{date:M月d日} {weekday}";
     }
 
     private sealed class ChatApprovalGate(ChatViewModel owner) : IToolApprovalGate

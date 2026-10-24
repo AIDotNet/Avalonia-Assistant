@@ -146,6 +146,65 @@ public static class Ui
             // 打不开链接不应影响应用。
         }
     }
+
+    /// <summary>
+    /// 在资源管理器里定位一个文件；目录就直接打开，路径不在了就退到它的上级目录。
+    /// 打不开不算错误——用户只是没看到那一下跳转。
+    /// </summary>
+    public static void RevealInExplorer(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return;
+        }
+
+        try
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                if (File.Exists(path))
+                {
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+                        "explorer.exe",
+                        $"/select,\"{path}\"")
+                    {
+                        UseShellExecute = false,
+                    });
+                    return;
+                }
+
+                if (Directory.Exists(path))
+                {
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+                        "explorer.exe",
+                        $"\"{path}\"")
+                    {
+                        UseShellExecute = false,
+                    });
+                    return;
+                }
+
+                var parent = Path.GetDirectoryName(path);
+                if (!string.IsNullOrWhiteSpace(parent) && Directory.Exists(parent))
+                {
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+                        "explorer.exe",
+                        $"\"{parent}\"")
+                    {
+                        UseShellExecute = false,
+                    });
+                }
+
+                return;
+            }
+
+            OpenExternal(File.Exists(path) ? path : Path.GetDirectoryName(path) ?? path);
+        }
+        catch
+        {
+            // 路径被删或没有权限：保持界面不动。
+        }
+    }
 }
 
 /// <summary>仅供开发/自动化截图使用，由 Desktop 入口在启动前赋值。</summary>
@@ -154,6 +213,9 @@ public static class AppLaunchOptions
     public static string? ScreenshotPath { get; set; }
 
     public static string Page { get; set; } = "home";
+
+    /// <summary>命令行是否显式指定了页面。显式指定时不再恢复上次会话，截图和验收才有稳定结果。</summary>
+    public static bool HasExplicitPage { get; set; }
 
     /// <summary>开发用：启动后自动发送一条消息（配合 --screenshot 做端到端验证）。</summary>
     public static string? RunPrompt { get; set; }
@@ -205,4 +267,28 @@ public static class AppLaunchOptions
 
     /// <summary>开发用：把输入框的拖放提示层摆出来，检查它盖住的区域和文案。</summary>
     public static bool ComposerDrop { get; set; }
+
+    /// <summary>开发用：单独摆出快捷键总览，配合 --screenshot 检查版式。</summary>
+    public static bool ShowShortcuts { get; set; }
+
+    /// <summary>开发用：对话页换成跨天示例，检查日期分隔和完整时间。</summary>
+    public static bool ChatDates { get; set; }
+
+    /// <summary>开发用：截图前把主内容滚到底，检查长页面下半截。</summary>
+    public static bool ScrollToEnd { get; set; }
+
+    /// <summary>开发用：截图前把主内容滚到顶，检查消息流开头的日期分隔。</summary>
+    public static bool ScrollToTop { get; set; }
+
+    /// <summary>开发用：截图时套一个缩放值，检查 90%–125% 的版式。</summary>
+    public static double? FontScale { get; set; }
+
+    /// <summary>开发用：对话页摆一张待确认的授权卡，检查键盘提示与按钮版式。</summary>
+    public static bool ApprovalDemo { get; set; }
+
+    /// <summary>开发用：对当前焦点控件发一次 Esc，验证审批卡的键盘拒绝。</summary>
+    public static bool PressEscape { get; set; }
+
+    /// <summary>是否用了隔离数据目录（--data-dir）。隔离时截图可以放心读写设置，不碰真实数据。</summary>
+    public static bool IsolatedData { get; set; }
 }

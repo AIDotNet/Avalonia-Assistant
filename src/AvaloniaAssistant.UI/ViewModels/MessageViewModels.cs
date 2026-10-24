@@ -18,6 +18,16 @@ public abstract partial class MessageViewModel : ObservableObject
 
     public string TimeText => CreatedAt.ToLocalTime().ToString("HH:mm");
 
+    /// <summary>悬停时看的完整时间。跨天翻记录时，光有 HH:mm 分不清是哪天。</summary>
+    public string FullTimeText => CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
+
+    /// <summary>这一条是不是当天第一条。由对话页在消息变化时统一算，模板只负责显示。</summary>
+    [ObservableProperty]
+    private bool showDateHeader;
+
+    [ObservableProperty]
+    private string dateHeaderText = string.Empty;
+
     /// <summary>会话内查找当前停在这一条上。只做一层浅底，不改变任何排版。</summary>
     [ObservableProperty]
     private bool isSearchHit;

@@ -315,7 +315,7 @@
           <StackPanel Orientation="Horizontal" Spacing="2">
             <Button Classes="icon"
                     Command="{Binding AttachCommand}"
-                    ToolTip.Tip="把文件交给助手（可多选）">
+                    ToolTip.Tip="添加文件引用（也可以直接拖进来；发送时才读正文）">
               <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Paperclip}" Size="16" />
             </Button>
             <Button Classes="icon"

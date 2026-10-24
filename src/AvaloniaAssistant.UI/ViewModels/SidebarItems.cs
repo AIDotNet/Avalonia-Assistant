@@ -30,10 +30,12 @@ public sealed partial class SessionItemViewModel : ObservableObject
         Action<string> open,
         Action<string> delete,
         Func<string, string, Task<string?>> rename,
-        string matchSnippet = "")
+        string matchSnippet = "",
+        string? displayTitle = null)
     {
         Id = session.Id;
         Title = session.Title;
+        DisplayTitle = string.IsNullOrWhiteSpace(displayTitle) ? session.Title : displayTitle;
         MatchSnippet = matchSnippet;
         TimeText = SessionText.RelativeTime(session.UpdatedAt);
         WorkspaceName = string.IsNullOrWhiteSpace(workspaceName) ? "普通对话" : workspaceName;
@@ -52,6 +54,9 @@ public sealed partial class SessionItemViewModel : ObservableObject
     public string Id { get; }
 
     public string Title { get; }
+
+    /// <summary>列表里显示的名字。重名时会带日期或序号，存档标题不受影响。</summary>
+    public string DisplayTitle { get; }
 
     /// <summary>搜索命中在正文里的那一句。只有搜正文命中时才有，标题命中时留空。</summary>
     public string MatchSnippet { get; }

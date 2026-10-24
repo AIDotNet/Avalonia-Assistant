@@ -7,6 +7,8 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using AvaloniaAssistant.Abstractions;
+using AvaloniaAssistant.UI.Services;
 using AvaloniaAssistant.UI.ViewModels;
 
 namespace AvaloniaAssistant.UI.Views;
@@ -54,6 +56,9 @@ public partial class ChatView : UserControl
     {
         AvaloniaXamlLoader.Load(this);
         AttachedToVisualTree += OnAttachedToVisualTree;
+
+        // 审批卡的键盘回答走隧道：输入框在同一个页面里，先于它拿到按键。
+        AddHandler(KeyDownEvent, OnChatKeyDown, RoutingStrategies.Tunnel);
     }
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
@@ -87,6 +92,54 @@ public partial class ChatView : UserControl
 
         ScheduleInitialScroll();
         base.OnDataContextChanged(e);
+    }
+
+    /// <summary>点一下引用标签：在资源管理器里定位这个文件，找不到就退到上级目录。</summary>
+    private void OnAttachmentClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Control { DataContext: ChatAttachment attachment })
+        {
+            Ui.RevealInExplorer(attachment.FullPath ?? attachment.Path);
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>
+    /// 审批卡的键盘回答：Esc 拒绝（安全默认），Ctrl+Enter 允许一次，Ctrl+Shift+Enter 本会话都允许。
+    /// 查找框、@ 浮层、录音各自有 Esc 语义，先让它们处理，别抢。
+    /// </summary>
+    private void OnChatKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (_viewModel is null || _viewModel.IsSearchOpen)
+        {
+            return;
+        }
+
+        var composer = _viewModel.Composer;
+        if (composer.ShowMention || composer.IsRecording)
+        {
+            return;
+        }
+
+        if (e.Key == Key.Escape)
+        {
+            if (_viewModel.TryAnswerApproval(allow: false, always: false))
+            {
+                e.Handled = true;
+            }
+
+            return;
+        }
+
+        if (e.Key == Key.Enter && e.KeyModifiers.HasFlag(KeyModifiers.Control))
+        {
+            if (_viewModel.TryAnswerApproval(
+                    allow: true,
+                    always: e.KeyModifiers.HasFlag(KeyModifiers.Shift)))
+            {
+                e.Handled = true;
+            }
+        }
     }
 
     /// <summary>点一下用户贴的缩略图，铺开看大图。</summary>

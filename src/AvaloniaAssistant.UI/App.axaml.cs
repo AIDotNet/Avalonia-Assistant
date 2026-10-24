@@ -31,11 +31,20 @@ public partial class AssistantApp : Application
         {
             var window = Services.GetRequiredService<MainWindow>();
             desktop.MainWindow = window;
-            window.Show();
 
             if (window.DataContext is MainWindowViewModel viewModel)
             {
-                _ = InitializeAsync(viewModel, window, desktop);
+                // 先读设置再显示：窗口位置、尺寸和缩放要在第一帧就正确，
+                // 否则会先居中弹出来再跳一下。LoadAsync 内部全用 ConfigureAwait(false)，同步等不会死锁。
+                viewModel.SettingsProvider.LoadAsync().GetAwaiter().GetResult();
+                window.ApplySavedWindowState();
+            }
+
+            window.Show();
+
+            if (window.DataContext is MainWindowViewModel started)
+            {
+                _ = InitializeAsync(started, window, desktop);
             }
         }
 
@@ -72,11 +81,32 @@ public partial class AssistantApp : Application
                 }
             }
 
+            // 快捷键总览：平时 Ctrl+/ 打开，这里给截图和人工验收一个固定入口
+            if (AppLaunchOptions.ShowShortcuts)
+            {
+                var preview = ShortcutsDialog.CreatePreview();
+                preview.Show();
+                await Task.Delay(600);
+
+                if (!string.IsNullOrWhiteSpace(AppLaunchOptions.ScreenshotPath))
+                {
+                    Capture(preview, AppLaunchOptions.ScreenshotPath);
+                }
+
+                preview.Close();
+
+                if (!string.IsNullOrWhiteSpace(AppLaunchOptions.ScreenshotPath))
+                {
+                    desktop.Shutdown();
+                    return;
+                }
+            }
+
             switch (AppLaunchOptions.Page)
             {
                 case "chat":
                     viewModel.LoadDemoSidebar();
-                    viewModel.LoadDemoChat();
+                    viewModel.LoadDemoChat(AppLaunchOptions.ChatDates);
 
                     if (viewModel.CurrentPage is ChatViewModel demoChat)
                     {
@@ -91,6 +121,11 @@ public partial class AssistantApp : Application
                         {
                             demoChat.OpenSearchCommand.Execute(null);
                             demoChat.SearchQuery = AppLaunchOptions.ChatSearch;
+                        }
+
+                        if (AppLaunchOptions.ApprovalDemo)
+                        {
+                            demoChat.AddDemoApproval();
                         }
                     }
 
@@ -149,6 +184,25 @@ public partial class AssistantApp : Application
                 }
             }
 
+            // 验收用：对焦点控件发一次 Esc，检查审批卡是不是真的按「拒绝」处理。
+            if (AppLaunchOptions.PressEscape)
+            {
+                await Task.Delay(700);
+                var topLevel = TopLevel.GetTopLevel(window);
+                if (topLevel?.FocusManager?.GetFocusedElement() is InputElement focused)
+                {
+                    focused.RaiseEvent(new KeyEventArgs
+                    {
+                        RoutedEvent = InputElement.KeyDownEvent,
+                        Key = Key.Escape,
+                        KeyModifiers = KeyModifiers.None,
+                        Source = focused,
+                    });
+                }
+
+                await Task.Delay(300);
+            }
+
             // 验收用：直接弹「完全访问」确认层，确认后真的切到完全访问，配合 --screenshot 看结果。
             if (AppLaunchOptions.ConfirmFullAccessDialog)
             {
@@ -159,6 +213,36 @@ public partial class AssistantApp : Application
                 }
 
                 await Task.Delay(400);
+            }
+
+            // 验收用：套一个缩放值，检查界面放大后有没有挤压/裁切。
+            if (AppLaunchOptions.FontScale is double scale)
+            {
+                viewModel.SetFontScale(scale, persist: false);
+                await Task.Delay(250);
+            }
+
+            // 验收用：把主内容滚到底或滚到顶，长页面下半截 / 消息流开头才拍得到。
+            if (AppLaunchOptions.ScrollToEnd || AppLaunchOptions.ScrollToTop)
+            {
+                // 刚切完页时 ScrollViewer 还没量出 Extent，等一下再滚，否则滚的是侧栏。
+                await Task.Delay(350);
+
+                var scroller = window.GetVisualDescendants()
+                    .OfType<ScrollViewer>()
+                    .Where(item => item.Extent.Height > item.Viewport.Height + 1)
+                    .OrderByDescending(item => item.Viewport.Height)
+                    .FirstOrDefault();
+
+                if (scroller is not null)
+                {
+                    var offset = AppLaunchOptions.ScrollToEnd
+                        ? scroller.Extent.Height - scroller.Viewport.Height
+                        : 0;
+
+                    scroller.Offset = new Vector(scroller.Offset.X, offset);
+                    await Task.Delay(250);
+                }
             }
 
             if (string.IsNullOrWhiteSpace(AppLaunchOptions.ScreenshotPath))

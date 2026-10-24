@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using Avalonia.Media;
 using Avalonia.Threading;
 using AvaloniaAssistant.Abstractions;
@@ -31,7 +32,7 @@ public sealed partial class ProviderOptionViewModel : ObservableObject
     private void Select() => _select(this);
 }
 
-public sealed partial class SettingsViewModel : ObservableObject
+public sealed partial class SettingsViewModel : ObservableObject, IDisposable
 {
     private readonly MainWindowViewModel _host;
 
@@ -44,6 +45,9 @@ public sealed partial class SettingsViewModel : ObservableObject
         Settings = host.Settings.Clone();
         _baseline = Settings.Clone();
 
+        // Ctrl+滚轮在设置页也能用：档位高亮要跟着实际缩放走，不能停在进页面时的快照上。
+        _host.FontScaleChanged += OnHostFontScaleChanged;
+
         Providers = new ObservableCollection<ProviderOptionViewModel>(
             ProviderPreset.All.Select(preset => new ProviderOptionViewModel(preset, SelectProvider)
             {
@@ -51,6 +55,14 @@ public sealed partial class SettingsViewModel : ObservableObject
             }));
 
         SavedText = string.Empty;
+    }
+
+    public void Dispose() => _host.FontScaleChanged -= OnHostFontScaleChanged;
+
+    private void OnHostFontScaleChanged(object? sender, EventArgs e)
+    {
+        Settings.FontScale = _host.FontScale;
+        NotifyScaleChanged();
     }
 
     public AssistantSettings Settings { get; }
@@ -161,6 +173,82 @@ public sealed partial class SettingsViewModel : ObservableObject
     public bool IsWorkspaceSelected => Settings.Permission == PermissionMode.Workspace;
 
     public bool IsFullAccessSelected => Settings.Permission == PermissionMode.FullAccess;
+
+    // ---- 界面与启动 ----
+
+    public bool IsScale90 => NearScale(0.9);
+
+    public bool IsScale100 => NearScale(1.0);
+
+    public bool IsScale110 => NearScale(1.1);
+
+    public bool IsScale125 => NearScale(1.25);
+
+    public string ScaleText => $"当前 {Math.Round(_host.FontScale * 100)}%";
+
+    public bool IsStartupHome => !IsStartupLast;
+
+    public bool IsStartupLast => string.Equals(Settings.StartupPage, "last", StringComparison.OrdinalIgnoreCase);
+
+    private bool NearScale(double value) => Math.Abs(_host.FontScale - value) < 0.001;
+
+    /// <summary>
+    /// 缩放和启动页属于「看一眼就该生效」的偏好，改完立刻落盘，
+    /// 不进「改动还没保存」那套提示——否则用户会以为还得再点一次保存。
+    /// </summary>
+    [RelayCommand]
+    private async Task SetScaleAsync(string value)
+    {
+        if (!double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var scale))
+        {
+            return;
+        }
+
+        Settings.FontScale = scale;
+        _baseline.FontScale = scale;
+        _host.SetFontScale(scale, persist: false);
+        NotifyScaleChanged();
+        await _host.SaveSettingsQuietlyAsync();
+    }
+
+    [RelayCommand]
+    private async Task SetStartupAsync(string value)
+    {
+        var page = string.Equals(value, "last", StringComparison.OrdinalIgnoreCase) ? "last" : "home";
+        Settings.StartupPage = page;
+        _baseline.StartupPage = page;
+        _host.Settings.StartupPage = page;
+        OnPropertyChanged(nameof(IsStartupHome));
+        OnPropertyChanged(nameof(IsStartupLast));
+        await _host.SaveSettingsQuietlyAsync();
+    }
+
+    private void NotifyScaleChanged()
+    {
+        OnPropertyChanged(nameof(IsScale90));
+        OnPropertyChanged(nameof(IsScale100));
+        OnPropertyChanged(nameof(IsScale110));
+        OnPropertyChanged(nameof(IsScale125));
+        OnPropertyChanged(nameof(ScaleText));
+    }
+
+    /// <summary>
+    /// 保存表单前，把「窗口位置、侧栏宽度、最后会话」这些开着设置页时仍在变的字段
+    /// 从实时设置抄回来。否则在设置页里拖过窗口再点保存，会把旧尺寸写回去。
+    /// </summary>
+    private void SyncWindowPreferences()
+    {
+        var live = _host.Settings;
+        Settings.IsSidebarVisible = live.IsSidebarVisible;
+        Settings.SidebarWidth = live.SidebarWidth;
+        Settings.FontScale = live.FontScale;
+        Settings.WindowWidth = live.WindowWidth;
+        Settings.WindowHeight = live.WindowHeight;
+        Settings.WindowLeft = live.WindowLeft;
+        Settings.WindowTop = live.WindowTop;
+        Settings.WindowMaximized = live.WindowMaximized;
+        Settings.LastSessionId = live.LastSessionId;
+    }
 
     public string DataFolder => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -338,6 +426,9 @@ public sealed partial class SettingsViewModel : ObservableObject
         SaveButtonText = "保存中…";
         try
         {
+            // 窗口/侧栏/最后会话这些是后台实时写的，不能被进页面时的快照覆盖回去。
+            SyncWindowPreferences();
+
             if (string.IsNullOrWhiteSpace(Settings.Model))
             {
                 Settings.Model = ProviderPreset.For(Settings.Provider).Model;

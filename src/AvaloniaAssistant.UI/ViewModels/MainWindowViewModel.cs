@@ -205,8 +205,33 @@ public sealed partial class MainWindowViewModel : ObservableObject
         await ReloadSessionsAsync();
         await ReloadWorkspacesAsync();
         Home.Refresh();
+
+        // 侧栏开关和宽度跟着设置走：关掉再开不该弹回来。
+        IsSidebarVisible = Settings.IsSidebarVisible;
+        OnPropertyChanged(nameof(IsSidebarVisible));
+        OnPropertyChanged(nameof(SidebarWidth));
+        OnPropertyChanged(nameof(FontScale));
+
+        // 上次那条任务还在盘上就接着打开；文件被删了、或者本来就没开过，就照常回首页。
+        if (ShouldRestoreLastSession()
+            && Settings.LastSessionId is { Length: > 0 } last
+            && _sessionCache.ContainsKey(last))
+        {
+            await OpenSessionAsync(last);
+            return;
+        }
+
         CurrentPage = Home;
     }
+
+    /// <summary>
+    /// 截图和自动化跑批默认不恢复上次会话：文档配图要的是固定首页。
+    /// 但显式传了 --page 才算「要某一页」，没传时允许用临时数据目录验收恢复逻辑。
+    /// </summary>
+    private bool ShouldRestoreLastSession()
+        => string.Equals(Settings.StartupPage, "last", StringComparison.OrdinalIgnoreCase)
+           && !AppLaunchOptions.HasExplicitPage
+           && string.IsNullOrWhiteSpace(AppLaunchOptions.RunPrompt);
 
     [RelayCommand]
     private async Task NewTaskAsync()
@@ -330,7 +355,76 @@ public sealed partial class MainWindowViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void ToggleSidebar() => IsSidebarVisible = !IsSidebarVisible;
+    private async Task ToggleSidebarAsync()
+    {
+        IsSidebarVisible = !IsSidebarVisible;
+        Settings.IsSidebarVisible = IsSidebarVisible;
+        await SaveSettingsQuietlyAsync();
+    }
+
+    /// <summary>侧栏宽度。拖动分隔条时实时写进设置对象，松手才落盘。</summary>
+    public double SidebarWidth
+    {
+        get => Settings.SidebarWidth;
+        set
+        {
+            var clamped = Math.Clamp(value, 220, 380);
+            if (Math.Abs(Settings.SidebarWidth - clamped) < 0.5)
+            {
+                return;
+            }
+
+            Settings.SidebarWidth = clamped;
+            OnPropertyChanged();
+        }
+    }
+
+    public Task PersistSidebarWidthAsync()
+    {
+        Settings.SidebarWidth = SidebarWidth;
+        return SaveSettingsQuietlyAsync();
+    }
+
+    /// <summary>当前界面缩放，1 表示 100%。</summary>
+    public double FontScale => Settings.FontScale;
+
+    /// <summary>缩放变化。窗口拿它更新根布局的 LayoutTransform。</summary>
+    public event EventHandler? FontScaleChanged;
+
+    /// <summary>缩放界面。滚轮连续调整时传 persist=false，由视图合并后统一保存。</summary>
+    public void SetFontScale(double scale, bool persist)
+    {
+        var clamped = Math.Clamp(Math.Round(scale, 2), 0.9, 1.25);
+        if (Math.Abs(Settings.FontScale - clamped) < 0.001)
+        {
+            return;
+        }
+
+        Settings.FontScale = clamped;
+        OnPropertyChanged(nameof(FontScale));
+        FontScaleChanged?.Invoke(this, EventArgs.Empty);
+
+        if (persist)
+        {
+            _ = SaveSettingsQuietlyAsync();
+        }
+    }
+
+    /// <summary>
+    /// 窗口位置、侧栏宽度这类偏好保存失败，不该弹框打断正在做的事；
+    /// 设置页自己的保存仍然走它原来的错误提示。
+    /// </summary>
+    public async Task SaveSettingsQuietlyAsync()
+    {
+        try
+        {
+            await SettingsProvider.SaveAsync(Settings);
+        }
+        catch
+        {
+            // 偏好没落盘不影响这一轮，下次改的时候还会再写一次。
+        }
+    }
 
     /// <summary>点「任务」标题：展开/收起全部任务。</summary>
     [RelayCommand]
@@ -806,6 +900,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
         sessions.Sort((left, right) => right.UpdatedAt.CompareTo(left.UpdatedAt));
 
+        // 同名任务在列表里长得一模一样，只能靠点开确认是哪条。重名的补上日期/序号。
+        var displayTitles = BuildDisplayTitles();
+
         _visibleSessionCount = sessions.Count;
         HasSearchResults = sessions.Count > 0;
 
@@ -840,7 +937,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
                     session,
                     activeId,
                     item.Name,
-                    snippets.GetValueOrDefault(session.Id, string.Empty)));
+                    snippets.GetValueOrDefault(session.Id, string.Empty),
+                    displayTitles.GetValueOrDefault(session.Id, session.Title)));
             }
 
             item.RefreshSessions();
@@ -864,7 +962,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
                     session,
                     activeId,
                     LooseWorkspaceName(session),
-                    snippets.GetValueOrDefault(session.Id, string.Empty)))));
+                    snippets.GetValueOrDefault(session.Id, string.Empty),
+                    displayTitles.GetValueOrDefault(session.Id, session.Title)))));
         }
 
         OnPropertyChanged(nameof(SessionCountText));
@@ -882,19 +981,48 @@ public sealed partial class MainWindowViewModel : ObservableObject
         ChatSession session,
         string? activeId,
         string workspaceName,
-        string matchSnippet)
+        string matchSnippet,
+        string displayTitle)
         => new(
             session,
             workspaceName,
             id => _ = OpenSessionAsync(id),
             id => _ = DeleteSessionAsync(id),
             RenameSessionAsync,
-            matchSnippet)
+            matchSnippet,
+            displayTitle)
         {
             IsActive = session.Id == activeId,
             IsRunning = IsChatRunning(session.Id),
             HasUnread = _unreadSessions.Contains(session.Id),
         };
+
+    /// <summary>
+    /// 重名任务在侧栏补一个区分后缀：优先补日期，同一天还重名再补序号。
+    /// 只影响列表显示，存档里的标题和重命名输入框仍是原文。
+    /// </summary>
+    private Dictionary<string, string> BuildDisplayTitles()
+    {
+        var titles = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        foreach (var group in _sessionCache.Values
+                     .GroupBy(session => session.Title.Trim(), StringComparer.OrdinalIgnoreCase)
+                     .Where(group => group.Count() > 1))
+        {
+            var seenByDate = new Dictionary<string, int>(StringComparer.Ordinal);
+            foreach (var session in group.OrderByDescending(item => item.UpdatedAt))
+            {
+                var date = session.UpdatedAt.LocalDateTime.ToString("MM-dd");
+                seenByDate[date] = seenByDate.TryGetValue(date, out var count) ? count + 1 : 1;
+                var suffix = seenByDate[date] == 1 ? date : $"{date} #{seenByDate[date]}";
+
+                // 日期放前面：放末尾会被标题的尾部省略号吃掉，两条还是长得一样。
+                titles[session.Id] = $"{suffix} · {session.Title}";
+            }
+        }
+
+        return titles;
+    }
 
     /// <summary>这条任务是不是还在跑：可能正在看，也可能被放到后台了。</summary>
     private bool IsChatRunning(string sessionId)
@@ -977,9 +1105,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
     }
 
-    public void LoadDemoChat()
+    public void LoadDemoChat(bool dateDemo = false)
     {
-        var session = DemoData.CreateSession(Settings.WorkspacePath);
+        var session = dateDemo
+            ? DemoData.CreateDateDemoSession(Settings.WorkspacePath)
+            : DemoData.CreateSession(Settings.WorkspacePath);
         CurrentPage = CreateChat(session);
     }
 
@@ -1027,6 +1157,13 @@ public sealed partial class MainWindowViewModel : ObservableObject
         if (sessionId is not null)
         {
             _unreadSessions.Remove(sessionId);
+
+            // 记住最后看的是哪条。启动恢复只在用户选「上次会话」时才用，但记下来没有代价。
+            if (!string.Equals(Settings.LastSessionId, sessionId, StringComparison.Ordinal))
+            {
+                Settings.LastSessionId = sessionId;
+                _ = SaveSettingsQuietlyAsync();
+            }
         }
 
         await Ui.OnUiAsync(() =>
@@ -1051,6 +1188,13 @@ public sealed partial class MainWindowViewModel : ObservableObject
     partial void OnCurrentPageChanging(object? oldValue, object? newValue)
     {
         EvictFinishedBackgroundChats();
+
+        // 设置页订了缩放事件，换页时退订，别让旧实例留在事件链上。
+        if (oldValue is SettingsViewModel settings)
+        {
+            settings.Dispose();
+            return;
+        }
 
         if (oldValue is not ChatViewModel chat)
         {

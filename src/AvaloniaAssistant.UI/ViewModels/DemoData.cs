@@ -5,6 +5,62 @@ namespace AvaloniaAssistant.UI.ViewModels;
 /// <summary>仅用于 --screenshot 的离线示例数据，不写入会话目录。</summary>
 internal static class DemoData
 {
+    /// <summary>跨天示例：验证日期分隔和完整时间，正文刻意写短，一屏放得下。</summary>
+    public static ChatSession CreateDateDemoSession(string workspace)
+    {
+        var now = DateTimeOffset.Now;
+        return new ChatSession
+        {
+            Id = "demo-dates",
+            Title = "跨天整理周报",
+            CreatedAt = now.AddDays(-2),
+            UpdatedAt = now,
+            WorkspacePath = workspace,
+            Entries =
+            [
+                new ChatEntry
+                {
+                    Kind = ChatEntryKind.User,
+                    Text = "这份周报先列个提纲。",
+                    CreatedAt = now.AddDays(-2).AddMinutes(-6),
+                },
+                new ChatEntry
+                {
+                    Kind = ChatEntryKind.Assistant,
+                    CreatedAt = now.AddDays(-2).AddMinutes(-5),
+                    Model = "deepseek-flash",
+                    Text = "提纲列了三段：本周进展、卡点、下周计划。",
+                },
+                new ChatEntry
+                {
+                    Kind = ChatEntryKind.User,
+                    Text = "把第二段补上数据。",
+                    CreatedAt = now.AddDays(-1).AddHours(-2),
+                },
+                new ChatEntry
+                {
+                    Kind = ChatEntryKind.Assistant,
+                    CreatedAt = now.AddDays(-1).AddHours(-2).AddMinutes(1),
+                    Model = "deepseek-flash",
+                    Text = "补好了，卡点那段现在有两个具体数字。",
+                },
+                new ChatEntry
+                {
+                    Kind = ChatEntryKind.User,
+                    Text = "今天再收一下尾。",
+                    CreatedAt = now.AddMinutes(-2),
+                },
+                new ChatEntry
+                {
+                    Kind = ChatEntryKind.Assistant,
+                    CreatedAt = now.AddMinutes(-1),
+                    Model = "deepseek-flash",
+                    Text = "收完了，全文四段，结尾加了下一步动作。",
+                },
+            ],
+        };
+    }
+
     public static ChatSession CreateSession(string workspace)
     {
         var now = DateTimeOffset.Now;
@@ -22,6 +78,20 @@ internal static class DemoData
                     Kind = ChatEntryKind.User,
                     Text = "帮我看下这台电脑的配置，顺便把结果整理成一份 Markdown 放到工作区。",
                     CreatedAt = now.AddMinutes(-13),
+                    // 示例引用：气泡里那枚可点标签要看得见，截图才能检查大小/行数排版
+                    Attachments =
+                    [
+                        new ChatAttachment
+                        {
+                            Id = "demo-att-1",
+                            Name = "电脑配置清单.md",
+                            Path = "电脑配置清单.md",
+                            FullPath = Path.Combine(workspace, "电脑配置清单.md"),
+                            Size = 2148,
+                            LineCount = 42,
+                            Text = "# 电脑配置清单",
+                        },
+                    ],
                 },
                 new ChatEntry
                 {

@@ -25,6 +25,12 @@ Windows 桌面 AI 助理。Agent 循环用 [pi.net](https://github.com/AIDotNet/
   归了空间的任务在「任务」里照样看得见。
 - **工作区一点就换**：输入框下面那条点开是「搜索 + 工作区列表」，当前那个打勾；
   新建工作空间、打开本地文件夹、不使用工作空间都在这一个浮层里，首页右上角是同一个。
+- **窗口记着上次的样子**：位置、尺寸、侧栏宽度（可拖动分隔条）、界面缩放（90%–125%，Ctrl+滚轮 / Ctrl+0）
+  和最后看的那条任务，关掉再开直接接上；设置里可选「启动时：首页 / 上次会话」。
+- **时间与引用看得清**：跨天的消息之间插日期分隔，时间悬停给完整日期；
+  引用文件是带大小、行数、截断状态的标签，点一下在资源管理器中定位。
+- **快捷键有张表**：Ctrl+/ 打开；Ctrl+N 新建任务、Ctrl+K 搜任务、Ctrl+F 会话内查找；
+  审批卡支持 Ctrl+Enter 允许一次、Ctrl+Shift+Enter 本会话允许、Esc 拒绝。
 - **Markdown**：标题、列表、表格、行内代码、代码块高亮。
 - **语音输入**：NAudio 录音 + `/audio/transcriptions` 转写（端点需支持）。
 - **技能页**：卡片式浏览，按分类筛选、关键词搜索，开关与导入都持久化。
@@ -287,6 +293,25 @@ dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --wor
 
 # 在主窗口里真的打开浮层，让弹层自己出图（含 Flyout 外壳和真实定位）
 dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --workspace-flyout
+```
+
+新增的几处界面也走同一套验收参数：
+
+```bash
+# 快捷键总览
+dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --shortcuts
+
+# 跨天消息：日期分隔与完整时间（--scroll-top 看最早一条）
+dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --page chat --chat-dates --scroll-top
+
+# 界面缩放 125%，设置页滚到底
+dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --page settings --scroll-bottom --scale 1.25
+
+# 授权卡版式；--press-escape 会真的发一次 Esc，验证「Esc 拒绝」
+dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --page chat --approval-demo --press-escape --scroll-bottom
+
+# 隔离数据目录：设置/会话都写到这里，验收启动恢复时不碰真实数据
+dotnet run --project src/AvaloniaAssistant.Desktop -- --data-dir .tmp/verify
 ```
 
 还提供一个开发用的自动发送参数，用来跑真实的端到端链路：

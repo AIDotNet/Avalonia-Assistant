@@ -66,6 +66,12 @@ internal static class Program
                     break;
                 case "--page" when index + 1 < args.Length:
                     AppLaunchOptions.Page = args[++index];
+                    AppLaunchOptions.HasExplicitPage = true;
+                    break;
+                case "--data-dir" when index + 1 < args.Length:
+                    // 验收/便携模式：把设置、会话和图片全放到指定目录，不碰真实数据。
+                    AppPaths.UseRoot(args[++index]);
+                    AppLaunchOptions.IsolatedData = true;
                     break;
                 case "--run" when index + 1 < args.Length:
                     AppLaunchOptions.RunPrompt = args[++index];
@@ -96,6 +102,35 @@ internal static class Program
                     break;
                 case "--workspace-picker-query" when index + 1 < args.Length:
                     AppLaunchOptions.WorkspacePickerQuery = args[++index];
+                    break;
+                case "--shortcuts":
+                    AppLaunchOptions.ShowShortcuts = true;
+                    break;
+                case "--chat-dates":
+                    AppLaunchOptions.ChatDates = true;
+                    break;
+                case "--scroll-bottom":
+                    AppLaunchOptions.ScrollToEnd = true;
+                    break;
+                case "--scroll-top":
+                    AppLaunchOptions.ScrollToTop = true;
+                    break;
+                case "--approval-demo":
+                    AppLaunchOptions.ApprovalDemo = true;
+                    break;
+                case "--press-escape":
+                    AppLaunchOptions.PressEscape = true;
+                    break;
+                case "--scale" when index + 1 < args.Length:
+                    if (double.TryParse(
+                            args[++index],
+                            System.Globalization.NumberStyles.Float,
+                            System.Globalization.CultureInfo.InvariantCulture,
+                            out var scale))
+                    {
+                        AppLaunchOptions.FontScale = scale;
+                    }
+
                     break;
                 case "--workspace-picker-create":
                     AppLaunchOptions.WorkspacePickerCreate = true;

@@ -37,13 +37,17 @@ public sealed class JsonSettingsProvider : ISettingsProvider
                 return;
             }
 
-            await using var stream = File.OpenRead(_file);
-            var loaded = await JsonSerializer
-                .DeserializeAsync<AssistantSettings>(stream, AssistantJson.Options, cancellationToken)
-                .ConfigureAwait(false);
+            // 释放同样不能回到被阻塞的 UI 线程：启动时这里是同步等待加载完成。
+            var stream = File.OpenRead(_file);
+            await using (stream.ConfigureAwait(false))
+            {
+                var loaded = await JsonSerializer
+                    .DeserializeAsync<AssistantSettings>(stream, AssistantJson.Options, cancellationToken)
+                    .ConfigureAwait(false);
 
-            _settings = loaded ?? CreateDefault();
-            Normalize(_settings);
+                _settings = loaded ?? CreateDefault();
+                Normalize(_settings);
+            }
         }
         catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
         {
@@ -65,7 +69,11 @@ public sealed class JsonSettingsProvider : ISettingsProvider
         {
             Directory.CreateDirectory(Path.GetDirectoryName(_file)!);
             var temp = _file + ".tmp";
-            await using (var stream = File.Create(temp))
+
+            // await using 的释放也要 ConfigureAwait(false)：关窗时 UI 线程会同步等这次保存，
+            // 释放续体如果再排回 UI 线程，就是死锁。
+            var stream = File.Create(temp);
+            await using (stream.ConfigureAwait(false))
             {
                 await JsonSerializer
                     .SerializeAsync(stream, settings, AssistantJson.Options, cancellationToken)
@@ -112,5 +120,14 @@ public sealed class JsonSettingsProvider : ISettingsProvider
             .Where(name => !string.IsNullOrWhiteSpace(name))
             .Distinct(StringComparer.Ordinal)
             .ToList();
+
+        // 窗口/侧栏/缩放：旧配置里没有这些字段，读出来是 0，回落到默认值再夹紧。
+        settings.StartupPage = string.Equals(settings.StartupPage, "last", StringComparison.OrdinalIgnoreCase)
+            ? "last"
+            : "home";
+        settings.SidebarWidth = Math.Clamp(settings.SidebarWidth <= 0 ? 268 : settings.SidebarWidth, 220, 380);
+        settings.FontScale = Math.Clamp(settings.FontScale <= 0 ? 1 : settings.FontScale, 0.9, 1.25);
+        settings.WindowWidth = Math.Clamp(settings.WindowWidth <= 0 ? 1280 : settings.WindowWidth, 960, 10_000);
+        settings.WindowHeight = Math.Clamp(settings.WindowHeight <= 0 ? 820 : settings.WindowHeight, 640, 10_000);
     }
 }

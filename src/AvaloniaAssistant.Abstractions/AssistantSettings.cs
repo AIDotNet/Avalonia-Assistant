@@ -142,6 +142,31 @@ public sealed class AssistantSettings
 
     public string Mode { get; set; } = "office";
 
+    /// <summary>启动时打开哪一页：<c>home</c> 首页，<c>last</c> 上次那条任务。</summary>
+    public string StartupPage { get; set; } = "home";
+
+    /// <summary>上次打开的会话 id。启动恢复只认它还存在于 sessions 目录里的情况。</summary>
+    public string? LastSessionId { get; set; }
+
+    public bool IsSidebarVisible { get; set; } = true;
+
+    /// <summary>侧栏宽度（DIP）。拖动分隔条后落盘，下次启动还是这个宽度。</summary>
+    public double SidebarWidth { get; set; } = 268;
+
+    /// <summary>界面缩放，1 表示 100%。只缩放渲染层，不改系统 DPI。</summary>
+    public double FontScale { get; set; } = 1;
+
+    /// <summary>窗口尺寸与位置。关掉再开应该回到原来的地方，而不是每次都居中。</summary>
+    public double WindowWidth { get; set; } = 1280;
+
+    public double WindowHeight { get; set; } = 820;
+
+    public int? WindowLeft { get; set; }
+
+    public int? WindowTop { get; set; }
+
+    public bool WindowMaximized { get; set; }
+
     /// <summary>
     /// 界面上显式选择的协议；null 表示跟随服务商预设。
     /// 旧版 settings.json 没有这个字段，读出来仍是 null，不会把 Anthropic 预设误降级成 Chat。
@@ -172,6 +197,16 @@ public sealed class AssistantSettings
         CollapsedWorkspaces = [.. CollapsedWorkspaces],
         DisabledTools = [.. DisabledTools],
         Mode = Mode,
+        StartupPage = StartupPage,
+        LastSessionId = LastSessionId,
+        IsSidebarVisible = IsSidebarVisible,
+        SidebarWidth = SidebarWidth,
+        FontScale = FontScale,
+        WindowWidth = WindowWidth,
+        WindowHeight = WindowHeight,
+        WindowLeft = WindowLeft,
+        WindowTop = WindowTop,
+        WindowMaximized = WindowMaximized,
         Protocol = Protocol,
     };
 }

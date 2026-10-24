@@ -45,10 +45,30 @@
     <Style Selector="Button.tool-line:pointerover">
       <Setter Property="Background" Value="{StaticResource SurfaceMutedBrush}" />
     </Style>
+
+    <!-- 引用文件的可点标签：点一下在资源管理器里定位，hover 看完整路径和截断说明 -->
+    <Style Selector="Button.attachment-chip">
+      <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+      <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Padding" Value="8,4" />
+      <Setter Property="HorizontalContentAlignment" Value="Left" />
+    </Style>
+    <Style Selector="Button.attachment-chip:pointerover">
+      <Setter Property="Background" Value="{StaticResource SurfaceMutedBrush}" />
+    </Style>
   </UserControl.Styles>
 
   <UserControl.DataTemplates>
     <DataTemplate DataType="{x:Type vm:UserMessageViewModel}">
+      <StackPanel>
+      <TextBlock Text="{Binding DateHeaderText}"
+                 IsVisible="{Binding ShowDateHeader}"
+                 Classes="caption"
+                 FontSize="10.5"
+                 HorizontalAlignment="Center"
+                 Margin="0,6,0,2" />
       <!-- 查找命中时给整条消息一层浅底。Padding 6 / Margin 收 6，净位置和原来一致 -->
       <Border Classes.hit="{Binding IsSearchHit}"
               HorizontalAlignment="Right"
@@ -92,24 +112,45 @@
             </ItemsControl.ItemTemplate>
           </ItemsControl>
 
-          <!-- 引用了哪些文件，气泡下面留一行小字，事后回看能对上 -->
-          <StackPanel Orientation="Horizontal"
-                      Spacing="5"
-                      HorizontalAlignment="Right"
-                      Margin="0,0,4,0"
-                      IsVisible="{Binding HasAttachments}">
-            <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Paperclip}"
-                          Size="11"
-                          Foreground="{StaticResource TextMutedBrush}" />
-            <TextBlock Text="{Binding AttachmentLabel}"
-                       Classes="caption"
-                       FontSize="10.5"
-                       MaxWidth="420"
-                       TextTrimming="CharacterEllipsis" />
-          </StackPanel>
+          <!-- 引用了哪些文件：可点，能定位到磁盘；大小、行数、截断状态都写在下面 -->
+          <ItemsControl ItemsSource="{Binding Attachments}"
+                        IsVisible="{Binding HasAttachments}"
+                        HorizontalAlignment="Right"
+                        Margin="0,2,0,0">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <WrapPanel ItemSpacing="6" LineSpacing="6" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Button Classes="attachment-chip"
+                        ToolTip.Tip="{Binding Detail}"
+                        Click="OnAttachmentClick">
+                  <StackPanel Spacing="1">
+                    <StackPanel Orientation="Horizontal" Spacing="5">
+                      <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Paperclip}"
+                                    Size="11"
+                                    Foreground="{StaticResource TextMutedBrush}"
+                                    VerticalAlignment="Center" />
+                      <TextBlock Text="{Binding Name}"
+                                 FontSize="10.5"
+                                 MaxWidth="220"
+                                 TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                    <TextBlock Text="{Binding Caption}"
+                               FontSize="9.5"
+                               Foreground="{StaticResource TextMutedBrush}"
+                               Margin="16,0,0,0" />
+                  </StackPanel>
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
 
           <!-- 时间戳：隔一天回来，得知道这轮是什么时候跑的 -->
           <TextBlock Text="{Binding TimeText}"
+                     ToolTip.Tip="{Binding FullTimeText}"
                      Classes="caption"
                      FontSize="9.5"
                      HorizontalAlignment="Right"
@@ -117,9 +158,17 @@
         </StackPanel>
         </Grid>
       </Border>
+      </StackPanel>
     </DataTemplate>
 
     <DataTemplate DataType="{x:Type vm:AssistantMessageViewModel}">
+      <StackPanel>
+      <TextBlock Text="{Binding DateHeaderText}"
+                 IsVisible="{Binding ShowDateHeader}"
+                 Classes="caption"
+                 FontSize="10.5"
+                 HorizontalAlignment="Center"
+                 Margin="0,6,0,2" />
       <!-- 命中的浅底铺满整块回复；Padding 6 / Margin 收 6，净位置和原来一致 -->
       <Border Classes.hit="{Binding IsSearchHit}"
               CornerRadius="12"
@@ -311,6 +360,7 @@
                        Margin="8,0,0,0"
                        VerticalAlignment="Center" />
             <TextBlock Text="{Binding TimeText}"
+                       ToolTip.Tip="{Binding FullTimeText}"
                        Classes="caption"
                        FontSize="9.5"
                        Margin="8,0,0,0"
@@ -319,9 +369,17 @@
         </StackPanel>
         </Grid>
       </Border>
+      </StackPanel>
     </DataTemplate>
 
     <DataTemplate DataType="{x:Type vm:ApprovalMessageViewModel}">
+      <StackPanel>
+      <TextBlock Text="{Binding DateHeaderText}"
+                 IsVisible="{Binding ShowDateHeader}"
+                 Classes="caption"
+                 FontSize="10.5"
+                 HorizontalAlignment="Center"
+                 Margin="0,6,0,2" />
       <Border Background="{StaticResource WarningSubtleBrush}"
               BorderBrush="#EBCFA4"
               BorderThickness="1"
@@ -378,6 +436,11 @@
                     ToolTip.Tip="这个工具在本次对话里不再逐次询问"
                     Content="{Binding AlwaysLabel}" />
           </Grid>
+          <TextBlock Text="Ctrl+Enter 允许一次 · Ctrl+Shift+Enter 本会话允许 · Esc 拒绝"
+                     IsVisible="{Binding ShowActions}"
+                     Classes="caption"
+                     FontSize="10"
+                     HorizontalAlignment="Right" />
           <TextBlock Text="{Binding ResolutionText}"
                      IsVisible="{Binding !ShowActions}"
                      Classes="caption"
@@ -385,9 +448,17 @@
                      Foreground="{StaticResource TextSecondaryBrush}" />
         </StackPanel>
       </Border>
+      </StackPanel>
     </DataTemplate>
 
     <DataTemplate DataType="{x:Type vm:NoticeMessageViewModel}">
+      <StackPanel>
+      <TextBlock Text="{Binding DateHeaderText}"
+                 IsVisible="{Binding ShowDateHeader}"
+                 Classes="caption"
+                 FontSize="10.5"
+                 HorizontalAlignment="Center"
+                 Margin="0,6,0,2" />
       <Border Background="{StaticResource SurfaceMutedBrush}"
               BorderBrush="{StaticResource BorderBrush}"
               BorderThickness="1"
@@ -396,6 +467,7 @@
               Margin="0,4,0,12">
         <TextBlock Text="{Binding Text}" TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" />
       </Border>
+      </StackPanel>
     </DataTemplate>
   </UserControl.DataTemplates>
 
@@ -404,7 +476,7 @@
             BorderBrush="{StaticResource BorderBrush}"
             BorderThickness="0,0,0,1"
             Padding="18,12,16,12">
-      <Grid ColumnDefinitions="Auto,*,Auto">
+      <Grid ColumnDefinitions="Auto,*,Auto,Auto">
         <Button Classes="icon" Command="{Binding BackCommand}" ToolTip.Tip="返回首页" Margin="0,0,6,0">
           <arc:ArcGlyph Data="{x:Static arc:ArcIcons.ChevronLeft}" Size="16" />
         </Button>
@@ -413,8 +485,15 @@
           <TextBlock Text="{Binding HeaderSubtitle}" Classes="caption" FontSize="10.5" />
         </StackPanel>
         <!-- 停止已经在输入框里（运行中发送键会变成停止键），重试挂在每条回复下面，
-             顶栏只留状态，避免同一个动作出现两处入口。 -->
-        <Border Grid.Column="2"
+             顶栏只留查找和状态，避免同一个动作出现两处入口。 -->
+        <Button Grid.Column="2"
+                Classes="icon"
+                Margin="0,0,6,0"
+                Command="{Binding OpenSearchCommand}"
+                ToolTip.Tip="在对话里查找（Ctrl+F）">
+          <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Search}" Size="14" />
+        </Button>
+        <Border Grid.Column="3"
                 Background="{StaticResource SurfaceMutedBrush}"
                 CornerRadius="11"
                 Padding="10,4"

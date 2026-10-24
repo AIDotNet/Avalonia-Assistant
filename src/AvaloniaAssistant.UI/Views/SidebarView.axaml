@@ -17,7 +17,7 @@
                 Classes.active="{Binding IsActive}"
                 Command="{Binding OpenCommand}">
           <StackPanel Spacing="1" VerticalAlignment="Center">
-            <TextBlock Text="{Binding Title}"
+            <TextBlock Text="{Binding DisplayTitle}"
                        FontSize="12.5"
                        VerticalAlignment="Center"
                        TextTrimming="CharacterEllipsis" />
@@ -146,7 +146,8 @@
               BorderBrush="{StaticResource BorderBrush}"
               BorderThickness="1"
               HorizontalContentAlignment="Left"
-              Command="{Binding NewTaskCommand}">
+              Command="{Binding NewTaskCommand}"
+              ToolTip.Tip="新建任务（Ctrl+N）">
         <StackPanel Orientation="Horizontal" Spacing="8" Margin="4,0,0,0">
           <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Plus}" Size="15" />
           <TextBlock Text="新建任务" FontSize="13" FontWeight="Medium" VerticalAlignment="Center" />

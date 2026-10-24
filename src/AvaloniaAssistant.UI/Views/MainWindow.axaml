@@ -13,10 +13,29 @@
         Background="{StaticResource AppBackgroundBrush}"
         FontFamily="{StaticResource AppFontFamily}"
         RequestedThemeVariant="Light">
-  <Grid ColumnDefinitions="Auto,*">
-    <views:SidebarView Width="268" DataContext="{Binding}" IsVisible="{Binding IsSidebarVisible}" />
+  <!-- 界面缩放走 LayoutTransform：既放大绘制，也把排版一起按比例算，
+       不会出现字号变大但行高没跟上的重叠。 -->
+  <LayoutTransformControl x:Name="RootTransform">
+  <Grid x:Name="Root" ColumnDefinitions="Auto,Auto,*">
+    <views:SidebarView x:Name="Sidebar"
+                       Width="{Binding SidebarWidth}"
+                       DataContext="{Binding}"
+                       IsVisible="{Binding IsSidebarVisible}" />
 
-    <Border Grid.Column="1"
+    <!-- 侧栏宽度可拖：长任务名和深层目录不该只能靠悬停卡片看全 -->
+    <Border x:Name="SidebarResizer"
+            Grid.Column="1"
+            Width="5"
+            Margin="2,0"
+            Background="Transparent"
+            Cursor="SizeWestEast"
+            IsVisible="{Binding IsSidebarVisible}"
+            ToolTip.Tip="拖动调整侧栏宽度"
+            PointerPressed="OnSidebarResizerPressed"
+            PointerMoved="OnSidebarResizerMoved"
+            PointerReleased="OnSidebarResizerReleased" />
+
+    <Border Grid.Column="2"
             Margin="0,8,8,8"
             Background="{StaticResource SurfaceBrush}"
             BorderBrush="{StaticResource BorderBrush}"
@@ -38,4 +57,5 @@
       </Grid>
     </Border>
   </Grid>
+  </LayoutTransformControl>
 </Window>

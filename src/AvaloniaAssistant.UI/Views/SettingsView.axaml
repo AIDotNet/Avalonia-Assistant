@@ -150,15 +150,72 @@
 
         <Border Height="1" Background="{StaticResource BorderBrush}" />
 
+        <StackPanel Spacing="10">
+          <TextBlock Text="界面与启动" FontSize="15" FontWeight="SemiBold" />
+
+          <Grid ColumnDefinitions="96,*" RowDefinitions="Auto,Auto" RowSpacing="10">
+            <TextBlock Text="界面缩放" FontSize="12" VerticalAlignment="Center" />
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+              <Button Classes="chip"
+                      Classes.active="{Binding IsScale90}"
+                      Command="{Binding SetScaleCommand}"
+                      CommandParameter="0.9"
+                      Content="90%" />
+              <Button Classes="chip"
+                      Classes.active="{Binding IsScale100}"
+                      Command="{Binding SetScaleCommand}"
+                      CommandParameter="1"
+                      Content="100%" />
+              <Button Classes="chip"
+                      Classes.active="{Binding IsScale110}"
+                      Command="{Binding SetScaleCommand}"
+                      CommandParameter="1.1"
+                      Content="110%" />
+              <Button Classes="chip"
+                      Classes.active="{Binding IsScale125}"
+                      Command="{Binding SetScaleCommand}"
+                      CommandParameter="1.25"
+                      Content="125%" />
+              <TextBlock Text="{Binding ScaleText}"
+                         Classes="caption"
+                         VerticalAlignment="Center"
+                         Margin="4,0,0,0" />
+            </StackPanel>
+
+            <TextBlock Grid.Row="1" Text="启动时" FontSize="12" VerticalAlignment="Center" />
+            <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+              <Button Classes="chip"
+                      Classes.active="{Binding IsStartupHome}"
+                      Command="{Binding SetStartupCommand}"
+                      CommandParameter="home"
+                      Content="首页" />
+              <Button Classes="chip"
+                      Classes.active="{Binding IsStartupLast}"
+                      Command="{Binding SetStartupCommand}"
+                      CommandParameter="last"
+                      Content="上次会话" />
+            </StackPanel>
+          </Grid>
+
+          <TextBlock Text="缩放立即生效并自动保存；也可以随时按住 Ctrl 滚滚轮，Ctrl+0 回到 100%。窗口位置、尺寸和侧栏宽度在关窗时记住。"
+                     Classes="caption"
+                     TextWrapping="Wrap"
+                     LineHeight="18" />
+        </StackPanel>
+
+        <Border Height="1" Background="{StaticResource BorderBrush}" />
+
         <StackPanel Spacing="8">
           <TextBlock Text="关于" FontSize="15" FontWeight="SemiBold" />
-          <Grid ColumnDefinitions="86,*" RowDefinitions="Auto,Auto,Auto">
+          <Grid ColumnDefinitions="86,*" RowDefinitions="Auto,Auto,Auto,Auto">
             <TextBlock Text="版本" FontSize="12" Margin="0,4" />
             <TextBlock Grid.Column="1" Text="Avalonia Assistant 1.0.0" FontSize="12" Margin="0,4" />
             <TextBlock Grid.Row="1" Text="技术栈" FontSize="12" Margin="0,4" />
             <TextBlock Grid.Row="1" Grid.Column="1" Text="Avalonia 12 · TKCode.Arc · pi.net" FontSize="12" Margin="0,4" />
             <TextBlock Grid.Row="2" Text="数据目录" FontSize="12" Margin="0,4" />
             <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding DataFolder}" FontSize="12" Margin="0,4" TextTrimming="CharacterEllipsis" />
+            <TextBlock Grid.Row="3" Text="快捷键" FontSize="12" Margin="0,4" />
+            <TextBlock Grid.Row="3" Grid.Column="1" Text="Ctrl+/ 查看全部" FontSize="12" Margin="0,4" />
           </Grid>
           <Button Classes="ghost-action"
                   HorizontalAlignment="Left"

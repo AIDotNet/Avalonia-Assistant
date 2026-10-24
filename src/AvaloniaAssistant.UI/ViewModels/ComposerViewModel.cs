@@ -312,6 +312,7 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
             Id = item.Id,
             Name = item.Name,
             Path = item.Path,
+            FullPath = item.FullPath,
             Source = "workspace",
             Kind = item.Kind,
             Size = item.Size,
