@@ -11,6 +11,28 @@
         <StackPanel Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Center" Spacing="1">
           <TextBlock Text="技能" FontSize="14" FontWeight="Medium" />
           <TextBlock Text="{Binding SubtitleText}" Classes="caption" FontSize="10.5" />
+          <!-- 从哪条任务进来的写在页头上：只挂返回键的悬停提示，用户得先知道要悬停 -->
+          <Button Classes="ghost-action"
+                  Margin="-6,2,0,0"
+                  HorizontalAlignment="Left"
+                  IsVisible="{Binding HasReturnTarget}"
+                  Command="{Binding BackCommand}"
+                  ToolTip.Tip="{Binding BackHint}">
+            <StackPanel Orientation="Horizontal" Spacing="5">
+              <arc:ArcGlyph Data="{x:Static arc:ArcIcons.ChevronLeft}"
+                            Size="11"
+                            VerticalAlignment="Center"
+                            Foreground="{StaticResource TextMutedBrush}" />
+              <TextBlock Text="{Binding BackHint}"
+                         FontSize="11"
+                         VerticalAlignment="Center"
+                         Foreground="{StaticResource TextSecondaryBrush}" />
+              <TextBlock Text="改完回来接着看"
+                         FontSize="11"
+                         VerticalAlignment="Center"
+                         Foreground="{StaticResource TextMutedBrush}" />
+            </StackPanel>
+          </Button>
         </StackPanel>
         <arc:SearchField Grid.Column="2"
                          Width="232"

@@ -71,6 +71,8 @@ public partial class ChatView : UserControl
             _viewModel.SearchHighlightRequested -= OnSearchHighlightRequested;
             _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
 
+            StopHighlightRetry();
+
             // 离开这一页时把读到哪儿记下来：VM 的 Dispose 不一定被调用（跑到后台的任务还活着）
             _viewModel.PersistReadingRatio();
         }
@@ -101,6 +103,15 @@ public partial class ChatView : UserControl
             // 重跑会删掉后面几轮，先把话说清楚再动手
             _viewModel.ConfirmAsync = (title, message, confirmLabel, dangerous) =>
                 ConfirmDialog.ShowAsync(this, title, message, confirmLabel, "取消", dangerous);
+
+            // 换了会话：上一条任务的查找状态不能带过来（视图实例被复用时尤其要清）
+            _searchQuery = string.Empty;
+            _searchTargets = null;
+            _searchHooked.Clear();
+            StopHighlightRetry();
+
+            // 挂载与 DataContext 赋值谁先谁后不确定，两处都补一次
+            RestoreSearchHighlight();
         }
 
         ScheduleInitialScroll();
@@ -585,7 +596,9 @@ public partial class ChatView : UserControl
         // 又得从头往下滚一遍。
         var ratio = _viewModel?.ReadingRatio ?? -1;
         Trace($"init ratio={ratio:0.###} vm={_viewModel is not null}");
-        if (ratio > 0.001 && ratio < 0.995)
+
+        // 0 是有效值（用户自己滚到了最顶），只有负数才代表「没记录过」
+        if (ratio >= 0 && ratio < 0.995)
         {
             _pendingRestoreRatio = ratio;
             _followOutput = false;

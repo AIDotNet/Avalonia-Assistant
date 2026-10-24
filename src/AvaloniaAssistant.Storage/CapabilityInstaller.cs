@@ -475,6 +475,30 @@ public static class CapabilityInstaller
         }
     }
 
+    /// <summary>
+    /// 撤销删除。优先把删除前的<b>整份原文</b>写回去：格式、键顺序、末尾换行都不动——
+    /// 重新序列化会把用户手写的缩进和顺序全部洗掉，撤销看起来像「文件被改写了一遍」。
+    /// 只有文件在删除之后又被别处改过，才退回「把这一条插回去」的合并写法。
+    /// </summary>
+    public static void UndoRemoveMcpServer(
+        string configPath,
+        byte[] originalBytes,
+        byte[] bytesAfterRemove,
+        string name,
+        string entryJson)
+    {
+        // 按字节比、按字节写：用文本会把 BOM 丢掉（Windows 上另存为「UTF-8 带 BOM」很常见），
+        // 撤销回来就不是原来那个文件了。
+        var current = File.Exists(configPath) ? File.ReadAllBytes(configPath) : [];
+        if (originalBytes.Length > 0 && current.AsSpan().SequenceEqual(bytesAfterRemove))
+        {
+            File.WriteAllBytes(configPath, originalBytes);
+            return;
+        }
+
+        RestoreMcpServer(configPath, name, entryJson);
+    }
+
     /// <summary>把删掉的服务端按原样放回去。撤销用：配置里 env / headers 一个字都不改。</summary>
     public static void RestoreMcpServer(string configPath, string name, string entryJson)
     {

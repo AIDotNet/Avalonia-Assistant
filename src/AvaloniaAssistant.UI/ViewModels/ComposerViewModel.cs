@@ -145,7 +145,7 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
     /// 用户不用先按一次才发现行为变了。
     /// </summary>
     public string InputHint => IsTranscribing
-        ? "正在转写这段录音，完成后按 Enter 发送"
+        ? "正在转写这段录音…按 Enter 会在转完后发送"
         : IsSending
             ? "正在读取引用，按 Enter 会在读完后再发"
             : IsBusy
@@ -163,10 +163,15 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
     [NotifyPropertyChangedFor(nameof(InputHint))]
     [NotifyPropertyChangedFor(nameof(CanUseVoice))]
     [NotifyPropertyChangedFor(nameof(MicTooltip))]
+    // CanSend 会拦转写中；不通知的话按钮仍停在上一次判定上，点下去照样把旧文字发出去
+    [NotifyCanExecuteChangedFor(nameof(SendCommand))]
     private bool isTranscribing;
 
     /// <summary>读引用的过程中用户按了 Enter：读完就把输入框里剩下的内容发出去。</summary>
     private bool _sendAfterReading;
+
+    /// <summary>转写期间按过 Enter：转完自动发。和读引用那条排队是两个时机。</summary>
+    private bool _sendAfterTranscribing;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(MicTooltip))]
@@ -338,10 +343,11 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
     /// <summary>
     /// 胶囊的悬停提示。普通任务也有落点（用户目录下的 .avaloniaassistant），
     /// 得说出来——不然让它写的报告到底存哪了，只能靠猜。
-    /// 钉住的会话要额外说清「切换只影响新任务」，否则用户会以为这一下改了当前任务。
+    /// 钉住的会话要额外说清「换工作区不动这条任务」，否则用户会以为这一下改了当前任务。
+    /// 别写成「只对下一个任务生效」：侧栏那个「新建任务」会先清掉工作区，承诺不成立。
     /// </summary>
     public string WorkspacePathHint => IsWorkspacePinned
-        ? $"这条任务固定在 {WorkspacePath}；切换工作区只对下一个任务生效"
+        ? $"这条任务固定在 {WorkspacePath}；换工作区不会改动它"
         : string.IsNullOrWhiteSpace(WorkspacePath)
             ? $"文件落在 {Ui.ShortenPath(PlainWorkspace.Root)}"
             : WorkspacePath;
@@ -489,6 +495,21 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
+    /// 转写期间按了 Enter。这段时间输入框是锁着的（CanSend 拦掉了），
+    /// 不记下来的话这一下就是纯吞键；记下来，转完把结果发出去。
+    /// </summary>
+    public void SendAfterTranscription()
+    {
+        if (!IsTranscribing || _sendAfterTranscribing)
+        {
+            return;
+        }
+
+        _sendAfterTranscribing = true;
+        UpdateActivity();
+    }
+
+    /// <summary>
     /// 读引用期间按了 Enter。不抢那一下按键，记下来等读完再发。
     /// 和生成期间的「排队」是同一个承诺：按下去一定有回应。
     /// </summary>
@@ -534,7 +555,7 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
     /// 生成期间也能发（会变成排队），所以这里不再拦 IsBusy：
     /// 拦掉的结果是 Enter 被吞、界面一声不响，比排队糟得多。
     /// </summary>
-    private bool CanSend() => !IsSending && !IsRecording
+    private bool CanSend() => !IsSending && !IsRecording && !IsTranscribing
         && (!string.IsNullOrWhiteSpace(Text) || Images.Count > 0 || References.Count > 0);
 
     partial void OnTextChanged(string? value)
@@ -976,7 +997,9 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
 
         IsRecording = false;
         IsTranscribing = true;
+        UpdateActivity();
 
+        var transcribed = false;
         try
         {
             var text = await _voice.StopAndTranscribeAsync();
@@ -987,10 +1010,21 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
             }
 
             Text = string.IsNullOrWhiteSpace(Text) ? text : $"{Text.TrimEnd()} {text}";
+            transcribed = true;
         }
         finally
         {
             IsTranscribing = false;
+
+            var queued = _sendAfterTranscribing;
+            _sendAfterTranscribing = false;
+            UpdateActivity();
+
+            // 转写没成功就不发：那一下 Enter 想发的是「刚说的话」，不是输入框里剩下的旧内容
+            if (queued && transcribed && SendCommand.CanExecute(null))
+            {
+                await SendAsync();
+            }
         }
     }
 
@@ -1170,7 +1204,9 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
         }
         else if (IsTranscribing)
         {
-            ActivityText = "正在转写这段录音，转到输入框里…";
+            ActivityText = _sendAfterTranscribing
+                ? "正在转写…转完自动发送"
+                : "正在转写这段录音，转到输入框里…（Enter 转完自动发）";
         }
         else if (IsSending)
         {

@@ -113,7 +113,8 @@ public sealed partial class McpViewModel : ObservableObject
     private string? _editingName;
 
     /// <summary>刚删掉的那条配置（原文），用来给「撤销」兜 10 秒。</summary>
-    private (string Name, string Json)? _undoEntry;
+    /// <summary>撤销条目：这一条自己的原文，加上删除前后的整份文件文本（撤销要原样写回去）。</summary>
+    private (string Name, string Json, byte[] OriginalBytes, byte[] AfterBytes)? _undoEntry;
 
     private DispatcherTimer? _undoTimer;
 
@@ -184,6 +185,9 @@ public sealed partial class McpViewModel : ObservableObject
 
     /// <summary>有来源任务时写清返回哪里：从对话页来查 MCP，返回不该落在首页。</summary>
     public string BackHint => _host.ReturnHint;
+
+    /// <summary>页头那条面包屑显不显示：有「刚才那条任务」才显示。</summary>
+    public bool HasReturnTarget => _host.HasReturnTarget;
 
     [RelayCommand]
     private void Back() => _host.GoBack();
@@ -506,12 +510,14 @@ public sealed partial class McpViewModel : ObservableObject
         {
             // 删除前把原文留一份：撤销要按原样放回去（env / headers 一个字都不改）
             var raw = CapabilityInstaller.ReadMcpServer(_configPathRaw, server.Name);
+            var originalBytes = File.Exists(_configPathRaw) ? File.ReadAllBytes(_configPathRaw) : [];
 
             if (CapabilityInstaller.RemoveMcpServer(_configPathRaw, server.Name))
             {
                 if (raw is not null)
                 {
-                    SetUndo(server.Name, raw);
+                    var afterBytes = File.Exists(_configPathRaw) ? File.ReadAllBytes(_configPathRaw) : [];
+                    SetUndo(server.Name, raw, originalBytes, afterBytes);
                 }
 
                 _host.Runtime.InvalidateSessions();
@@ -526,9 +532,9 @@ public sealed partial class McpViewModel : ObservableObject
     }
 
     /// <summary>撤销窗口。10 秒够用，又不至于让「已删除」的提示一直挂在页面上。</summary>
-    private void SetUndo(string name, string json)
+    private void SetUndo(string name, string json, byte[] originalBytes, byte[] afterBytes)
     {
-        _undoEntry = (name, json);
+        _undoEntry = (name, json, originalBytes, afterBytes);
         CanUndo = true;
         OnPropertyChanged(nameof(UndoText));
 
@@ -560,7 +566,8 @@ public sealed partial class McpViewModel : ObservableObject
 
         try
         {
-            CapabilityInstaller.RestoreMcpServer(_configPathRaw, entry.Name, entry.Json);
+            CapabilityInstaller.UndoRemoveMcpServer(
+                _configPathRaw, entry.OriginalBytes, entry.AfterBytes, entry.Name, entry.Json);
             ClearUndo();
             _host.Runtime.InvalidateSessions();
             Refresh();

@@ -66,7 +66,8 @@ internal static class DemoData
         var now = DateTimeOffset.Now;
         return new ChatSession
         {
-            Id = "demo-chat",
+            // 和侧栏第一条演示任务同一个 id：选中态、等待确认的盾牌都按会话 id 关联
+            Id = "demo",
             Title = "整理电脑配置清单",
             CreatedAt = now.AddMinutes(-14),
             UpdatedAt = now.AddMinutes(-1),

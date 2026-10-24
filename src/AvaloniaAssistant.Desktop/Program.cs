@@ -157,6 +157,36 @@ internal static class Program
                     }
 
                     break;
+                case "--settings-invalid":
+                    AppLaunchOptions.SettingsInvalid = true;
+                    break;
+                case "--demo-toast":
+                    AppLaunchOptions.DemoToast = true;
+                    break;
+                case "--composer-hint":
+                    AppLaunchOptions.ComposerHint = true;
+                    break;
+                case "--mcp-delete":
+                    AppLaunchOptions.McpDelete = true;
+                    break;
+                case "--verify-back":
+                    AppLaunchOptions.VerifyBack = true;
+                    break;
+                case "--verify-delete":
+                    AppLaunchOptions.VerifyDelete = true;
+                    break;
+                case "--chat-search-close":
+                    AppLaunchOptions.ChatSearchClose = true;
+                    break;
+                case "--verify-pin":
+                    AppLaunchOptions.VerifyPin = true;
+                    break;
+                case "--settings-from-chat":
+                    AppLaunchOptions.SettingsFromChat = true;
+                    break;
+                case "--verify-mcp":
+                    AppLaunchOptions.VerifyMcp = true;
+                    break;
                 case "--retry-confirm":
                     AppLaunchOptions.ShowRetryConfirm = true;
                     break;
@@ -194,9 +224,6 @@ internal static class Program
                     break;
                 case "--tooltips":
                     AppLaunchOptions.ShowTooltips = true;
-                    break;
-                case "--data-dir" when index + 1 < args.Length:
-                    AppPaths.UseRoot(args[++index]);
                     break;
             }
         }

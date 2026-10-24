@@ -195,6 +195,9 @@ public sealed partial class ToolsViewModel : ObservableObject
     /// <summary>有来源任务时写清返回哪里：从对话页来查技能，返回不该落在首页。</summary>
     public string BackHint => _host.ReturnHint;
 
+    /// <summary>页头那条面包屑显不显示：有「刚才那条任务」才显示。</summary>
+    public bool HasReturnTarget => _host.HasReturnTarget;
+
     [RelayCommand]
     private void Back() => _host.GoBack();
 

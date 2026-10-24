@@ -178,6 +178,13 @@ public partial class ComposerView : UserControl
             return;
         }
 
+        // 正在转写：同样不许吞键，转完把那句话发出去
+        if (viewModel.IsTranscribing)
+        {
+            viewModel.SendAfterTranscription();
+            return;
+        }
+
         if (viewModel.SendCommand.CanExecute(null))
         {
             viewModel.SendCommand.Execute(null);

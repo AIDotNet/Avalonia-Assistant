@@ -573,6 +573,9 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     /// <summary>返回按钮的悬停提示：有来源任务时写清回到哪，别让人猜「返回」是回首页还是回对话。</summary>
     public string BackHint => _host.ReturnHint;
 
+    /// <summary>页头那条面包屑显不显示：有「刚才那条任务」才显示。</summary>
+    public bool HasReturnTarget => _host.HasReturnTarget;
+
     /// <summary>改过东西就直接返回，等于把改动丢掉；先问一句，给「保存并返回」和「放弃」两条路。</summary>
     [RelayCommand]
     private void Back()

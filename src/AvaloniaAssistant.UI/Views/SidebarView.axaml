@@ -17,8 +17,9 @@
                 Classes.active="{Binding IsActive}"
                 Command="{Binding OpenCommand}">
           <!-- 时间放在行内右侧：以前只有悬停 450ms 的信息卡才看得到，
-               一屏任务分不清哪个是刚跑的。悬停时它淡出，让位给「⋯」。 -->
-          <Grid ColumnDefinitions="*,Auto">
+               一屏任务分不清哪个是刚跑的。悬停时它淡出，让位给「⋯」。
+               状态图标单占一列：以前是绝对定位浮在右边，会盖住时间末尾那个字。 -->
+          <Grid ColumnDefinitions="*,Auto,Auto">
             <StackPanel Spacing="1" VerticalAlignment="Center">
               <!-- 置顶标记：只给置顶的那几条占位，没置顶时这一列宽度是 0 -->
               <Grid ColumnDefinitions="Auto,*">
@@ -44,7 +45,43 @@
                          FontSize="10"
                          TextTrimming="CharacterEllipsis" />
             </StackPanel>
-            <TextBlock Grid.Column="1"
+
+            <!-- 三态各占同一格，同一时刻最多亮一个；没亮时这一列宽度是 0 -->
+            <Panel Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Center">
+              <!-- 后台跑完、还没回来看：一个点比"再点进去确认"省事 -->
+              <Ellipse Width="6"
+                       Height="6"
+                       IsVisible="{Binding HasUnread}"
+                       Fill="{StaticResource AccentBrush}"
+                       HorizontalAlignment="Right"
+                       VerticalAlignment="Center"
+                       ToolTip.Tip="已跑完，还没看过" />
+
+              <!-- 后台还在跑：转圈和对话里的「正在处理」是同一个语义，比一个圆点更不容易被读成未读 -->
+              <arc:ArcSpinner IsVisible="{Binding ShowRunningSpinner}"
+                              Width="11"
+                              Height="11"
+                              HorizontalAlignment="Right"
+                              VerticalAlignment="Center"
+                              Foreground="{StaticResource TextMutedBrush}"
+                              ToolTip.Tip="正在运行" />
+
+              <!-- 卡在工具确认上：不转圈，改琥珀盾牌。这两件事对用户是两种等待，不能长一样 -->
+              <Border IsVisible="{Binding NeedsApproval}"
+                      Width="11"
+                      Height="11"
+                      HorizontalAlignment="Right"
+                      VerticalAlignment="Center"
+                      ToolTip.Tip="等待你确认：点开这条任务处理">
+                <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Shield}"
+                              Size="11"
+                              Foreground="{StaticResource WarningBrush}"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Center" />
+              </Border>
+            </Panel>
+
+            <TextBlock Grid.Column="2"
                        Classes="caption row-time"
                        Text="{Binding TimeText}"
                        FontSize="9.5"
@@ -52,41 +89,6 @@
                        VerticalAlignment="Center" />
           </Grid>
         </Button>
-
-        <!-- 后台跑完、还没回来看：一个点比"再点进去确认"省事 -->
-        <Ellipse Width="6"
-                 Height="6"
-                 IsVisible="{Binding HasUnread}"
-                 Fill="{StaticResource AccentBrush}"
-                 HorizontalAlignment="Right"
-                 VerticalAlignment="Center"
-                 Margin="0,0,29,0"
-                 ToolTip.Tip="已跑完，还没看过" />
-
-        <!-- 后台还在跑：转圈和对话里的「正在处理」是同一个语义，比一个圆点更不容易被读成未读 -->
-        <arc:ArcSpinner IsVisible="{Binding ShowRunningSpinner}"
-                        Width="11"
-                        Height="11"
-                        HorizontalAlignment="Right"
-                        VerticalAlignment="Center"
-                        Margin="0,0,28,0"
-                        Foreground="{StaticResource TextMutedBrush}"
-                        ToolTip.Tip="正在运行" />
-
-        <!-- 卡在工具确认上：不转圈，改琥珀盾牌。这两件事对用户是两种等待，不能长一样 -->
-        <Border IsVisible="{Binding NeedsApproval}"
-                Width="11"
-                Height="11"
-                HorizontalAlignment="Right"
-                VerticalAlignment="Center"
-                Margin="0,0,28,0"
-                ToolTip.Tip="等待你确认：点开这条任务处理">
-          <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Shield}"
-                        Size="11"
-                        Foreground="{StaticResource WarningBrush}"
-                        HorizontalAlignment="Center"
-                        VerticalAlignment="Center" />
-        </Border>
 
         <Button Classes="icon row-more"
                 Width="22"

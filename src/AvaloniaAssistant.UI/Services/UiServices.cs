@@ -347,6 +347,36 @@ public static class AppLaunchOptions
     /// <summary>开发用：给示例会话一个「上次读到 45%」的位置，检查打开时是否接着读而不是跳到底部。</summary>
     public static double? ReadingRatio { get; set; }
 
+    /// <summary>开发用：设置页摆出「数值填错」的样子，检查字段下面的红字和保存拦截。</summary>
+    public static bool SettingsInvalid { get; set; }
+
+    /// <summary>开发用：对话页摆一条导出回执，检查一次性提示条和「打开所在文件夹」。</summary>
+    public static bool DemoToast { get; set; }
+
+    /// <summary>开发用：输入框摆出「还没配 Key」的就地提示，检查麦克风那条说明。</summary>
+    public static bool ComposerHint { get; set; }
+
+    /// <summary>开发用：MCP 第一张卡片进入「确认删除」态，检查二次确认。</summary>
+    public static bool McpDelete { get; set; }
+
+    /// <summary>开发用：从对话进设置再返回，验收「回到原来那条任务」。</summary>
+    public static bool VerifyBack { get; set; }
+
+    /// <summary>开发用：先滚动再删任务，验收「删掉的存档不会被写回来」。</summary>
+    public static bool VerifyDelete { get; set; }
+
+    /// <summary>开发用：填好查找词后立刻关掉查找条，验收高亮被清干净。</summary>
+    public static bool ChatSearchClose { get; set; }
+
+    /// <summary>开发用：反复置顶/取消置顶一条任务，验收分组顺序和存档里的 pinned。</summary>
+    public static bool VerifyPin { get; set; }
+
+    /// <summary>开发用：先开一条任务再进设置，检查页头上那条「返回某条任务」的面包屑。</summary>
+    public static bool SettingsFromChat { get; set; }
+
+    /// <summary>开发用：MCP 删除走三步（确认态 → 真删 → 撤销），逐步比对 mcp.json 的原文。</summary>
+    public static bool VerifyMcp { get; set; }
+
     /// <summary>摆出「重跑会删掉后面几轮」的确认弹窗，检查版式与红色主按钮。</summary>
     public static bool ShowRetryConfirm { get; set; }
 

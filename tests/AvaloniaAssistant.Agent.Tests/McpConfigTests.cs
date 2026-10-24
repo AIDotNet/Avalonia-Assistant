@@ -258,6 +258,89 @@ public sealed class McpConfigTests : IDisposable
         Assert.Equal("node", ReadServers()["other"]!["command"]!.GetValue<string>());
     }
 
+    /// <summary>
+    /// 撤销删除要把整份原文写回去：缩进、键顺序、末尾换行都不该被重新序列化洗掉。
+    /// 验收口径是「恢复原 JSON 文本」，不是「字段值还在」。
+    /// </summary>
+    [Fact]
+    public void UndoWritesBackTheOriginalText()
+    {
+        var original = """
+            {
+              "mcpServers": {
+                "filesystem": { "command": "node", "args": ["a.js"] },
+                "other": { "command": "node" }
+              }
+            }
+
+            """;
+
+        File.WriteAllText(Config, original);
+        var originalBytes = File.ReadAllBytes(Config);
+        var raw = CapabilityInstaller.ReadMcpServer(Config, "filesystem");
+        Assert.NotNull(raw);
+
+        Assert.True(CapabilityInstaller.RemoveMcpServer(Config, "filesystem"));
+        var afterRemove = File.ReadAllBytes(Config);
+
+        CapabilityInstaller.UndoRemoveMcpServer(Config, originalBytes, afterRemove, "filesystem", raw!);
+
+        Assert.Equal(originalBytes, File.ReadAllBytes(Config));
+    }
+
+    /// <summary>
+    /// 另存为「UTF-8 带 BOM」的配置文件，撤销之后 BOM 也得回来——
+    /// 按文本读写会把 BOM 洗掉，文件看起来一样、字节不一样。
+    /// </summary>
+    [Fact]
+    public void UndoKeepsUtf8Bom()
+    {
+        var body = """
+            {
+              "mcpServers": {
+                "filesystem": { "command": "node" }
+              }
+            }
+
+            """;
+        var bom = new byte[] { 0xEF, 0xBB, 0xBF };
+        File.WriteAllBytes(Config, [.. bom, .. System.Text.Encoding.UTF8.GetBytes(body)]);
+
+        var original = File.ReadAllBytes(Config);
+        var raw = CapabilityInstaller.ReadMcpServer(Config, "filesystem");
+        Assert.NotNull(raw);
+
+        Assert.True(CapabilityInstaller.RemoveMcpServer(Config, "filesystem"));
+        var afterRemove = File.ReadAllBytes(Config);
+
+        CapabilityInstaller.UndoRemoveMcpServer(Config, original, afterRemove, "filesystem", raw!);
+
+        var restored = File.ReadAllBytes(Config);
+        Assert.Equal(original, restored);
+        Assert.Equal(bom, restored[..3]);
+    }
+
+    /// <summary>删除之后文件又被别处改过：旧原文不能覆盖别人的改动，退回合并写法。</summary>
+    [Fact]
+    public void UndoMergesWhenFileChangedAfterRemoval()
+    {
+        File.WriteAllText(Config, """{"mcpServers":{"filesystem":{"command":"node"}}}""");
+        var raw = CapabilityInstaller.ReadMcpServer(Config, "filesystem");
+        var original = File.ReadAllBytes(Config);
+
+        Assert.True(CapabilityInstaller.RemoveMcpServer(Config, "filesystem"));
+        var afterRemove = File.ReadAllBytes(Config);
+
+        // 撤销窗口里别处又加了一个服务端
+        CapabilityInstaller.AddMcpServer(Config, "late", "node", "late.js");
+
+        CapabilityInstaller.UndoRemoveMcpServer(Config, original, afterRemove, "filesystem", raw!);
+
+        var servers = ReadServers();
+        Assert.True(servers.ContainsKey("filesystem"));
+        Assert.True(servers.ContainsKey("late"));
+    }
+
     /// <summary>编辑要原地替换：换命令换参数，但 env 这类表单表达不了的字段得留着。</summary>
     [Fact]
     public void ReplaceKeepsFieldsTheFormCannotExpress()

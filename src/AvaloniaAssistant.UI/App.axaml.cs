@@ -173,6 +173,12 @@ public partial class AssistantApp : Application
                         {
                             demoChat.OpenSearchCommand.Execute(null);
                             demoChat.SearchQuery = AppLaunchOptions.ChatSearch;
+
+                            if (AppLaunchOptions.ChatSearchClose)
+                            {
+                                // 关掉查找条：正文里的高亮必须一起消失
+                                demoChat.CloseSearchCommand.Execute(null);
+                            }
                         }
 
                         if (AppLaunchOptions.ApprovalDemo)
@@ -197,6 +203,19 @@ public partial class AssistantApp : Application
                             // 「已经跑了一会儿」：状态词旁边那颗秒表平时只有真跑起来才有
                             demoChat.ShowDemoRunning();
                         }
+
+                        if (AppLaunchOptions.DemoToast)
+                        {
+                            // 导出回执：真实导出要过系统另存为对话框，截不到
+                            demoChat.ShowDemoToast();
+                        }
+
+                        if (AppLaunchOptions.ComposerHint)
+                        {
+                            // 麦克风在没配 Key 时的就地说明：真点一下才有，截图里直接摆
+                            demoChat.Composer.SetupHint =
+                                "语音输入要用模型服务的 Key 做转写：先在设置里填 API Key，这段文字会留在这里。";
+                        }
                     }
 
                     break;
@@ -205,17 +224,49 @@ public partial class AssistantApp : Application
                     _ = viewModel.StartNewChatAsync((string?)null);
                     break;
                 case "settings":
+                    if (AppLaunchOptions.SettingsFromChat)
+                    {
+                        // 从一条任务进设置：页头应该出现「返回…」的面包屑
+                        viewModel.LoadDemoSidebar();
+                        viewModel.LoadDemoChat();
+                    }
+
                     await viewModel.OpenSettingsAsync();
                     if (AppLaunchOptions.TestConnection && viewModel.CurrentPage is SettingsViewModel settingsPage)
                     {
                         await settingsPage.TestConnectionCommand.ExecuteAsync(null);
                     }
 
+                    if (AppLaunchOptions.SettingsInvalid && viewModel.CurrentPage is SettingsViewModel invalidPage)
+                    {
+                        // 摆出两个填错的值：字段下面该出红字，保存该被拦下
+                        invalidPage.TemperatureText = "2.6";
+                        invalidPage.MaxTokensText = "四万";
+                    }
+
                     break;
                 case "tools":
+                    if (AppLaunchOptions.SettingsFromChat)
+                    {
+                        viewModel.LoadDemoSidebar();
+                        viewModel.LoadDemoChat();
+                    }
+
                     viewModel.OpenTools();
                     break;
                 case "mcp":
+                    if (AppLaunchOptions.SettingsFromChat)
+                    {
+                        viewModel.LoadDemoSidebar();
+                        viewModel.LoadDemoChat();
+                    }
+
+                    if (AppLaunchOptions.McpDelete)
+                    {
+                        // mcp.json 在「工作区/.pi」下：先把演示工作区摆出来，卡片才有内容可删
+                        viewModel.LoadDemoSidebar();
+                    }
+
                     viewModel.OpenMcp();
                     if (AppLaunchOptions.OpenMcpImport && viewModel.CurrentPage is McpViewModel mcp)
                     {
@@ -223,7 +274,107 @@ public partial class AssistantApp : Application
                         mcp.FillExample();
                     }
 
+                    if (AppLaunchOptions.McpDelete
+                        && viewModel.CurrentPage is McpViewModel mcpPage
+                        && mcpPage.Servers.FirstOrDefault() is { } card)
+                    {
+                        // 删除第一步：卡片翻成「确认删除」，不是一键就没
+                        card.StartDeleteCommand.Execute(null);
+                    }
                     break;
+            }
+
+            // 验收用：从对话进设置再「返回」，看落回哪里、那条任务还在不在。
+            if (AppLaunchOptions.VerifyBack)
+            {
+                if (viewModel.CurrentPage is not ChatViewModel)
+                {
+                    viewModel.LoadDemoSidebar();
+                    viewModel.LoadDemoChat();
+                }
+
+                var before = (viewModel.CurrentPage as ChatViewModel)?.Title ?? "(无)";
+                await viewModel.OpenSettingsAsync();
+                var entered = viewModel.CurrentPage is SettingsViewModel;
+                var hintInSettings = viewModel.ReturnHint;
+
+                viewModel.GoBack();
+
+                var page = viewModel.CurrentPage;
+                Console.WriteLine(
+                    $"[verify-back] 原任务：{before} / 进设置：{entered} / 设置里返回提示：{hintInSettings}"
+                    + $" / 返回后：{page?.GetType().Name}"
+                    + $" / 任务：{(page as ChatViewModel)?.Title ?? "(无)"}");
+            }
+
+            // 验收用：MCP 删除三步，逐步比对 mcp.json 的原文
+            if (AppLaunchOptions.VerifyMcp)
+            {
+                viewModel.LoadDemoSidebar();
+                viewModel.OpenMcp();
+
+                if (viewModel.CurrentPage is McpViewModel page && page.Servers.FirstOrDefault() is { } server)
+                {
+                    var config = Path.Combine(viewModel.Settings.WorkspacePath, ".pi", "mcp.json");
+
+                    var before = File.Exists(config) ? File.ReadAllText(config) : string.Empty;
+                    server.StartDeleteCommand.Execute(null);
+                    var afterConfirm = File.Exists(config) ? File.ReadAllText(config) : string.Empty;
+
+                    page.RemoveCommand.Execute(server);
+                    var afterRemove = File.Exists(config) ? File.ReadAllText(config) : string.Empty;
+
+                    page.UndoRemoveCommand.Execute(null);
+                    var afterUndo = File.Exists(config) ? File.ReadAllText(config) : string.Empty;
+
+                    Console.WriteLine(
+                        $"[verify-mcp] 确认态未写盘={afterConfirm == before}"
+                        + $" 删除生效={!afterRemove.Contains(server.Name)}"
+                        + $" 撤销还原={afterUndo == before}");
+                }
+            }
+
+            // 验收用：置顶一次、取消一次，看分组顺序和磁盘上的 pinned
+            if (AppLaunchOptions.VerifyPin)
+            {
+                if (viewModel.CurrentPage is not ChatViewModel)
+                {
+                    viewModel.LoadDemoSidebar();
+                    viewModel.LoadDemoChat();
+                }
+
+                string Describe() => string.Join(
+                    " | ",
+                    viewModel.SessionGroups.Select(group => $"{group.Header}:{group.Items.Count}"));
+
+                const string target = "demo-2";
+                await viewModel.TogglePinAsync(target);
+                Console.WriteLine($"[verify-pin] 置顶后 {Describe()}");
+
+                await viewModel.TogglePinAsync(target);
+                Console.WriteLine($"[verify-pin] 取消后 {Describe()}");
+            }
+
+            // 验收用：滚过一段再删任务，看存档会不会被 Dispose 写回来
+            if (AppLaunchOptions.VerifyDelete)
+            {
+                if (viewModel.CurrentPage is not ChatViewModel)
+                {
+                    viewModel.LoadDemoSidebar();
+                    viewModel.LoadDemoChat();
+                }
+
+                if (viewModel.CurrentPage is ChatViewModel target)
+                {
+                    var id = target.Session.Id;
+                    target.ReportReadingRatio(0.4);
+                    await viewModel.DeleteSessionAsync(id);
+
+                    var file = Path.Combine(AppPaths.Sessions, id + ".json");
+                    Console.WriteLine(
+                        $"[verify-delete] id={id} 页面={viewModel.CurrentPage?.GetType().Name}"
+                        + $" 存档还在={File.Exists(file)}");
+                }
             }
 
             if (!string.IsNullOrWhiteSpace(AppLaunchOptions.RunPrompt))

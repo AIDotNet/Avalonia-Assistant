@@ -72,13 +72,14 @@ public sealed partial class WorkspacePickerViewModel : ObservableObject
     public string AddLimitHint => $"最多 {MainWindowViewModel.MaxWorkspaceCount} 个工作空间，先在侧栏移除一个再加。";
 
     /// <summary>
-    /// 这条任务已经开口、目录钉住了：切换只影响下一个任务。
+    /// 这条任务已经开口、目录钉住了：切换不动它，只影响之后在空间里新建的任务。
     /// 不说的话，用户会以为这一下改的是当前任务——胶囊一变，他更确信了。
     /// </summary>
     public bool IsPinnedToTask => _host.IsActiveWorkspacePinned;
 
     public string PinHint
-        => $"这条任务固定在 {Ui.ShortenPath(_host.ActiveWorkspacePath)}；切换工作区只对下一个任务生效。";
+        => $"这条任务固定在 {Ui.ShortenPath(_host.ActiveWorkspacePath)}；切换不会改动它，"
+           + "只影响之后在空间里新建的任务。";
 
     /// <summary>当前是「普通任务」：工作区那条是空的，浮层最下面那行打勾。</summary>
     public bool IsPlainTask => string.IsNullOrWhiteSpace(_host.ActiveWorkspacePath);

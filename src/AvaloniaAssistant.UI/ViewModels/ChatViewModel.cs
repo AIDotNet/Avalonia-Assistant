@@ -118,13 +118,17 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
         // 页面被换走（去设置、回首页、开别的任务）时把没发出去的草稿留一份，
         // 否则几十个字跟着 ChatViewModel 一起没了。
         // 一句话都没发过的新任务还没有稳定 id，走单独的待用草稿位。
-        if (Session.Entries.Count == 0)
+        // 已经删掉的任务不留草稿：留着的话下次新建任务会冒出一段来自已删任务的话。
+        if (!IsDiscarded)
         {
-            _host.SavePendingDraft(Composer.Text);
-        }
-        else
-        {
-            _host.SaveDraft(Session.Id, Composer.Text);
+            if (Session.Entries.Count == 0)
+            {
+                _host.SavePendingDraft(Composer.Text);
+            }
+            else
+            {
+                _host.SaveDraft(Session.Id, Composer.Text);
+            }
         }
 
         _settings.Changed -= OnSettingsChanged;
@@ -261,6 +265,14 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
         }
 
         ratio = Math.Clamp(ratio, 0, 1);
+
+        // 停在底部本来就是这个应用的默认行为（-1 等于「打开就到底」）：
+        // 记成 1 只会让「打开一条任务再关掉」也重写一遍存档，没有信息量。
+        if (Session.ReadingRatio < 0 && ratio >= 0.995)
+        {
+            return;
+        }
+
         if (Math.Abs(Session.ReadingRatio - ratio) < 0.01)
         {
             return;
@@ -270,9 +282,20 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
         _readingRatioDirty = true;
     }
 
+    /// <summary>截图/自动化跑批：临时会话不该写进真实存档（和窗口尺寸同一条规则）。</summary>
+    private static bool IsScreenshotRun
+        => !string.IsNullOrWhiteSpace(AppLaunchOptions.ScreenshotPath) && !AppLaunchOptions.IsolatedData;
+
     /// <summary>切页 / 关窗时落盘。滚动过程中一次都不写文件。</summary>
     public void PersistReadingRatio()
     {
+        // 任务已经删掉：这一写会把刚删的存档又写回磁盘，下次启动它自己回来。
+        // DeleteSessionAsync 的顺序是「删文件 → 切页 → Dispose」，正好会走到这里。
+        if (IsDiscarded || IsScreenshotRun)
+        {
+            return;
+        }
+
         if (!_readingRatioDirty || Session.Entries.Count == 0)
         {
             return;
@@ -456,7 +479,7 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
     /// </summary>
     public IReadOnlyList<MessageViewModel> SearchHitMessages => _searchHits;
 
-    partial void OnSearchQueryChanged(string? value) => RebuildSearchHits(value);
+    partial void OnSearchQueryChanged(string value) => RebuildSearchHits(value);
 
     [RelayCommand]
     private void OpenSearch()
@@ -1066,6 +1089,12 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
         // 截到一条不剩时这条任务又变成「没开口」，工作区重新跟着选择走
         SyncComposerWorkspacePin();
 
+        // 命中的消息已经被删掉了：不重算的话，查找条上的「共 N 条」还挂着不存在的那几轮
+        if (IsSearchOpen && !string.IsNullOrWhiteSpace(SearchQuery))
+        {
+            RebuildSearchHits(SearchQuery);
+        }
+
         await RunPromptAsync(prompt, addUserMessage: false);
     }
 
@@ -1425,6 +1454,18 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
         StatusText = "正在执行「执行命令」…";
         RunClockText = "1m23s";
         Composer.IsBusy = true;
+    }
+
+    /// <summary>
+    /// 仅用于 --screenshot：摆一条导出回执。真实导出要经过系统另存为对话框，截不到这一条。
+    /// </summary>
+    public void ShowDemoToast()
+    {
+        var target = string.IsNullOrWhiteSpace(_settings.Current.WorkspacePath)
+            ? Path.GetTempPath()
+            : _settings.Current.WorkspacePath;
+
+        ShowToast("已导出 整理电脑配置清单.md", target);
     }
 
     /// <summary>

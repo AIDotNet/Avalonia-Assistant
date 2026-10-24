@@ -483,6 +483,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public string ReturnHint => _returnChat is null ? "返回首页" : $"返回「{_returnChat.Title}」";
 
     /// <summary>
+    /// 有没有「刚才那条任务」可以回去。设置 / 技能 / MCP 的页头按它决定要不要显示面包屑——
+    /// 只靠返回键的悬停提示，用户得先知道要悬停才看得见。
+    /// </summary>
+    public bool HasReturnTarget => _returnChat is not null;
+
+    /// <summary>
     /// 当前任务真正会读写的目录：已经开口的会话按钉住的那个，否则按设置。
     /// 工作区浮层的勾选和「普通任务」判断都用它，避免浮层说一套、任务跑另一套。
     /// </summary>
@@ -500,6 +506,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         {
             _returnChat = chat;
             OnPropertyChanged(nameof(ReturnHint));
+            OnPropertyChanged(nameof(HasReturnTarget));
         }
     }
 
@@ -514,6 +521,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
         _returnChat = null;
         OnPropertyChanged(nameof(ReturnHint));
+        OnPropertyChanged(nameof(HasReturnTarget));
     }
 
     /// <summary>「返回」：有来源就回来源，没有才回首页。</summary>
@@ -522,6 +530,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         var target = _returnChat;
         _returnChat = null;
         OnPropertyChanged(nameof(ReturnHint));
+        OnPropertyChanged(nameof(HasReturnTarget));
 
         if (target is null)
         {
@@ -776,6 +785,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         {
             _returnChat = null;
             OnPropertyChanged(nameof(ReturnHint));
+            OnPropertyChanged(nameof(HasReturnTarget));
         }
 
         if (CurrentPage is ChatViewModel chat && chat.Session.Id == sessionId)
@@ -1418,6 +1428,22 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// <summary>仅用于 --screenshot：塞几轮假对话，让侧栏的空间/任务分层能看出效果。</summary>
     public void LoadDemoSidebar()
     {
+        // 截图环境的数据目录是空的：没有工作区就先摆一个。
+        // 否则「空间」区、输入框胶囊、页头副标题全是空态，看不出「任务钉在哪个目录」这类状态。
+        // 只在 --data-dir 隔离环境里摆：这项设置会被后续保存写进 settings.json，
+        // 不带隔离跑截图会把开发者的真实工作区改成一个演示目录。
+        if (AppLaunchOptions.IsolatedData && Settings.RecentWorkspaces.Count == 0)
+        {
+            // 放在数据目录里而不是用户主目录：截图跑完删掉就行，不往家里留东西
+            var demoWorkspace = Path.Combine(AppPaths.Root, "演示工作区");
+            Directory.CreateDirectory(demoWorkspace);
+            Settings.RecentWorkspaces.Add(demoWorkspace);
+            if (string.IsNullOrWhiteSpace(Settings.WorkspacePath))
+            {
+                Settings.WorkspacePath = demoWorkspace;
+            }
+        }
+
         var paths = WorkspacePaths(Settings);
         var now = DateTimeOffset.Now;
 
@@ -1448,20 +1474,14 @@ public sealed partial class MainWindowViewModel : ObservableObject
             };
         }
 
+        // 有空间时「任务」默认收起，截图里就只剩一个标题；演示数据把两区都摊开
+        _taskSectionExpanded = true;
+        _workspaceSectionExpanded = true;
+
         RebuildSidebar();
 
-        // TEMP: 截图验证悬停卡片用
-        if (Workspaces.FirstOrDefault()?.Sessions.FirstOrDefault() is { } first)
-        {
-            first.IsActive = true;
-
-            // --approval-wait 的意思是「摆出等待确认的状态」，侧栏那行也得跟着摆，
-            // 否则只能截到输入框上方那条常驻提示，看不见盾牌与转圈是否打架
-            if (AppLaunchOptions.ApprovalWait)
-            {
-                first.NeedsApproval = true;
-            }
-        }
+        // 侧栏的选中态、盾牌都由「会话 id」算出来（CreateSessionItem 里按 chat 状态回填），
+        // 所以这里不再手动摆：手动设的标记下一次重建就被真实状态覆盖掉。
     }
 
     private async Task SetActiveSessionAsync(string? sessionId)
