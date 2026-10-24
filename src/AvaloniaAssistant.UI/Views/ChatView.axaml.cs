@@ -61,6 +61,8 @@ public partial class ChatView : UserControl
         if (_viewModel is not null)
         {
             _viewModel.ScrollToEndRequested -= OnScrollToEndRequested;
+            _viewModel.ScrollToMessageRequested -= OnScrollToMessageRequested;
+            _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
         }
 
         base.OnDetachedFromVisualTree(e);
@@ -71,12 +73,16 @@ public partial class ChatView : UserControl
         if (_viewModel is not null)
         {
             _viewModel.ScrollToEndRequested -= OnScrollToEndRequested;
+            _viewModel.ScrollToMessageRequested -= OnScrollToMessageRequested;
+            _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
         }
 
         _viewModel = DataContext as ChatViewModel;
         if (_viewModel is not null)
         {
             _viewModel.ScrollToEndRequested += OnScrollToEndRequested;
+            _viewModel.ScrollToMessageRequested += OnScrollToMessageRequested;
+            _viewModel.PropertyChanged += OnViewModelPropertyChanged;
         }
 
         ScheduleInitialScroll();
@@ -96,7 +102,82 @@ public partial class ChatView : UserControl
     private void OnAttachedToVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
     {
         AttachScrollViewer();
+        AttachSearchInput();
         ScheduleInitialScroll();
+    }
+
+    /// <summary>
+    /// 查找框的按键要在隧道阶段截：arc:Input 内部的 TextBox 自己也会吃 Enter。
+    /// </summary>
+    private void AttachSearchInput()
+    {
+        if (_searchWired || this.FindControl<Control>("SearchInput") is not { } search)
+        {
+            return;
+        }
+
+        search.AddHandler(KeyDownEvent, OnSearchKeyDown, RoutingStrategies.Tunnel);
+        _searchWired = true;
+    }
+
+    private bool _searchWired;
+
+    private void OnSearchKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (_viewModel is null)
+        {
+            return;
+        }
+
+        switch (e.Key)
+        {
+            case Key.Enter when !e.KeyModifiers.HasFlag(KeyModifiers.Shift):
+                _viewModel.NextSearchHitCommand.Execute(null);
+                e.Handled = true;
+                break;
+
+            case Key.Enter:
+                _viewModel.PreviousSearchHitCommand.Execute(null);
+                e.Handled = true;
+                break;
+
+            case Key.Escape:
+                _viewModel.CloseSearchCommand.Execute(null);
+                e.Handled = true;
+                break;
+        }
+    }
+
+    /// <summary>查找条打开、或者从一个命中跳到另一个时，把键盘交给查找框。</summary>
+    private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(ChatViewModel.IsSearchOpen) || _viewModel?.IsSearchOpen != true)
+        {
+            return;
+        }
+
+        Dispatcher.UIThread.Post(
+            () => this.FindControl<Control>("SearchInput")?.Focus(),
+            DispatcherPriority.Input);
+    }
+
+    /// <summary>把命中的那条消息滚进视野。容器还没生成时等一趟布局。</summary>
+    private void OnScrollToMessageRequested(object? sender, MessageViewModel message)
+    {
+        if (this.FindControl<ItemsControl>("MessagesItems") is not { } items)
+        {
+            return;
+        }
+
+        if (items.ContainerFromItem(message) is { } container)
+        {
+            container.BringIntoView();
+            return;
+        }
+
+        Dispatcher.UIThread.Post(
+            () => items.ContainerFromItem(message)?.BringIntoView(),
+            DispatcherPriority.Loaded);
     }
 
     private void AttachScrollViewer()

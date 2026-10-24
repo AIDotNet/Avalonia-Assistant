@@ -29,10 +29,12 @@ public sealed partial class SessionItemViewModel : ObservableObject
         string workspaceName,
         Action<string> open,
         Action<string> delete,
-        Func<string, string, Task<string?>> rename)
+        Func<string, string, Task<string?>> rename,
+        string matchSnippet = "")
     {
         Id = session.Id;
         Title = session.Title;
+        MatchSnippet = matchSnippet;
         TimeText = SessionText.RelativeTime(session.UpdatedAt);
         WorkspaceName = string.IsNullOrWhiteSpace(workspaceName) ? "普通对话" : workspaceName;
         ModeText = session.Mode switch
@@ -50,6 +52,11 @@ public sealed partial class SessionItemViewModel : ObservableObject
     public string Id { get; }
 
     public string Title { get; }
+
+    /// <summary>搜索命中在正文里的那一句。只有搜正文命中时才有，标题命中时留空。</summary>
+    public string MatchSnippet { get; }
+
+    public bool HasMatchSnippet => !string.IsNullOrWhiteSpace(MatchSnippet);
 
     /// <summary>默认显示在行尾，鼠标移到这一行时让位给「⋯」。</summary>
     public string TimeText { get; }
@@ -70,6 +77,10 @@ public sealed partial class SessionItemViewModel : ObservableObject
     /// <summary>这一轮还在跑。切走之后也要看得见，否则不知道任务到底跑没跑完。</summary>
     [ObservableProperty]
     private bool isRunning;
+
+    /// <summary>后台跑完了，用户还没回去看。打开这条任务就清掉。</summary>
+    [ObservableProperty]
+    private bool hasUnread;
 
     [RelayCommand]
     private void Open() => _open(Id);

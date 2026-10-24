@@ -1,0 +1,82 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:arc="https://github.com/AIDotNet/TKCode.Arc"
+        x:Class="AvaloniaAssistant.UI.Views.RunningTasksDialog"
+        Title="还有任务在跑"
+        CanResize="False"
+        ShowInTaskbar="False"
+        WindowDecorations="None"
+        WindowStartupLocation="CenterOwner"
+        TransparencyLevelHint="Transparent"
+        Background="Transparent"
+        FontFamily="{StaticResource AppFontFamily}"
+        RequestedThemeVariant="Light">
+  <Grid Background="#66000000">
+    <Border Width="470"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center"
+            Background="{StaticResource SurfaceBrush}"
+            BorderBrush="{StaticResource BorderStrongBrush}"
+            BorderThickness="1"
+            CornerRadius="18"
+            Padding="22,18,22,16"
+            BoxShadow="0 24 64 0 #33000000">
+      <StackPanel Spacing="13">
+        <Grid ColumnDefinitions="Auto,*,Auto">
+          <Border Width="26"
+                  Height="26"
+                  CornerRadius="13"
+                  Background="{StaticResource WarningSubtleBrush}"
+                  VerticalAlignment="Top">
+            <arc:ArcGlyph Data="{x:Static arc:ArcIcons.CircleAlert}"
+                          Size="15"
+                          Foreground="{StaticResource WarningBrush}"
+                          HorizontalAlignment="Center"
+                          VerticalAlignment="Center" />
+          </Border>
+
+          <TextBlock Grid.Column="1"
+                     Text="还有任务在跑"
+                     FontSize="16"
+                     FontWeight="SemiBold"
+                     Margin="10,0,8,0"
+                     VerticalAlignment="Center" />
+
+          <Button Grid.Column="2"
+                  Classes="icon"
+                  Click="OnCancelClick"
+                  ToolTip.Tip="继续等待">
+            <arc:ArcGlyph Data="{x:Static arc:ArcIcons.CircleX}" Size="15" />
+          </Button>
+        </Grid>
+
+        <TextBlock x:Name="MessageText"
+                   Text="现在关掉会中断正在执行的任务。已经生成的内容会保留，没跑完的这一轮不会继续。"
+                   FontSize="12.5"
+                   LineHeight="20"
+                   TextWrapping="Wrap"
+                   Foreground="{StaticResource TextSecondaryBrush}" />
+
+        <TextBlock Text="要等它跑完，点「继续等待」；确实要退出，点「停止并退出」。"
+                   FontSize="11.5"
+                   LineHeight="17"
+                   TextWrapping="Wrap"
+                   Foreground="{StaticResource TextMutedBrush}" />
+
+        <StackPanel Orientation="Horizontal"
+                    Spacing="10"
+                    HorizontalAlignment="Right"
+                    Margin="0,2,0,0">
+          <Button Classes="chip"
+                  Content="继续等待"
+                  MinWidth="88"
+                  HorizontalContentAlignment="Center"
+                  Click="OnCancelClick" />
+          <Button Classes="danger"
+                  Content="停止并退出"
+                  Click="OnStopAndExitClick" />
+        </StackPanel>
+      </StackPanel>
+    </Border>
+  </Grid>
+</Window>

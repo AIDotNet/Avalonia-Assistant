@@ -136,7 +136,34 @@
   </UserControl.Styles>
 
   <StackPanel>
-    <Border Background="{StaticResource SurfaceBrush}"
+    <!-- 生成期间按过 Enter：内容已经收走，这里明确说一声它还在，并且能取消 -->
+    <Border IsVisible="{Binding HasQueued}"
+            Background="{StaticResource SurfaceMutedBrush}"
+            BorderBrush="{StaticResource BorderBrush}"
+            BorderThickness="1"
+            CornerRadius="9"
+            Padding="10,6"
+            Margin="0,0,0,7">
+      <Grid ColumnDefinitions="Auto,*,Auto">
+        <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Clock}"
+                      Size="12"
+                      Foreground="{StaticResource TextSecondaryBrush}"
+                      VerticalAlignment="Center" />
+        <TextBlock Grid.Column="1"
+                   Text="{Binding QueuedHint}"
+                   FontSize="11.5"
+                   TextTrimming="CharacterEllipsis"
+                   Margin="7,0,8,0"
+                   VerticalAlignment="Center" />
+        <Button Grid.Column="2"
+                Classes="ghost-action"
+                Command="{Binding CancelQueueCommand}"
+                Content="取消" />
+      </Grid>
+    </Border>
+
+    <Border x:Name="ComposerFrame"
+            Background="{StaticResource SurfaceBrush}"
             BorderBrush="{StaticResource BorderStrongBrush}"
             BorderThickness="1"
             CornerRadius="22"
@@ -299,7 +326,7 @@
           </StackPanel>
 
           <TextBlock Grid.Column="1"
-                     Text="Enter 发送 · Shift+Enter 换行 · @ 引用文件"
+                     Text="{Binding InputHint}"
                      Classes="caption"
                      FontSize="10"
                      Margin="7,0,0,0"
@@ -365,6 +392,32 @@
             </Button>
           </StackPanel>
         </Grid>
+
+        <!-- 拖文件进来时铺在输入框上：只给一层提示，不改布局。 -->
+        <Border x:Name="DropOverlay"
+                Grid.RowSpan="4"
+                IsVisible="False"
+                IsHitTestVisible="False"
+                Background="{StaticResource SurfaceBrush}"
+                BorderBrush="{StaticResource AccentBrush}"
+                BorderThickness="2"
+                CornerRadius="16">
+          <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="5">
+            <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Paperclip}"
+                          Size="18"
+                          HorizontalAlignment="Center"
+                          Foreground="{StaticResource TextPrimaryBrush}" />
+            <TextBlock x:Name="DropOverlayText"
+                       Text="松开即引用"
+                       FontSize="12.5"
+                       HorizontalAlignment="Center" />
+            <TextBlock x:Name="DropOverlayHint"
+                       Text="和 @ 引用走同一条路，发送时才读正文"
+                       Classes="caption"
+                       FontSize="10.5"
+                       HorizontalAlignment="Center" />
+          </StackPanel>
+        </Border>
       </Grid>
     </Border>
 

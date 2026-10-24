@@ -26,6 +26,11 @@
       <Setter Property="Background" Value="{StaticResource SurfaceMutedBrush}" />
     </Style>
 
+    <!-- 会话内查找停在哪条消息上。只加一层浅底，不动排版 -->
+    <Style Selector="Border.hit">
+      <Setter Property="Background" Value="#FFF6D6" />
+    </Style>
+
     <!-- 工具调用压成一行：一次任务十几次调用，卡片会把人埋掉 -->
     <Style Selector="Button.tool-line">
       <Setter Property="MinHeight" Value="24" />
@@ -44,7 +49,13 @@
 
   <UserControl.DataTemplates>
     <DataTemplate DataType="{x:Type vm:UserMessageViewModel}">
-      <Grid Margin="0,10,0,18" HorizontalAlignment="Right">
+      <!-- 查找命中时给整条消息一层浅底。Padding 6 / Margin 收 6，净位置和原来一致 -->
+      <Border Classes.hit="{Binding IsSearchHit}"
+              HorizontalAlignment="Right"
+              CornerRadius="12"
+              Padding="6"
+              Margin="0,4,-6,12">
+        <Grid HorizontalAlignment="Right">
         <StackPanel HorizontalAlignment="Right" Spacing="4">
           <Border Background="{StaticResource UserBubbleBrush}"
                   CornerRadius="16,16,4,16"
@@ -104,11 +115,17 @@
                      HorizontalAlignment="Right"
                      Margin="0,0,4,0" />
         </StackPanel>
-      </Grid>
+        </Grid>
+      </Border>
     </DataTemplate>
 
     <DataTemplate DataType="{x:Type vm:AssistantMessageViewModel}">
-      <Grid Margin="0,2,0,26" ColumnDefinitions="28,*">
+      <!-- 命中的浅底铺满整块回复；Padding 6 / Margin 收 6，净位置和原来一致 -->
+      <Border Classes.hit="{Binding IsSearchHit}"
+              CornerRadius="12"
+              Padding="6"
+              Margin="-6,-4,-6,20">
+        <Grid ColumnDefinitions="28,*">
         <Border Width="26" Height="26" CornerRadius="8" Background="{StaticResource AccentBrush}" VerticalAlignment="Top" Margin="0,2,0,0">
           <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Sparkles}"
                         Size="14"
@@ -300,7 +317,8 @@
                        VerticalAlignment="Center" />
           </StackPanel>
         </StackPanel>
-      </Grid>
+        </Grid>
+      </Border>
     </DataTemplate>
 
     <DataTemplate DataType="{x:Type vm:ApprovalMessageViewModel}">
@@ -381,7 +399,7 @@
     </DataTemplate>
   </UserControl.DataTemplates>
 
-  <Grid RowDefinitions="Auto,*,Auto">
+  <Grid RowDefinitions="Auto,Auto,*,Auto">
     <Border Grid.Row="0"
             BorderBrush="{StaticResource BorderBrush}"
             BorderThickness="0,0,0,1"
@@ -406,13 +424,63 @@
       </Grid>
     </Border>
 
+    <!-- 会话内查找：单独占一条，收起时整行不占位，也不压住正文第一行 -->
+    <Border Grid.Row="1"
+            IsVisible="{Binding IsSearchOpen}"
+            Background="{StaticResource SurfaceMutedBrush}"
+            BorderBrush="{StaticResource BorderBrush}"
+            BorderThickness="0,0,0,1"
+            Padding="18,7">
+      <StackPanel Orientation="Horizontal"
+                  Spacing="6"
+                  HorizontalAlignment="Right"
+                  VerticalAlignment="Center">
+        <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Search}"
+                      Size="13"
+                      Foreground="{StaticResource TextMutedBrush}"
+                      VerticalAlignment="Center" />
+        <arc:Input x:Name="SearchInput"
+                   Width="188"
+                   Size="Small"
+                   Placeholder="在对话里查找"
+                   Text="{Binding SearchQuery, Mode=TwoWay}" />
+        <TextBlock Text="{Binding SearchCounter}"
+                   Classes="caption"
+                   FontSize="10.5"
+                   MinWidth="78"
+                   VerticalAlignment="Center" />
+        <Button Classes="icon"
+                Width="24"
+                Height="24"
+                Command="{Binding PreviousSearchHitCommand}"
+                ToolTip.Tip="上一处（Shift+Enter）">
+          <arc:ArcGlyph Data="{x:Static arc:ArcIcons.ChevronUp}" Size="13" />
+        </Button>
+        <Button Classes="icon"
+                Width="24"
+                Height="24"
+                Command="{Binding NextSearchHitCommand}"
+                ToolTip.Tip="下一处（Enter）">
+          <arc:ArcGlyph Data="{x:Static arc:ArcIcons.ChevronDown}" Size="13" />
+        </Button>
+        <Button Classes="icon"
+                Width="24"
+                Height="24"
+                Command="{Binding CloseSearchCommand}"
+                ToolTip.Tip="关闭（Esc）">
+          <arc:ArcGlyph Data="{x:Static arc:ArcIcons.CircleX}" Size="13" />
+        </Button>
+      </StackPanel>
+    </Border>
+
     <!-- 消息区 + 回到底部的浮标：用户滚上去看历史时，新内容不该悄悄长在下面 -->
-    <Panel Grid.Row="1">
+    <Panel Grid.Row="2">
       <ScrollViewer x:Name="MessagesScroll"
                     Classes="message-list"
                     VerticalScrollBarVisibility="Auto"
                     HorizontalScrollBarVisibility="Disabled">
-        <ItemsControl ItemsSource="{Binding Messages}"
+        <ItemsControl x:Name="MessagesItems"
+                      ItemsSource="{Binding Messages}"
                       MaxWidth="840"
                       Margin="26,22,26,10"
                       />
@@ -431,11 +499,11 @@
       </Button>
     </Panel>
 
-    <Border Grid.Row="2" Padding="26,8,26,14" Background="{StaticResource SurfaceBrush}">
+    <Border Grid.Row="3" Padding="26,8,26,14" Background="{StaticResource SurfaceBrush}">
       <views:ComposerView DataContext="{Binding Composer}" MaxWidth="840" />
     </Border>
 
     <!-- 点开大图：平时 IsVisible=False，不占布局也不吃事件 -->
-    <controls:ImageViewer x:Name="ImageViewerLayer" Grid.RowSpan="3" />
+    <controls:ImageViewer x:Name="ImageViewerLayer" Grid.RowSpan="4" />
   </Grid>
 </UserControl>

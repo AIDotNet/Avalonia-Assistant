@@ -26,6 +26,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// </summary>
     private readonly Dictionary<string, ChatViewModel> _backgroundChats = new(StringComparer.Ordinal);
 
+    /// <summary>后台跑完、用户还没回去看过的任务。侧栏给一个点，打开就清掉。</summary>
+    private readonly HashSet<string> _unreadSessions = new(StringComparer.Ordinal);
+
     /// <summary>「任务」区是展开还是收起。null 表示用户还没动过，按有没有空间来定。</summary>
     private bool? _taskSectionExpanded;
 
@@ -82,6 +85,21 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public string PlanText => "本地运行 · 数据留在本机";
 
     public string VersionText => "v1.0.0";
+
+    /// <summary>有任务在跑、但窗口不在前台时，让视图闪一下任务栏。</summary>
+    public event EventHandler? AttentionRequested;
+
+    /// <summary>还在跑的任务数（当前页 + 后台）。关窗保护和标题都看它。</summary>
+    public int RunningChatCount
+        => (CurrentPage is ChatViewModel active && active.IsBusy ? 1 : 0)
+           + _backgroundChats.Values.Count(chat => chat.IsBusy);
+
+    public bool HasRunningChats => RunningChatCount > 0;
+
+    /// <summary>标题栏直接说"还在跑几个"，用户切到别的窗口也能从任务栏看出来。</summary>
+    public string WindowTitle => RunningChatCount == 0
+        ? "Avalonia Assistant"
+        : $"Avalonia Assistant — 正在执行（{RunningChatCount}）";
 
     /// <summary>「任务」是全部任务的总入口：归了空间也还是任务，不从这里消失。</summary>
     public string SessionCountText => IsSearching
@@ -223,10 +241,56 @@ public sealed partial class MainWindowViewModel : ObservableObject
     {
         foreach (var item in AllSessionItems())
         {
-            if (item.Id == sessionId)
+            if (item.Id != sessionId)
             {
-                item.IsRunning = running;
+                continue;
             }
+
+            item.IsRunning = running;
+            if (running)
+            {
+                item.HasUnread = false;
+            }
+        }
+
+        if (running)
+        {
+            _unreadSessions.Remove(sessionId);
+        }
+        else if (!IsActiveSession(sessionId))
+        {
+            // 跑完的时候人不在这一页：留个点，别让结果悄悄躺在那儿
+            _unreadSessions.Add(sessionId);
+            foreach (var item in AllSessionItems().Where(item => item.Id == sessionId))
+            {
+                item.HasUnread = true;
+            }
+        }
+
+        OnPropertyChanged(nameof(RunningChatCount));
+        OnPropertyChanged(nameof(HasRunningChats));
+        OnPropertyChanged(nameof(WindowTitle));
+
+        if (!running)
+        {
+            AttentionRequested?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    private bool IsActiveSession(string sessionId)
+        => CurrentPage is ChatViewModel chat && chat.Session.Id == sessionId;
+
+    /// <summary>关窗前用户选了「停止并退出」：把所有还在跑的轮次停掉，别让进程带着半截请求退出。</summary>
+    public void StopAllRuns()
+    {
+        if (CurrentPage is ChatViewModel active && active.IsBusy)
+        {
+            active.StopCommand.Execute(null);
+        }
+
+        foreach (var chat in _backgroundChats.Values.Where(item => item.IsBusy).ToList())
+        {
+            chat.StopCommand.Execute(null);
         }
     }
 
@@ -391,6 +455,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         await _sessions.DeleteAsync(sessionId);
         _sessionCache.Remove(sessionId);
         _drafts.Remove(sessionId);
+        _unreadSessions.Remove(sessionId);
 
         if (CurrentPage is ChatViewModel chat && chat.Session.Id == sessionId)
         {
@@ -722,10 +787,24 @@ public sealed partial class MainWindowViewModel : ObservableObject
         var query = SessionQuery.Trim();
 
         // 搜索只过滤「看得见的这一层」，不改磁盘、不改分组规则。
-        var sessions = _sessionCache.Values
-            .Where(session => MatchesQuery(session, query))
-            .OrderByDescending(session => session.UpdatedAt)
-            .ToList();
+        // 命中正文的，额外记一句上下文，挂在那条任务下面——否则只看见标题，不知道凭什么命中。
+        var snippets = new Dictionary<string, string>(StringComparer.Ordinal);
+        var sessions = new List<ChatSession>(_sessionCache.Count);
+        foreach (var session in _sessionCache.Values)
+        {
+            if (!SessionSearch.TryMatch(session, query, out var snippet))
+            {
+                continue;
+            }
+
+            sessions.Add(session);
+            if (snippet.Length > 0)
+            {
+                snippets[session.Id] = snippet;
+            }
+        }
+
+        sessions.Sort((left, right) => right.UpdatedAt.CompareTo(left.UpdatedAt));
 
         _visibleSessionCount = sessions.Count;
         HasSearchResults = sessions.Count > 0;
@@ -757,7 +836,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
             foreach (var session in matched.Where(session => !claimed.Contains(session.Id)))
             {
                 claimed.Add(session.Id);
-                item.Sessions.Add(CreateSessionItem(session, activeId, item.Name));
+                item.Sessions.Add(CreateSessionItem(
+                    session,
+                    activeId,
+                    item.Name,
+                    snippets.GetValueOrDefault(session.Id, string.Empty)));
             }
 
             item.RefreshSessions();
@@ -777,7 +860,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
         {
             SessionGroups.Add(new SessionGroupViewModel(
                 group.Key,
-                group.Select(session => CreateSessionItem(session, activeId, LooseWorkspaceName(session)))));
+                group.Select(session => CreateSessionItem(
+                    session,
+                    activeId,
+                    LooseWorkspaceName(session),
+                    snippets.GetValueOrDefault(session.Id, string.Empty)))));
         }
 
         OnPropertyChanged(nameof(SessionCountText));
@@ -791,16 +878,22 @@ public sealed partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(WorkspaceCountText));
     }
 
-    private SessionItemViewModel CreateSessionItem(ChatSession session, string? activeId, string workspaceName)
+    private SessionItemViewModel CreateSessionItem(
+        ChatSession session,
+        string? activeId,
+        string workspaceName,
+        string matchSnippet)
         => new(
             session,
             workspaceName,
             id => _ = OpenSessionAsync(id),
             id => _ = DeleteSessionAsync(id),
-            RenameSessionAsync)
+            RenameSessionAsync,
+            matchSnippet)
         {
             IsActive = session.Id == activeId,
             IsRunning = IsChatRunning(session.Id),
+            HasUnread = _unreadSessions.Contains(session.Id),
         };
 
     /// <summary>这条任务是不是还在跑：可能正在看，也可能被放到后台了。</summary>
@@ -931,6 +1024,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     private async Task SetActiveSessionAsync(string? sessionId)
     {
+        if (sessionId is not null)
+        {
+            _unreadSessions.Remove(sessionId);
+        }
+
         await Ui.OnUiAsync(() =>
         {
             var items = SessionGroups
@@ -940,6 +1038,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
             foreach (var item in items)
             {
                 item.IsActive = item.Id == sessionId;
+                if (item.IsActive)
+                {
+                    item.HasUnread = false;
+                }
             }
         });
 
@@ -981,6 +1083,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(IsToolsSelected));
         OnPropertyChanged(nameof(IsMcpSelected));
         OnPropertyChanged(nameof(IsSettingsSelected));
+        OnPropertyChanged(nameof(RunningChatCount));
+        OnPropertyChanged(nameof(HasRunningChats));
+        OnPropertyChanged(nameof(WindowTitle));
     }
 
     /// <summary>没挂到空间上的任务：以前带过工作区的话，悬停卡片里还看得到那个目录名。</summary>
@@ -1000,18 +1105,6 @@ public sealed partial class MainWindowViewModel : ObservableObject
         => System.IO.Path.GetFileName(path.TrimEnd(
             System.IO.Path.DirectorySeparatorChar,
             System.IO.Path.AltDirectorySeparatorChar));
-
-    /// <summary>搜索词命中标题或所属空间名。空词视为全通过。</summary>
-    private static bool MatchesQuery(ChatSession session, string query)
-    {
-        if (query.Length == 0)
-        {
-            return true;
-        }
-
-        return session.Title.Contains(query, StringComparison.OrdinalIgnoreCase)
-            || LooseWorkspaceName(session).Contains(query, StringComparison.OrdinalIgnoreCase);
-    }
 
     private static string GroupName(DateTimeOffset updatedAt)    {
         var today = DateTimeOffset.Now.Date;

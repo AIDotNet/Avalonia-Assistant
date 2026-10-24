@@ -100,6 +100,21 @@ internal static class Program
                 case "--workspace-picker-create":
                     AppLaunchOptions.WorkspacePickerCreate = true;
                     break;
+                case "--chat-search" when index + 1 < args.Length:
+                    AppLaunchOptions.ChatSearch = args[++index];
+                    break;
+                case "--chat-queued" when index + 1 < args.Length:
+                    AppLaunchOptions.ChatQueued = args[++index];
+                    break;
+                case "--session-query" when index + 1 < args.Length:
+                    AppLaunchOptions.SessionQuery = args[++index];
+                    break;
+                case "--running-dialog":
+                    AppLaunchOptions.RunningDialog = true;
+                    break;
+                case "--composer-drop":
+                    AppLaunchOptions.ComposerDrop = true;
+                    break;
                 case "--data-dir" when index + 1 < args.Length:
                     AppPaths.UseRoot(args[++index]);
                     break;

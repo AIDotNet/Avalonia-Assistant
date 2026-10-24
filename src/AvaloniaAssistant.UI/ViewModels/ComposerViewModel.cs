@@ -53,6 +53,12 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
 
     public event EventHandler<PromptRequest>? SendRequested;
 
+    /// <summary>正在生成时按下发送：不丢内容，交给对话页排到本轮结束后自动发出。</summary>
+    public event EventHandler<PromptRequest>? QueueRequested;
+
+    /// <summary>点了排队提示条上的「取消」。</summary>
+    public event EventHandler? QueueCancelled;
+
     public event EventHandler? FocusRequested;
 
     public event EventHandler? StopRequested;
@@ -97,9 +103,25 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
     [NotifyCanExecuteChangedFor(nameof(SendCommand))]
     [NotifyPropertyChangedFor(nameof(ShowSend))]
     [NotifyPropertyChangedFor(nameof(ShowStop))]
+    [NotifyPropertyChangedFor(nameof(InputHint))]
     private bool isBusy;
 
     public bool ShowSend => !IsBusy;
+
+    /// <summary>这一轮排队等着的消息，由对话页写好；为空表示没有排队。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasQueued))]
+    private string? queuedHint;
+
+    public bool HasQueued => !string.IsNullOrWhiteSpace(QueuedHint);
+
+    /// <summary>
+    /// 生成期间按 Enter 不是"没反应"，是排队。把这件事写在原来那行提示里，
+    /// 用户不用先按一次才发现行为变了。
+    /// </summary>
+    public string InputHint => IsBusy
+        ? "Enter 排队，本轮结束后自动发送"
+        : "Enter 发送 · Shift+Enter 换行 · @ 引用文件";
 
     /// <summary>正在读引用文件的正文，读完才真正发出。</summary>
     [ObservableProperty]
@@ -241,6 +263,10 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
             value = Images.Count > 0 ? "看下这张图。" : "看下这些文件。";
         }
 
+        // 先记下这一下是"发送"还是"排队"：读取引用的过程中 IsSending 会变，
+        // 但用户按 Enter 那一刻的意图不能跟着变。
+        var queue = IsBusy;
+
         // 引用的是工作区文件时，正文要现场读：文件可能刚被改过，索引里的旧内容不作数。
         IsSending = true;
         try
@@ -260,7 +286,16 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
             OnPropertyChanged(nameof(HasImages));
             CloseMention();
 
-            SendRequested?.Invoke(this, new PromptRequest(value, attachments, images));
+            var request = new PromptRequest(value, attachments, images);
+            if (queue)
+            {
+                QueueRequested?.Invoke(this, request);
+            }
+            else
+            {
+                SendRequested?.Invoke(this, request);
+            }
+
             RequestFocus();
         }
         finally
@@ -295,7 +330,11 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
         return attachment;
     }
 
-    private bool CanSend() => !IsBusy && !IsSending && !IsRecording
+    /// <summary>
+    /// 生成期间也能发（会变成排队），所以这里不再拦 IsBusy：
+    /// 拦掉的结果是 Enter 被吞、界面一声不响，比排队糟得多。
+    /// </summary>
+    private bool CanSend() => !IsSending && !IsRecording
         && (!string.IsNullOrWhiteSpace(Text) || Images.Count > 0 || References.Count > 0);
 
     partial void OnTextChanged(string? value)
@@ -435,6 +474,22 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
 
         AddReference(MentionItemViewModel.FromWorkspace(file));
         return true;
+    }
+
+    /// <summary>
+    /// 把一个本地文件变成待发送的引用。拖放进来的文件和纸夹选、@ 引用走同一条链路：
+    /// 发送时才读正文。返回 false 表示文件不在或已经引用过了。
+    /// </summary>
+    public bool AddFileReference(string fullPath)
+    {
+        if (string.IsNullOrWhiteSpace(fullPath) || !File.Exists(fullPath))
+        {
+            return false;
+        }
+
+        var added = AddReference(MentionItemViewModel.FromFile(fullPath));
+        RequestFocus();
+        return added;
     }
 
     private bool AddReference(MentionItemViewModel item)
@@ -605,6 +660,14 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
 
     [RelayCommand]
     private void Stop() => StopRequested?.Invoke(this, EventArgs.Empty);
+
+    /// <summary>取消排队。内容已经离开输入框了，所以这里只负责收提示，真正的丢弃在对话页。</summary>
+    [RelayCommand]
+    private void CancelQueue()
+    {
+        QueuedHint = null;
+        QueueCancelled?.Invoke(this, EventArgs.Empty);
+    }
 
     /// <summary>提示条上的「去设置」。用户主动点的，跳走之后草稿由宿主接住。</summary>
     [RelayCommand]

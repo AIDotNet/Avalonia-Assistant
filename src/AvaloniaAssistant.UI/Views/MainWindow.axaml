@@ -3,7 +3,7 @@
         xmlns:views="using:AvaloniaAssistant.UI.Views"
         xmlns:arc="https://github.com/AIDotNet/TKCode.Arc"
         x:Class="AvaloniaAssistant.UI.Views.MainWindow"
-        Title="Avalonia Assistant"
+        Title="{Binding WindowTitle}"
         Icon="/Assets/app.ico"
         Width="1280"
         Height="820"

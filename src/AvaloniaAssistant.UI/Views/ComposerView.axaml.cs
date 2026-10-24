@@ -8,6 +8,7 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
+using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using AvaloniaAssistant.Abstractions;
@@ -21,9 +22,31 @@ public partial class ComposerView : UserControl
     {
         AvaloniaXamlLoader.Load(this);
         AddHandler(KeyDownEvent, OnInputKeyDown, RoutingStrategies.Tunnel);
-        AttachedToVisualTree += (_, _) => Dispatcher.UIThread.Post(
-            () => this.FindControl<Control>("Input")?.Focus(),
-            DispatcherPriority.Input);
+
+        // 拖文件进来就当成引用。AllowDrop 挂在整个输入框上，
+        // 因为拖放设备会从命中的子控件往上找第一个开着 AllowDrop 的元素。
+        DragDrop.SetAllowDrop(this, true);
+        AddHandler(DragDrop.DragEnterEvent, OnDragOver);
+        AddHandler(DragDrop.DragOverEvent, OnDragOver);
+        AddHandler(DragDrop.DragLeaveEvent, OnDragLeave);
+        AddHandler(DragDrop.DropEvent, OnDrop);
+
+        AttachedToVisualTree += (_, _) =>
+        {
+            // 拖放设备是从命中的元素往上找 AllowDrop 的；不同版本行为有差别，
+            // 干脆把输入框和容器也各开一份，保证落在文字区、工具条上都能接住。
+            foreach (var name in new[] { "ComposerFrame", "Input" })
+            {
+                if (this.FindControl<Control>(name) is { } target)
+                {
+                    DragDrop.SetAllowDrop(target, true);
+                }
+            }
+
+            Dispatcher.UIThread.Post(
+                () => this.FindControl<Control>("Input")?.Focus(),
+                DispatcherPriority.Input);
+        };
     }
 
     private ComposerViewModel? ViewModel => DataContext as ComposerViewModel;
@@ -179,6 +202,150 @@ public partial class ComposerView : UserControl
         catch
         {
             // 剪贴板格式不认识，当普通粘贴处理
+        }
+    }
+
+    /// <summary>
+    /// 拖到输入框上：有文件就显示"松开即引用"，拖的是文件夹就说明为什么不接。
+    /// 拦掉文件夹比让它落下来再报错省事。
+    /// </summary>
+    private void OnDragOver(object? sender, DragEventArgs e)
+    {
+        var (files, folders) = CountDropItems(e);
+
+        if (files > 0)
+        {
+            e.DragEffects = DragDropEffects.Copy;
+            ShowDropOverlay(
+                files == 1 ? "松开即引用这个文件" : $"松开即引用这 {files} 个文件",
+                "和 @ 引用走同一条路，发送时才读正文");
+        }
+        else if (folders > 0)
+        {
+            e.DragEffects = DragDropEffects.None;
+            ShowDropOverlay("文件夹不能直接拖进来", "把工作区切到那个目录，再用 @ 引用里面的文件");
+        }
+        else
+        {
+            e.DragEffects = DragDropEffects.None;
+            HideDropOverlay();
+        }
+
+        e.Handled = true;
+    }
+
+    private void OnDragLeave(object? sender, DragEventArgs e)
+    {
+        HideDropOverlay();
+        e.Handled = true;
+    }
+
+    private void OnDrop(object? sender, DragEventArgs e)
+    {
+        HideDropOverlay();
+        e.Handled = true;
+
+        if (ViewModel is not { } viewModel)
+        {
+            return;
+        }
+
+        IStorageItem[]? items;
+        try
+        {
+            items = e.DataTransfer.TryGetFiles();
+        }
+        catch
+        {
+            // 剪贴板 / 拖放里塞了不认识的格式，当没发生
+            return;
+        }
+
+        if (items is null)
+        {
+            return;
+        }
+
+        var added = 0;
+        foreach (var item in items)
+        {
+            if (item is IStorageFolder)
+            {
+                continue;
+            }
+
+            var path = item.TryGetLocalPath();
+            if (!string.IsNullOrWhiteSpace(path) && viewModel.AddFileReference(path))
+            {
+                added++;
+            }
+        }
+
+        if (added > 0)
+        {
+            e.DragEffects = DragDropEffects.Copy;
+        }
+    }
+
+    /// <summary>拖进来的条目里，文件和文件夹各几个。读不出来就当没有。</summary>
+    private static (int Files, int Folders) CountDropItems(DragEventArgs e)
+    {
+        IStorageItem[]? items;
+        try
+        {
+            items = e.DataTransfer.TryGetFiles();
+        }
+        catch
+        {
+            return (0, 0);
+        }
+
+        if (items is null || items.Length == 0)
+        {
+            return (0, 0);
+        }
+
+        var folders = 0;
+        foreach (var item in items)
+        {
+            if (item is IStorageFolder)
+            {
+                folders++;
+            }
+        }
+
+        return (items.Length - folders, folders);
+    }
+
+    /// <summary>开发用：把拖放提示层摆出来截图。真实拖拽没法在命令行里模拟，只能单独验版式。</summary>
+    public void ShowDropPreview()
+        => ShowDropOverlay("松开即引用这 2 个文件", "和 @ 引用走同一条路，发送时才读正文");
+
+    private void ShowDropOverlay(string title, string hint)
+    {
+        if (this.FindControl<Border>("DropOverlay") is not { } overlay)
+        {
+            return;
+        }
+
+        if (this.FindControl<TextBlock>("DropOverlayText") is { } titleBlock)
+        {
+            titleBlock.Text = title;
+        }
+
+        if (this.FindControl<TextBlock>("DropOverlayHint") is { } hintBlock)
+        {
+            hintBlock.Text = hint;
+        }
+
+        overlay.IsVisible = true;
+    }
+
+    private void HideDropOverlay()
+    {
+        if (this.FindControl<Border>("DropOverlay") is { } overlay)
+        {
+            overlay.IsVisible = false;
         }
     }
 

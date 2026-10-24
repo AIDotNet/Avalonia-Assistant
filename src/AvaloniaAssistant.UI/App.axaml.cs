@@ -51,11 +51,49 @@ public partial class AssistantApp : Application
         {
             await viewModel.InitializeAsync();
 
+            if (!string.IsNullOrWhiteSpace(AppLaunchOptions.SessionQuery))
+            {
+                viewModel.SessionQuery = AppLaunchOptions.SessionQuery;
+            }
+
+            // 关窗确认平时只有真的关窗才出现，单独给一个截图入口
+            if (AppLaunchOptions.RunningDialog)
+            {
+                var preview = RunningTasksDialog.CreatePreview(2);
+                preview.Show();
+                await Task.Delay(700);
+
+                if (!string.IsNullOrWhiteSpace(AppLaunchOptions.ScreenshotPath))
+                {
+                    Capture(preview, AppLaunchOptions.ScreenshotPath);
+                    preview.Close();
+                    desktop.Shutdown();
+                    return;
+                }
+            }
+
             switch (AppLaunchOptions.Page)
             {
                 case "chat":
                     viewModel.LoadDemoSidebar();
                     viewModel.LoadDemoChat();
+
+                    if (viewModel.CurrentPage is ChatViewModel demoChat)
+                    {
+                        if (!string.IsNullOrWhiteSpace(AppLaunchOptions.ChatQueued))
+                        {
+                            // 连"正在生成"一起摆出来：排队条只在生成期间出现，单摆一条会看不到真实版式
+                            demoChat.Composer.IsBusy = true;
+                            demoChat.Composer.QueuedHint = "已排队：" + AppLaunchOptions.ChatQueued;
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(AppLaunchOptions.ChatSearch))
+                        {
+                            demoChat.OpenSearchCommand.Execute(null);
+                            demoChat.SearchQuery = AppLaunchOptions.ChatSearch;
+                        }
+                    }
+
                     break;
                 case "settings":
                     await viewModel.OpenSettingsAsync();
@@ -157,6 +195,17 @@ public partial class AssistantApp : Application
 
             var waitingForRun = !string.IsNullOrWhiteSpace(AppLaunchOptions.RunPrompt) || AppLaunchOptions.PressEnter;
             await Task.Delay(waitingForRun ? 4500 : 1600);
+
+            // 拖放层要等页面真正进可视树之后再摆，否则 FindControl 还是空的
+            if (AppLaunchOptions.ComposerDrop)
+            {
+                window.GetVisualDescendants()
+                    .OfType<ComposerView>()
+                    .FirstOrDefault()
+                    ?.ShowDropPreview();
+                await Task.Delay(250);
+            }
+
             Capture(window, AppLaunchOptions.ScreenshotPath);
             desktop.Shutdown();
         }

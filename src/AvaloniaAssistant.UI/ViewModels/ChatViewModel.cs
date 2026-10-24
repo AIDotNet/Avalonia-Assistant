@@ -18,6 +18,12 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
     /// <summary>「本会话都允许」记住的工具名。只在这次对话里有效，不写进设置。</summary>
     private readonly HashSet<string> _sessionAllowedTools = new(StringComparer.Ordinal);
 
+    /// <summary>生成期间按 Enter 排进来的那条，本轮结束后自动发出。只留一条，后到的替换先到的。</summary>
+    private PromptRequest? _queuedPrompt;
+
+    /// <summary>上一轮是不是失败结束的。失败时排队的消息不再往下发，先还回输入框。</summary>
+    private bool _lastRunFailed;
+
     public ChatViewModel(MainWindowViewModel host, ChatSession? session, bool consumePendingDraft = true)
     {
         _host = host;
@@ -34,6 +40,8 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
 
         Composer = new ComposerViewModel(host);
         Composer.SendRequested += async (_, request) => await SendPromptAsync(request);
+        Composer.QueueRequested += OnQueueRequested;
+        Composer.QueueCancelled += OnQueueCancelled;
         Composer.StopRequested += (_, _) => Stop();
         Composer.PermissionChanged += OnPermissionChanged;
         Composer.ResetSessionAllowedRequested += OnResetSessionAllowed;
@@ -163,6 +171,171 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
     /// <summary>用户自己滚回底部了，浮标就没必要再挂着。</summary>
     public void ClearFloatingHint() => FloatingHint = null;
 
+    // ---- 会话内查找 ----
+
+    /// <summary>把某条消息滚进视野。视图负责找容器，VM 只说"是这一条"。</summary>
+    public event EventHandler<MessageViewModel>? ScrollToMessageRequested;
+
+    [ObservableProperty]
+    private bool isSearchOpen;
+
+    [ObservableProperty]
+    private string searchQuery = string.Empty;
+
+    /// <summary>「第 2 / 共 7 处」或「没有匹配」。</summary>
+    [ObservableProperty]
+    private string searchCounter = string.Empty;
+
+    /// <summary>每一处命中落在哪条消息上。同一条消息里命中两次就是两条记录。</summary>
+    private readonly List<MessageViewModel> _searchHits = [];
+
+    private int _searchHitIndex = -1;
+
+    partial void OnSearchQueryChanged(string? value) => RebuildSearchHits(value);
+
+    [RelayCommand]
+    private void OpenSearch()
+    {
+        IsSearchOpen = true;
+
+        if (!string.IsNullOrWhiteSpace(SearchQuery))
+        {
+            RebuildSearchHits(SearchQuery);
+        }
+    }
+
+    [RelayCommand]
+    private void CloseSearch()
+    {
+        IsSearchOpen = false;
+        SearchQuery = string.Empty;
+        SearchCounter = string.Empty;
+        _searchHits.Clear();
+        _searchHitIndex = -1;
+        ClearSearchMarks();
+        Composer.RequestFocus();
+    }
+
+    [RelayCommand]
+    private void NextSearchHit() => MoveSearchHit(1);
+
+    [RelayCommand]
+    private void PreviousSearchHit() => MoveSearchHit(-1);
+
+    private void RebuildSearchHits(string? query)
+    {
+        ClearSearchMarks();
+        _searchHits.Clear();
+        _searchHitIndex = -1;
+
+        var keyword = (query ?? string.Empty).Trim();
+        if (keyword.Length == 0)
+        {
+            SearchCounter = string.Empty;
+            return;
+        }
+
+        foreach (var message in Messages)
+        {
+            foreach (var text in SearchableTexts(message))
+            {
+                var index = 0;
+                while (index < text.Length)
+                {
+                    index = text.IndexOf(keyword, index, StringComparison.OrdinalIgnoreCase);
+                    if (index < 0)
+                    {
+                        break;
+                    }
+
+                    _searchHits.Add(message);
+                    index += keyword.Length;
+                }
+            }
+        }
+
+        if (_searchHits.Count == 0)
+        {
+            SearchCounter = "没有匹配";
+            return;
+        }
+
+        MoveSearchHit(1);
+    }
+
+    private void MoveSearchHit(int delta)
+    {
+        if (_searchHits.Count == 0)
+        {
+            return;
+        }
+
+        var next = _searchHitIndex + delta;
+        if (next < 0)
+        {
+            next = _searchHits.Count - 1;
+        }
+        else if (next >= _searchHits.Count)
+        {
+            next = 0;
+        }
+
+        _searchHitIndex = next;
+        var target = _searchHits[next];
+
+        foreach (var message in Messages)
+        {
+            message.IsSearchHit = ReferenceEquals(message, target);
+        }
+
+        SearchCounter = $"第 {next + 1} / {_searchHits.Count} 处";
+        ScrollToMessageRequested?.Invoke(this, target);
+    }
+
+    private void ClearSearchMarks()
+    {
+        foreach (var message in Messages)
+        {
+            message.IsSearchHit = false;
+        }
+    }
+
+    /// <summary>能被搜到的东西：用户原话、助手正文、工具那一行和它的结果。</summary>
+    private static IEnumerable<string> SearchableTexts(MessageViewModel message)
+    {
+        switch (message)
+        {
+            case UserMessageViewModel user when !string.IsNullOrWhiteSpace(user.Text):
+                yield return user.Text;
+                break;
+
+            case AssistantMessageViewModel assistant:
+                if (!string.IsNullOrWhiteSpace(assistant.Text))
+                {
+                    yield return assistant.Text;
+                }
+
+                foreach (var tool in assistant.Tools)
+                {
+                    if (!string.IsNullOrWhiteSpace(tool.Summary))
+                    {
+                        yield return tool.Summary;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(tool.Result))
+                    {
+                        yield return tool.Result!;
+                    }
+                }
+
+                break;
+
+            case NoticeMessageViewModel notice when !string.IsNullOrWhiteSpace(notice.Text):
+                yield return notice.Text;
+                break;
+        }
+    }
+
 
     public event EventHandler<bool>? ScrollToEndRequested;
 
@@ -181,6 +354,42 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
         _cts?.Cancel();
         _runtime.Abort(Session.Id);
         StatusText = "正在停止…";
+
+        // 停止是明确的"不要继续"，排在后面的那条也不该再自己发出去。
+        if (DropQueuedPrompt())
+        {
+            Messages.Add(new NoticeMessageViewModel("已停止，排队的那条消息没有发送。"));
+            RequestScroll(true);
+        }
+    }
+
+    /// <summary>生成期间按了发送：记下来，本轮结束后接着发。</summary>
+    private void OnQueueRequested(object? sender, PromptRequest request)
+    {
+        _queuedPrompt = request;
+
+        var preview = request.Text.ReplaceLineEndings(" ").Trim();
+        if (preview.Length > 28)
+        {
+            preview = preview[..28] + "…";
+        }
+
+        Composer.QueuedHint = $"已排队：{preview}";
+    }
+
+    private void OnQueueCancelled(object? sender, EventArgs e) => _queuedPrompt = null;
+
+    /// <summary>丢掉排队内容，返回刚才是否有东西被丢掉。</summary>
+    private bool DropQueuedPrompt()
+    {
+        if (_queuedPrompt is null)
+        {
+            return false;
+        }
+
+        _queuedPrompt = null;
+        Composer.QueuedHint = null;
+        return true;
     }
 
     public async Task SendPromptAsync(string text)
@@ -194,6 +403,31 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
         }
 
         await RunPromptAsync(request with { Text = request.Text.Trim() }, addUserMessage: true);
+
+        // 这一轮结束，把排队的那条接着发。已经删掉的任务不再往下跑。
+        if (IsDiscarded || _queuedPrompt is not { } queued)
+        {
+            return;
+        }
+
+        _queuedPrompt = null;
+        Composer.QueuedHint = null;
+
+        // 上一轮是失败结束的（401、断网），这时候再发也只会再失败一次，
+        // 反而把用户排队的那句话烧掉。先还回输入框，让他决定。
+        if (_lastRunFailed)
+        {
+            Composer.Text = string.IsNullOrWhiteSpace(Composer.Text)
+                ? queued.Text
+                : Composer.Text.TrimEnd() + Environment.NewLine + Environment.NewLine + queued.Text;
+
+            Messages.Add(new NoticeMessageViewModel("上一轮没有跑完，排队的那条已放回输入框。"));
+            RequestScroll(true);
+            Composer.RequestFocus();
+            return;
+        }
+
+        await SendPromptAsync(queued);
     }
 
     /// <summary>
@@ -531,6 +765,7 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
             }
 
             Session.UpdatedAt = DateTimeOffset.Now;
+            _lastRunFailed = failed;
             IsBusy = false;
             Composer.IsBusy = false;
             StatusText = failed
@@ -653,6 +888,9 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
 
         var addedUserMessage = e.NewItems?.OfType<UserMessageViewModel>().Any() == true;
         RequestScroll(addedUserMessage);
+
+        // 不在这里重算命中：回复流式输出时每加一张工具卡都重算，会把用户正在看的那一处
+        // 拽回第一处。查找结果按用户按下的一刻为准，改关键词才刷新。
     }
 
     /// <summary>

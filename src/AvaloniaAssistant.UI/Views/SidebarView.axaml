@@ -16,11 +16,29 @@
         <Button Classes="task"
                 Classes.active="{Binding IsActive}"
                 Command="{Binding OpenCommand}">
-          <TextBlock Text="{Binding Title}"
-                     FontSize="12.5"
-                     VerticalAlignment="Center"
-                     TextTrimming="CharacterEllipsis" />
+          <StackPanel Spacing="1" VerticalAlignment="Center">
+            <TextBlock Text="{Binding Title}"
+                       FontSize="12.5"
+                       VerticalAlignment="Center"
+                       TextTrimming="CharacterEllipsis" />
+            <!-- 搜索命中在正文里时，把那一句亮出来，否则只看见标题不知道凭什么命中 -->
+            <TextBlock Text="{Binding MatchSnippet}"
+                       IsVisible="{Binding HasMatchSnippet}"
+                       Classes="caption"
+                       FontSize="10"
+                       TextTrimming="CharacterEllipsis" />
+          </StackPanel>
         </Button>
+
+        <!-- 后台跑完、还没回来看：一个点比"再点进去确认"省事 -->
+        <Ellipse Width="6"
+                 Height="6"
+                 IsVisible="{Binding HasUnread}"
+                 Fill="{StaticResource AccentBrush}"
+                 HorizontalAlignment="Right"
+                 VerticalAlignment="Center"
+                 Margin="0,0,29,0"
+                 ToolTip.Tip="已跑完，还没看过" />
 
         <!-- 后台还在跑：转圈和对话里的「正在处理」是同一个语义，比一个圆点更不容易被读成未读 -->
         <arc:ArcSpinner IsVisible="{Binding IsRunning}"

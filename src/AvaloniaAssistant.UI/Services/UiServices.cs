@@ -190,4 +190,19 @@ public static class AppLaunchOptions
 
     /// <summary>开发用：工作区浮层截图时直接切到「新建」态。</summary>
     public static bool WorkspacePickerCreate { get; set; }
+
+    /// <summary>开发用：对话页打开会话内查找并填好关键词，检查查找条与命中高亮。</summary>
+    public static string? ChatSearch { get; set; }
+
+    /// <summary>开发用：对话页摆一条"已排队"提示，检查排队状态条。</summary>
+    public static string? ChatQueued { get; set; }
+
+    /// <summary>开发用：给侧栏搜索框预置关键词，检查正文命中摘要。</summary>
+    public static string? SessionQuery { get; set; }
+
+    /// <summary>开发用：单独摆出「还有任务在跑」的关窗确认层，配合 --screenshot 看版式。</summary>
+    public static bool RunningDialog { get; set; }
+
+    /// <summary>开发用：把输入框的拖放提示层摆出来，检查它盖住的区域和文案。</summary>
+    public static bool ComposerDrop { get; set; }
 }
