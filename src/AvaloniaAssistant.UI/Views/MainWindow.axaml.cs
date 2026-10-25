@@ -108,6 +108,11 @@ public partial class MainWindow : Window
                 e.Handled = true;
                 break;
 
+            case Key.OemComma:
+                _viewModel.OpenSettingsCommand.Execute(null);
+                e.Handled = true;
+                break;
+
             case Key.F:
                 // 只在对话页有意义：首页/设置页没有可查的消息流
                 if (_viewModel.CurrentPage is ChatViewModel chat)

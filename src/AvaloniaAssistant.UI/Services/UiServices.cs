@@ -183,11 +183,15 @@ public static class Ui
     /// 在资源管理器里定位一个文件；目录就直接打开，路径不在了就退到它的上级目录。
     /// 打不开不算错误——用户只是没看到那一下跳转。
     /// </summary>
-    public static void RevealInExplorer(string? path)
+    /// <summary>
+    /// 在资源管理器里定位文件或目录。打不开返回 false，交给调用方提示——
+    /// 静默失败会让「打开位置」看起来像坏按钮。
+    /// </summary>
+    public static bool RevealInExplorer(string? path)
     {
         if (string.IsNullOrWhiteSpace(path))
         {
-            return;
+            return false;
         }
 
         try
@@ -196,47 +200,39 @@ public static class Ui
             {
                 if (File.Exists(path))
                 {
-                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
-                        "explorer.exe",
-                        $"/select,\"{path}\"")
-                    {
-                        UseShellExecute = false,
-                    });
-                    return;
+                    StartExplorer($"/select,\"{path}\"");
+                    return true;
                 }
 
                 if (Directory.Exists(path))
                 {
-                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
-                        "explorer.exe",
-                        $"\"{path}\"")
-                    {
-                        UseShellExecute = false,
-                    });
-                    return;
+                    StartExplorer($"\"{path}\"");
+                    return true;
                 }
 
                 var parent = Path.GetDirectoryName(path);
                 if (!string.IsNullOrWhiteSpace(parent) && Directory.Exists(parent))
                 {
-                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
-                        "explorer.exe",
-                        $"\"{parent}\"")
-                    {
-                        UseShellExecute = false,
-                    });
+                    StartExplorer($"\"{parent}\"");
+                    return true;
                 }
 
-                return;
+                return false;
             }
 
-            OpenExternal(File.Exists(path) ? path : Path.GetDirectoryName(path) ?? path);
+            return OpenExternal(File.Exists(path) ? path : Path.GetDirectoryName(path) ?? path);
         }
         catch
         {
-            // 路径被删或没有权限：保持界面不动。
+            return false;
         }
     }
+
+    private static void StartExplorer(string arguments)
+        => System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("explorer.exe", arguments)
+        {
+            UseShellExecute = false,
+        });
 }
 
 /// <summary>仅供开发/自动化截图使用，由 Desktop 入口在启动前赋值。</summary>

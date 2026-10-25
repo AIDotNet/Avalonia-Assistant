@@ -101,13 +101,21 @@ public sealed partial class ToolCallViewModel : ObservableObject
         "command", "path", "file_path", "filePath", "pattern", "url", "query", "name", "directory",
     ];
 
-    public ToolCallViewModel(string id, string name, string label, string arguments)
+    private readonly Action<string>? _report;
+
+    public ToolCallViewModel(
+        string id,
+        string name,
+        string label,
+        string arguments,
+        Action<string>? report = null)
     {
         Id = id;
         Name = name;
         Label = label;
         Arguments = arguments;
         Target = ExtractTarget(arguments);
+        _report = report;
     }
 
     public string Id { get; }
@@ -201,13 +209,13 @@ public sealed partial class ToolCallViewModel : ObservableObject
     [RelayCommand]
     private void OpenTarget()
     {
-        if (IsUrl)
+        var opened = IsUrl
+            ? Services.Ui.OpenExternal(Target)
+            : Services.Ui.RevealInExplorer(Target);
+
+        if (!opened)
         {
-            Services.Ui.OpenExternal(Target);
-        }
-        else if (IsRootedPath)
-        {
-            Services.Ui.RevealInExplorer(Target);
+            _report?.Invoke($"打不开「{Target}」：可能已被移动或删除，或者没有关联程序。");
         }
     }
 

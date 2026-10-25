@@ -65,7 +65,8 @@ public sealed class LocalNetworkProxyTests
         using var stream = client.GetStream();
 
         var buffer = new byte[8192];
-        await stream.ReadAsync(buffer);
+        var read = await stream.ReadAsync(buffer);
+        Assert.True(read > 0);
 
         var bytes = Encoding.UTF8.GetBytes(body);
         var head = $"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {bytes.Length}\r\nConnection: close\r\n\r\n";

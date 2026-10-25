@@ -258,8 +258,20 @@ public sealed partial class ToolsViewModel : ObservableObject
             return;
         }
 
-        Directory.CreateDirectory(_skillsRootRaw);
-        Ui.OpenExternal(_skillsRootRaw);
+        try
+        {
+            Directory.CreateDirectory(_skillsRootRaw);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            ShowNotice("技能目录不可用：" + ex.Message, isError: true);
+            return;
+        }
+
+        if (!Ui.OpenExternal(_skillsRootRaw))
+        {
+            ShowNotice("打不开技能目录，可能被系统策略拦住了。", isError: true);
+        }
     }
 
     private void ShowNotice(string message, bool isError)

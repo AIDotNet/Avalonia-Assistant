@@ -931,8 +931,20 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void OpenDataFolder()
     {
-        Directory.CreateDirectory(DataFolder);
-        Services.Ui.OpenExternal(DataFolder);
+        try
+        {
+            Directory.CreateDirectory(DataFolder);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            ShowToast("数据目录不可用：" + ex.Message, error: true);
+            return;
+        }
+
+        if (!Services.Ui.OpenExternal(DataFolder))
+        {
+            ShowToast("打不开数据目录，可能被系统策略拦住了。", error: true);
+        }
     }
 
     /// <summary>返回按钮的悬停提示：有来源任务时写清回到哪，别让人猜「返回」是回首页还是回对话。</summary>

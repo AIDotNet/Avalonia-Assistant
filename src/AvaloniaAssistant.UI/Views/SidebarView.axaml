@@ -454,6 +454,13 @@
               Background="{StaticResource SurfaceBrush}"
               BorderBrush="{StaticResource BorderBrush}"
               BorderThickness="1">
+        <StackPanel Spacing="7">
+          <TextBlock Text="{Binding SidebarNotice}"
+                     IsVisible="{Binding HasSidebarNotice}"
+                     FontSize="10.5"
+                     LineHeight="15"
+                     TextWrapping="Wrap"
+                     Foreground="{StaticResource DangerBrush}" />
         <Grid ColumnDefinitions="Auto,*,Auto">
           <Border Width="30" Height="30" CornerRadius="15" Background="#E4E1F7">
             <TextBlock Text="{Binding UserInitial}"
@@ -474,6 +481,7 @@
             <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Settings}" Size="14" />
           </Button>
         </Grid>
+        </StackPanel>
       </Border>
     </Grid>
   </Border>

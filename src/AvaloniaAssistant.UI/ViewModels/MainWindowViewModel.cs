@@ -35,6 +35,15 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// <summary>「任务」区是展开还是收起。null 表示用户还没动过，按有没有空间来定。</summary>
     private bool? _taskSectionExpanded;
 
+    /// <summary>侧栏底部的临时提示，几秒后自己消失。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSidebarNotice))]
+    private string? sidebarNotice;
+
+    public bool HasSidebarNotice => !string.IsNullOrWhiteSpace(SidebarNotice);
+
+    private DispatcherTimer? _sidebarNoticeTimer;
+
     /// <summary>每分钟把侧栏的相对时间重算一遍；跨天时还要重排「今天 / 昨天」。</summary>
     private readonly DispatcherTimer _relativeTimeTimer;
 
@@ -1012,10 +1021,29 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
         if (!Directory.Exists(path))
         {
+            ShowSidebarNotice("打不开：目录不存在，可能已被移动或删除。");
             return;
         }
 
-        Ui.OpenExternal(path);
+        if (!Ui.OpenExternal(path))
+        {
+            ShowSidebarNotice("打不开这个目录，可能被系统策略拦住了。");
+        }
+    }
+
+    /// <summary>侧栏里那些没有提示条的动作（打开目录等）失败时，用这一行说明原因。</summary>
+    private void ShowSidebarNotice(string message)
+    {
+        SidebarNotice = message;
+        _sidebarNoticeTimer?.Stop();
+        _sidebarNoticeTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(6) };
+        _sidebarNoticeTimer.Tick += (_, _) =>
+        {
+            _sidebarNoticeTimer?.Stop();
+            _sidebarNoticeTimer = null;
+            SidebarNotice = null;
+        };
+        _sidebarNoticeTimer.Start();
     }
 
     /// <summary>

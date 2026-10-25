@@ -1260,7 +1260,8 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
                             toolStarted.CallId,
                             toolStarted.Name,
                             toolStarted.Label,
-                            toolStarted.Arguments);
+                            toolStarted.Arguments,
+                            message => ShowToast(message, null));
                         assistant.Tools.Add(tool);
                         assistantEntry.ToolCalls.Add(new ToolCallRecord
                         {
@@ -1529,7 +1530,12 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
 
                     foreach (var record in entry.ToolCalls)
                     {
-                        var tool = new ToolCallViewModel(record.Id, record.Name, record.Label, record.Arguments);
+                        var tool = new ToolCallViewModel(
+                            record.Id,
+                            record.Name,
+                            record.Label,
+                            record.Arguments,
+                            message => ShowToast(message, null));
                         tool.Finish(record.Result, record.IsError, record.DurationMs);
 
                         // 重新打开会话时也要记得这一轮是被停掉的，不能显示成「完成」
