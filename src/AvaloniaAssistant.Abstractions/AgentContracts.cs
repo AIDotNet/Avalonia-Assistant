@@ -42,11 +42,34 @@ public abstract record AgentStreamEvent
     public sealed record RunFailed(string Message) : AgentStreamEvent;
 }
 
+/// <summary>
+/// 模型菜单里的一项。<see cref="ContextWindow"/> 来自本地模型目录，
+/// <see cref="ContextWindowEstimated"/> 为 true 表示目录里没查到、用的是保守值。
+/// </summary>
 public sealed record ModelOption(
     string Id,
     string Name,
     string ProviderName,
-    string Description);
+    string Description,
+    long ContextWindow = 0,
+    bool ContextWindowEstimated = true);
+
+/// <summary>
+/// 「测试连接」的结果。成功时带一次往返耗时，失败时带一句人话和可折叠的原文。
+/// </summary>
+public sealed record ConnectionTestResult(bool Ok, string Title, string Detail, long ElapsedMs)
+{
+    public string Summary => Ok
+        ? $"{Title} · {ElapsedMs} ms"
+        : $"{Title}：{Detail}";
+
+    public static ConnectionTestResult Success(string model, long elapsedMs)
+        => new(true, $"连上了，{model} 有响应", string.Empty, elapsedMs);
+
+    public static ConnectionTestResult Failure(string title, string detail, long elapsedMs)
+        => new(false, title, detail, elapsedMs);
+}
+
 
 public sealed record ToolParameterInfo(
     string Name,
@@ -74,21 +97,28 @@ public sealed record HistoryTurn(string Role, string Text)
 }
 
 /// <summary>
-/// 连通性检查结果。只问「能不能连上、模型名对不对」，不发对话请求，不消耗生成额度。
+/// 用户按下发送时交给对话线的东西：输入框里的原文，加上这一轮 @ 引用进来的文件。
+/// 原文照原样显示在气泡里，附件内容只喂给模型。
 /// </summary>
-public sealed record ConnectionProbe(
-    bool Ok,
-    string Message,
-    IReadOnlyList<string> Models);
+public sealed record PromptRequest(
+    string Text,
+    IReadOnlyList<ChatAttachment> Attachments,
+    IReadOnlyList<ChatImage>? Images = null)
+{
+    public static PromptRequest Plain(string text) => new(text, []);
+
+    public bool HasImages => Images is { Count: > 0 };
+}
 
 /// <summary>一次 agent 运行的输入。运行时无状态：历史由调用方携带。</summary>
-public sealed record AgentRunRequest(
-    string SessionId,
+public sealed record AgentRunRequest(    string SessionId,
     string Prompt,
     IReadOnlyList<HistoryTurn> History,
+    string Mode,
     PermissionMode Permission,
     string? WorkspacePath,
-    IToolApprovalGate? ApprovalGate);
+    IToolApprovalGate? ApprovalGate,
+    IReadOnlyList<ChatImage>? Images = null);
 
 public sealed record ToolApprovalRequest(
     string SessionId,

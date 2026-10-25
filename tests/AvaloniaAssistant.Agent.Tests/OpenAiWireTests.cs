@@ -30,6 +30,7 @@ public sealed class OpenAiWireTests
             "wire-test",
             "打个招呼",
             [],
+            "office",
             PermissionMode.ReadOnly,
             Path.GetTempPath(),
             null);

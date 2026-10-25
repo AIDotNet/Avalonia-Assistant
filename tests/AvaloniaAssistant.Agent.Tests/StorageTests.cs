@@ -62,6 +62,39 @@ public sealed class StorageTests
     }
 
     [Fact]
+    public void PlainWorkspaceIsHiddenFolderUnderUserProfile()
+    {
+        var plain = PlainWorkspace.Resolve(string.Empty);
+
+        // 普通任务的落点必须是一个专门的目录，不能是用户目录本身
+        Assert.EndsWith(PlainWorkspace.FolderName, plain.TrimEnd(Path.DirectorySeparatorChar));
+        Assert.NotEqual(
+            Path.GetFullPath(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)),
+            Path.GetFullPath(plain));
+        Assert.True(Directory.Exists(plain), "第一次用到时应该把目录建出来");
+    }
+
+    [Fact]
+    public void PlainWorkspaceKeepsChosenWorkspace()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "ava-tests", Guid.NewGuid().ToString("n"));
+        Directory.CreateDirectory(directory);
+
+        Assert.Equal(Path.GetFullPath(directory), PlainWorkspace.Resolve(directory));
+
+        Directory.Delete(directory, recursive: true);
+    }
+
+    [Fact]
+    public void PlainWorkspaceFallsBackWhenWorkspaceIsGone()
+    {
+        // 空间被删/移走之后不能还拿那个路径当工作区，否则工具连读都读不了
+        var missing = Path.Combine(Path.GetTempPath(), "ava-tests", Guid.NewGuid().ToString("n"));
+
+        Assert.Equal(PlainWorkspace.Root, PlainWorkspace.Resolve(missing));
+    }
+
+    [Fact]
     public async Task SessionStoreRoundTripAndDelete()
     {
         var directory = Path.Combine(Path.GetTempPath(), "ava-tests", Guid.NewGuid().ToString("n"));
@@ -104,6 +137,40 @@ public sealed class StorageTests
 
         await store.DeleteAsync("session-1");
         Assert.Empty(await store.LoadAllAsync());
+
+        if (Directory.Exists(directory))
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// 置顶和「读到哪儿」都必须跟着存档走：重启之后置顶还在顶上，接着读还是原来那一屏。
+    /// </summary>
+    [Fact]
+    public async Task SessionKeepsPinAndReadingPosition()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "ava-tests", Guid.NewGuid().ToString("n"));
+        Directory.CreateDirectory(directory);
+        var store = new JsonSessionStore(directory);
+
+        await store.SaveAsync(new ChatSession
+        {
+            Id = "pinned-1",
+            Title = "常用任务",
+            Pinned = true,
+            ReadingRatio = 0.42,
+        });
+
+        var loaded = Assert.Single(await store.LoadAllAsync());
+        Assert.True(loaded.Pinned);
+        Assert.Equal(0.42, loaded.ReadingRatio, precision: 3);
+
+        // 没置顶的、也没有位置记录的：不能被写成 true / 0
+        await store.SaveAsync(new ChatSession { Id = "plain-2", Title = "普通任务" });
+        var plain = (await store.LoadAllAsync()).Single(item => item.Id == "plain-2");
+        Assert.False(plain.Pinned);
+        Assert.Equal(-1, plain.ReadingRatio);
 
         if (Directory.Exists(directory))
         {

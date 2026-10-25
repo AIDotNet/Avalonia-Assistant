@@ -12,25 +12,43 @@ Windows 桌面 AI 助理。Agent 循环用 [pi.net](https://github.com/AIDotNet/
 - **真的会动手**：自建 8 个日常办公 / 编码工具 + CodingAgent 内置的 read / grep / find / ls / edit。
 - **技能与 MCP**：工作区 `.pi/skills` 的 `SKILL.md` 按需加载，技能页可从文件夹或 zip 导入；
   `.pi/mcp.json` 的 MCP 服务端启动时连接。
+- **@ 直接引用文件**：输入框打 `@` 按名字搜当前工作区的文件——文件名精确 > 前缀 > 包含 > 路径 > 字符子序列，
+  自动跳过 `node_modules` / `.git` 这类目录；选中即引用，**发送时才读内容**，不用先把文件导入到哪里。
+- **粘贴图片**：输入框里 Ctrl+V 直接贴图（截图也行），缩略图挂在输入框上方，和文字一起发；
+  图片落在数据目录的 `images/` 下，会话 JSON 只记路径，存档不会被 base64 撑大。
 - **长会话能自己压缩**：CodingAgent 的上下文压缩与自动重试，不必手动清空。
-- **三档权限**：只读 / 工作区 / 完全访问；执行命令会在对话里弹授权卡，可以对单个工具选「本会话都允许」。
-- **工具过程可见**：每次调用都有卡片，参数、结果、耗时、成功/失败可展开。
-- **会话留在本机**：一个会话一个 JSON 文件，侧边栏按今天 / 昨天 / 最近 7 天分组；
-  Ctrl+K 按标题和正文搜索，跨天时分组和时间会自己更新。
-- **快捷键**：Ctrl+N 新建任务、Ctrl+K 搜索任务、Ctrl+, 打开设置、Esc 停止生成。
+- **三档权限**：只读 / 工作区 / 完全访问；执行命令会在对话里弹授权卡。
+- **工具过程可见**：每次调用压成一行（「执行命令：dotnet build」+ 耗时），点开才看参数和结果；
+  连续十几次调用也只是一列短行，不会把对话淹掉。
+- **会话留在本机**：一个会话一个 JSON 文件，第一句话一发出就落盘（不用等回复跑完）。
+  侧栏「任务」列全部任务、按今天 / 昨天 / 最近 7 天分组，「空间」只是按目录再归一次类——
+  归了空间的任务在「任务」里照样看得见。
+- **工作区一点就换**：输入框下面那条点开是「搜索 + 工作区列表」，当前那个打勾；
+  新建工作空间、打开本地文件夹、不使用工作空间都在这一个浮层里，首页右上角是同一个。
+  **新建任务默认是普通任务**，上一次选的空间不跟过来；还没发第一条时挑的空间当场生效，
+  发过话就钉在那条任务上——中途换目录，前面引用过的文件就对不上了。
+  普通任务的文件落在 `~/.avaloniaassistant`（像 `.claude` / `.codex` 那样藏在用户目录里，
+  第一次用到时才建），不再把整个用户目录当工作区。
+- **窗口记着上次的样子**：位置、尺寸、侧栏宽度（可拖动分隔条）、界面缩放（90%–125%，Ctrl+滚轮 / Ctrl+0）
+  和最后看的那条任务，关掉再开直接接上；设置里可选「启动时：首页 / 上次会话」。
+- **时间与引用看得清**：跨天的消息之间插日期分隔，时间悬停给完整日期；
+  引用文件是带大小、行数、截断状态的标签，点一下在资源管理器中定位。
+- **快捷键有张表**：Ctrl+/ 打开；Ctrl+N 新建任务、Ctrl+K 搜任务、Ctrl+F 会话内查找；
+  审批卡支持 Ctrl+Enter 允许一次、Ctrl+Shift+Enter 本会话允许、Esc 拒绝。
 - **Markdown**：标题、列表、表格、行内代码、代码块高亮。
-- **语音输入**：NAudio 录音 + `/audio/transcriptions` 转写（端点需支持），转写期间发送键与麦克风会锁住。
-- **技能页**：卡片式浏览，搜索词同时筛技能与工具；工具开关、技能导入都持久化。
-- **MCP 页**：列出 `mcp.json` 里的服务端，整段粘贴标准 JSON（`mcpServers` / VS Code 的 `servers` 写法）
-  就能一次导入多个，也能从现成的 `mcp.json` 文件读进来；只加一个 stdio 服务端时用表单。
+- **语音输入**：NAudio 录音 + `/audio/transcriptions` 转写（端点需支持）。
+- **技能页**：卡片式浏览，按分类筛选、关键词搜索，开关与导入都持久化。
+- **MCP 页**：列出 `mcp.json` 里的服务端，并**真的起一次进程握手**——已连接会给出工具数，
+  起不来会给出原因（Windows 上 `npx` 少了 `cmd /c` 包装在这里就能看见），每张卡可重试。
+  整段粘贴标准 JSON（`mcpServers` / VS Code 的 `servers` 写法）就能一次导入多个，也能从现成的
+  `mcp.json` 文件读进来；只加一个 stdio 服务端时用表单。
+- **导出会话**：对话页右上角一键存成 Markdown，工具调用、失败轮次、引用文件都在里面。
 
 | 会话 | 设置 |
 | --- | --- |
 | ![会话](docs/images/chat.png) | ![设置](docs/images/settings.png) |
 
-| 技能 | 资料库 |
-| --- | --- |
-| ![技能](docs/images/tools.png) | ![资料库](docs/images/library.png) |
+![技能](docs/images/tools.png)
 
 ## 两个核心框架
 
@@ -38,7 +56,7 @@ Windows 桌面 AI 助理。Agent 循环用 [pi.net](https://github.com/AIDotNet/
 
 | 层 | 框架 | 引用包 | 版本 |
 | --- | --- | --- | --- |
-| UI 框架 | [TKCode.Arc](https://github.com/AIDotNet/TKCode.Arc)（AtomUI 生态） | `TKCode.Arc`、`TKCode.Arc.Fonts` | 0.3.0-preview.1 |
+| UI 框架 | [TKCode.Arc](https://github.com/AIDotNet/TKCode.Arc)（AtomUI 生态） | `TKCode.Arc`、`TKCode.Arc.Fonts` | 0.3.0-preview.3 |
 | Agent 框架 | [pi.net](https://github.com/AIDotNet/pi.net)（Pi 的 .NET 移植） | `Pi.CodingAgent`（传递引入 `Pi.Agent` / `Pi.Ai` / `Pi.Mcp` 等） | 1.4.2 |
 
 - **TKCode.Arc 负责界面**：控件、主题、图标字体全部来自 Arc，入口在 `Program.BuildAvaloniaApp`
@@ -77,19 +95,20 @@ dotnet run --project src/AvaloniaAssistant.Desktop
 
 首次启动进入首页，点右上角「设置」或提示条里的「去设置」：
 
-1. 选一个服务商（默认 DeepSeek）；
-2. 填 API Key；
-3. Base URL 与模型会自动带出，也可以手动改；
-4. 保存后回到首页，直接输入任务。
+1. 进「模型设置」配一套：名称（可留空，留空就显示模型名）、Base URL、API Key、模型名；
+2. 服务商预设只负责带默认值（DeepSeek / OpenAI / Anthropic / 自定义），协议按端点选
+   Chat Completions / Responses / Anthropic Messages；
+3. 需要多个渠道就点左边「+ 添加模型」继续加：每套有各自的地址、Key 和协议，互不影响；
+4. 保存后，输入框下方那颗胶囊里随时切换当前模型。列表里只有你配过的那几套。
 
-默认配置：
+预设带出的默认值：
 
-| 服务商 | Base URL | 默认模型 | 备选 |
-| --- | --- | --- | --- |
-| DeepSeek | `https://api.deepseek.com/v1` | `deepseek-flash` | `deepseek-v4-pro` |
-| OpenAI | `https://api.openai.com/v1` | `gpt-6.1-sol` | `gpt-6-astra`（需申请）、`gpt-6-luna` |
-| Anthropic | `https://api.anthropic.com` | `claude-sonnet-5-5` | `claude-opus-5-5`、`claude-haiku-5-5` |
-| 自定义 | `http://localhost:11434/v1` | `qwen3.8:27b` | `qwen3.8-flash`（云端 API 名） |
+| 预设 | Base URL | 默认模型 | 协议 | 该厂商其它常用模型 |
+| --- | --- | --- | --- | --- |
+| DeepSeek | `https://api.deepseek.com/v1` | `deepseek-flash` | Chat Completions | `deepseek-v4-pro` |
+| OpenAI | `https://api.openai.com/v1` | `gpt-6.1-sol` | Chat Completions | `gpt-6-astra`（需申请）、`gpt-6-luna` |
+| Anthropic | `https://api.anthropic.com` | `claude-sonnet-5-5` | Anthropic Messages | `claude-opus-5-5`、`claude-haiku-5-5` |
+| 自定义 | `http://localhost:11434/v1` | `qwen3.8:27b` | Chat Completions | `qwen3.8-flash`（云端 API 名） |
 
 > 默认走「够用且便宜」的那一档：DeepSeek 用 Flash、Anthropic 用 Sonnet、本地用 27B。要更强就换成
 > `deepseek-v4-pro` 或 `claude-opus-5-5`，Token 消耗也会跟着上去。
@@ -98,6 +117,10 @@ dotnet run --project src/AvaloniaAssistant.Desktop
 > DeepSeek `deepseek-flash` 用连字符，Ollama 的 tag 用冒号（`qwen3.8:27b`），填错直接 404。
 > 旧的 `deepseek-chat` / `deepseek-reasoner` 已于 2026-07-24 下线，`deepseek-v4-flash` 也已退役
 > （请求会被转到 `deepseek-flash`，但别再写了）。
+>
+> 公司网关、代理这类自建端点选「自定义」：预设里的模型名只是该厂商的示例，
+> App 不会替你猜端点上有哪些模型。旧版单套配置（settings.json 里的扁平 provider/apiKey/...）
+> 会在首次启动时自动搬成一套模型，地址和预设对不上时标为「自定义」。
 
 > 自定义端点必须是 OpenAI 兼容的 `/chat/completions`。本地 LLM 不再走 LLamaSharp，
 > 用 Ollama / LM Studio 暴露一个兼容端点即可。
@@ -198,8 +221,8 @@ macOS / Linux 直接写 `npx`。
 - 项目级 `.pi` 属于「需要信任」的配置（技能、MCP、`AGENTS.md` 都会进上下文）。
   桌面助理默认信任你选的工作区，`settings.json` 里把 `TrustWorkspace` 设为 `false` 可以关掉，
   关掉后只读全局 `~/.pi/agent`。
-- 技能页列出扫到的技能，MCP 页列出服务端（只报配置，不代表已连上）；加完文件点「重新扫描」，
-  新配置在下一个会话生效。
+- 技能页列出扫到的技能，MCP 页列出服务端并显示这一次真实握手的结果（配置在 ≠ 连上了）；
+  加完文件点「重新扫描」，新配置在下一个会话生效。
 - 技能页的「导入文件夹」选一个直接含 `SKILL.md` 的目录；「导入 zip」选一个 `.zip` 技能包。
   包里可以带一层外层目录，也可以把 `SKILL.md` 放在压缩包根上（用包名当技能名）；
   一个包只装一个技能，重名会拒绝，装完自动让会话重建。校验与解压在 `Storage/CapabilityInstaller`。
@@ -268,11 +291,43 @@ dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --pag
 dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --page chat
 dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --page settings
 dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --page tools
-dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --page chat --search 下载
 ```
 
-`--page chat` 会加载一份内存里的示例会话（不写入 `sessions/`），用来检查消息、工具卡、表格渲染；
-加 `--search` 可以预填侧栏搜索词，检查过滤与空结果提示。
+`--page chat` 会加载一份内存里的示例会话（不写入 `sessions/`），用来检查消息、工具卡、表格渲染。
+
+弹层（Popup / Flyout）挂在另一个 TopLevel 上，截主窗口是看不到的，单独有两个入口：
+
+```bash
+# 把工作区浮层摆进一个无边框窗口再截，检查列表 / 新建 / 搜索三种版式
+dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --workspace-picker
+dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --workspace-picker --workspace-picker-create
+dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --workspace-picker --workspace-picker-query banana
+
+# 在主窗口里真的打开浮层，让弹层自己出图（含 Flyout 外壳和真实定位）
+dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --workspace-flyout
+```
+
+新增的几处界面也走同一套验收参数：
+
+```bash
+# 快捷键总览
+dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --shortcuts
+
+# 跨天消息：日期分隔与完整时间（--scroll-top 看最早一条）
+dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --page chat --chat-dates --scroll-top
+
+# 界面缩放 125%，设置页滚到底
+dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --page settings --scroll-bottom --scale 1.25
+
+# 授权卡版式；--press-escape 会真的发一次 Esc，验证「Esc 拒绝」
+dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --page chat --approval-demo --press-escape --scroll-bottom
+
+# 悬停提示的皮：短提示 / 中等长度 / 长路径折行三种样例
+dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --tooltips
+
+# 隔离数据目录：设置/会话都写到这里，验收启动恢复时不碰真实数据
+dotnet run --project src/AvaloniaAssistant.Desktop -- --data-dir .tmp/verify
+```
 
 还提供一个开发用的自动发送参数，用来跑真实的端到端链路：
 
@@ -300,9 +355,10 @@ dotnet run --project src/AvaloniaAssistant.Desktop -- --run "用三句话介绍�
 - **MCP 工具要写 `exposure: "direct"`**：不写就只有 codemode / tool_search 能碰到，模型直接调不到。
 - **会话存档仍是本项目自己的 JSON**：CodingAgent 的会话跑在内存里，压缩结果不跨进程保存；
   重启后由 `sessions/*.json` 的历史重建上下文，压缩收益会重新累计。
-- **上下文窗口按 128k 估算**：模型真实窗口不在本地目录里，压缩触发点据此计算，特殊模型需要手动调。
-- **设置页的「测试连接」探的是 `GET /models`**：只验证地址、密钥和模型名，不发对话请求；
-  少数自建端点不实现这个接口，会返回 404，此时以实际发一条消息为准。
+- **上下文窗口读本地模型目录**：从 `~/.pi/agent/models-store.json` 取当前模型的 `contextWindow`，
+  水位条和自动压缩用同一个值；目录里没有这个模型时退回 128k，界面上会标 `*` 并说明是估算。
+- **图片要模型支持视觉**：不支持的模型由 pi.net 降级成占位符，不会报错，但也看不到图。
+- **@ 只按文件名和路径匹配**：不是全文检索，搜文件里的内容要等后面的索引；二进制文件可以引用但没有正文。
 - **没有定时任务 / 专家市场**：导航里暂未提供入口，避免假按钮；扩展点见架构文档。
 - **Windows 优先**：代码里对 macOS/Linux 的路径和 shell 做了分支，但只在 Windows 上验证过。
 

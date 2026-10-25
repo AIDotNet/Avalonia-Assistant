@@ -188,14 +188,5 @@ internal static class CapabilityScanner
         return "stdio";
     }
 
-    private static string ResolveWorkspace(string? workspacePath)
-    {
-        if (!string.IsNullOrWhiteSpace(workspacePath) && Directory.Exists(workspacePath))
-        {
-            return Path.GetFullPath(workspacePath);
-        }
-
-        var fallback = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        return Directory.Exists(fallback) ? fallback : Environment.CurrentDirectory;
-    }
+    private static string ResolveWorkspace(string? workspacePath) => PlainWorkspace.Resolve(workspacePath);
 }

@@ -55,7 +55,7 @@ internal sealed class CodingSessionFactory
         StreamFn? streamOverride,
         CancellationToken cancellationToken)
     {
-        var api = ApiName(settings);
+        var api = ProtocolCatalog.ApiId(settings.EffectiveProtocol);
         var http = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
 
         var runtime = await ModelRuntime.CreateAsync(new CreateModelRuntimeOptions
@@ -84,8 +84,10 @@ internal sealed class CodingSessionFactory
                     Input = [Pi.Ai.Models.ModelInput.Text],
                     Cost = new ModelCostRates(0, 0),
                     Reasoning = false,
-                    // 目录里查不到该模型的真实窗口，取一个保守值让压缩按比例触发。
-                    ContextWindow = 128_000,
+                    // 窗口按模型配置里写的覆盖值，其次查本地模型目录；都查不到才退回保守值，
+                    // 避免压缩阈值和界面水位条各说一套。
+                    ContextWindow = settings.ActiveModel?.ContextWindow
+                                    ?? ModelContextCatalog.Resolve(settings.Model),
                     MaxTokens = settings.MaxTokens,
                 },
             ],
@@ -107,9 +109,15 @@ internal sealed class CodingSessionFactory
                 }
 
                 var streamingModel = spec with { Api = api, BaseUrl = settings.BaseUrl };
-                return settings.Protocol == AgentProtocol.AnthropicMessages
-                    ? AnthropicMessages.StreamSimple(streamingModel, context, options, http, CancellationToken.None)
-                    : OpenAiCompletions.StreamSimple(streamingModel, context, options, http, CancellationToken.None);
+                return settings.EffectiveProtocol switch
+                {
+                    AgentProtocol.AnthropicMessages => AnthropicMessages.StreamSimple(
+                        streamingModel, context, options, http, CancellationToken.None),
+                    AgentProtocol.OpenAiResponses => OpenAiResponses.StreamSimple(
+                        streamingModel, context, options, http, CancellationToken.None),
+                    _ => OpenAiCompletions.StreamSimple(
+                        streamingModel, context, options, http, CancellationToken.None),
+                };
             },
         });
 
@@ -120,12 +128,24 @@ internal sealed class CodingSessionFactory
             ProjectTrusted = settings.TrustWorkspace,
         });
 
+        // 关掉的技能在加载结果里摘掉：SDK 只认加载器给出的清单，磁盘上的 SKILL.md 一个字不动，
+        // 「关掉」随时能改回来。Skills 是 init-only 的，只能从构造参数里过滤。
+        var disabledSkills = new HashSet<string>(settings.DisabledSkills, StringComparer.OrdinalIgnoreCase);
+
         // SDK 不会像 CLI 那样自动装内置扩展：技能靠 loader，MCP / codemode / tool-search 靠这四个扩展工厂。
         var resourceLoader = new DefaultResourceLoader(
             cwd,
             agentDir,
             settingsManager,
-            extensionFactories: BuiltInExtensions.All);
+            extensionFactories: BuiltInExtensions.All,
+            skillsOverride: outcome => disabledSkills.Count == 0
+                ? outcome
+                : outcome with
+                {
+                    Skills = outcome.Skills
+                        .Where(skill => !disabledSkills.Contains(skill.Name))
+                        .ToList(),
+                });
         await resourceLoader.ReloadAsync(null, cancellationToken).ConfigureAwait(false);
 
         var result = await Sdk.CreateAgentSessionAsync(
@@ -163,7 +183,4 @@ internal sealed class CodingSessionFactory
 
         return result.Session;
     }
-
-    private static string ApiName(AssistantSettings settings)
-        => settings.Protocol == AgentProtocol.AnthropicMessages ? "anthropic-messages" : "openai-completions";
 }

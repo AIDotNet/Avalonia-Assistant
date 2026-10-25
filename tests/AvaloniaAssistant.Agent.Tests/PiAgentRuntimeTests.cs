@@ -81,6 +81,53 @@ public sealed class PiAgentRuntimeTests
         Assert.Contains(events, e => e is AgentStreamEvent.ToolFinished { IsError: false });
     }
 
+    [Fact]
+    public async Task MissingApiKeyFailsWithoutCallingModel()
+    {
+        var settings = new FakeSettings();
+        settings.Current.ApiKey = string.Empty;
+        var stream = new ScriptedStreamFactory([]);
+        var runtime = new PiAgentRuntime(settings, stream);
+
+        var events = await CollectAsync(runtime, "你好");
+
+        Assert.Contains(events, e => e is AgentStreamEvent.RunFailed);
+        Assert.False(stream.Created);
+    }
+
+    [Fact]
+    public async Task SwitchingToReadOnlyRebuildsSessionAndBlocksMutatingTools()
+    {
+        var stream = new ScriptedStreamFactory(
+        [
+            Faux.Response.ToolUse(new ToolCallContent("call-1", "run_command", new { command = "echo hi" })),
+            Faux.Response.Text("好的，不执行。"),
+        ]);
+
+        var runtime = new PiAgentRuntime(new FakeSettings(), stream);
+        var sessionId = Guid.NewGuid().ToString("n");
+
+        // 第一轮工作区、无授权界面 → 被拦；第二轮切到只读 → 应在工具执行前被拦。
+        await CollectAsync(runtime, sessionId, "第一句", PermissionMode.Workspace, history: []);
+        var events = await CollectAsync(
+            runtime,
+            sessionId,
+            "帮我执行命令",
+            PermissionMode.ReadOnly,
+            history: [HistoryTurn.User("第一句"), HistoryTurn.Assistant("好的，不执行。")]);
+
+        var finished = Assert.Single(events.OfType<AgentStreamEvent.ToolFinished>());
+        Assert.True(finished.IsError);
+        Assert.Contains("只读", finished.Result);
+    }
+
+    private static async Task<List<AgentStreamEvent>> CollectAsync(
+        IAssistantRuntime runtime,
+        string prompt,
+        PermissionMode permission = PermissionMode.Workspace,
+        IToolApprovalGate? gate = null)
+        => await CollectAsync(runtime, Guid.NewGuid().ToString("n"), prompt, permission, gate, []);
+
     /// <summary>
     /// 同一会话连续追问时不应重建 Agent 会话：重建会重扫技能、重启 MCP 子进程，
     /// 并把上一轮的工具结果丢在旧会话里。
@@ -106,36 +153,6 @@ public sealed class PiAgentRuntimeTests
             history: [HistoryTurn.User("第一句"), HistoryTurn.Assistant("第一轮回答。")]);
 
         Assert.Equal(1, stream.CreatedCount);
-    }
-
-    /// <summary>
-    /// 换了工作区必须重建：会话的工具沙箱和 cwd 都是装配时定下的，
-    /// 复用会让「界面显示新目录、文件写到旧目录」。
-    /// </summary>
-    [Fact]
-    public async Task SwitchingWorkspaceRebuildsSession()
-    {
-        var stream = new ScriptedStreamFactory(
-        [
-            Faux.Response.Text("第一轮回答。"),
-            Faux.Response.Text("第二轮回答。"),
-        ]);
-
-        var runtime = new PiAgentRuntime(new FakeSettings(), stream);
-        var sessionId = Guid.NewGuid().ToString("n");
-        var first = Directory.CreateTempSubdirectory("aa-ws-a-").FullName;
-        var second = Directory.CreateTempSubdirectory("aa-ws-b-").FullName;
-
-        await CollectAsync(runtime, sessionId, "第一句", PermissionMode.Workspace, history: [], workspace: first);
-        await CollectAsync(
-            runtime,
-            sessionId,
-            "第二句",
-            PermissionMode.Workspace,
-            history: [HistoryTurn.User("第一句"), HistoryTurn.Assistant("第一轮回答。")],
-            workspace: second);
-
-        Assert.Equal(2, stream.CreatedCount);
     }
 
     /// <summary>
@@ -232,9 +249,9 @@ public sealed class PiAgentRuntimeTests
         Assert.Equal(2, stream.CreatedCount);
     }
 
-    /// <summary>重试前会显式丢弃会话缓存，下一轮必须重新装配。</summary>
+    /// <summary>换了工作区必须重建：会话的沙箱和 cwd 都是装配时定下的。</summary>
     [Fact]
-    public async Task InvalidatedSessionIsRebuiltOnNextTurn()
+    public async Task SwitchingWorkspaceRebuildsSession()
     {
         var stream = new ScriptedStreamFactory(
         [
@@ -244,65 +261,20 @@ public sealed class PiAgentRuntimeTests
 
         var runtime = new PiAgentRuntime(new FakeSettings(), stream);
         var sessionId = Guid.NewGuid().ToString("n");
+        var first = Directory.CreateTempSubdirectory("aa-ws-a-").FullName;
+        var second = Directory.CreateTempSubdirectory("aa-ws-b-").FullName;
 
-        await CollectAsync(runtime, sessionId, "第一句", PermissionMode.Workspace, history: []);
-        runtime.InvalidateSession(sessionId);
+        await CollectAsync(runtime, sessionId, "第一句", PermissionMode.Workspace, history: [], workspace: first);
         await CollectAsync(
             runtime,
             sessionId,
             "第二句",
             PermissionMode.Workspace,
-            history: [HistoryTurn.User("第一句"), HistoryTurn.Assistant("第一轮回答。")]);
+            history: [HistoryTurn.User("第一句"), HistoryTurn.Assistant("第一轮回答。")],
+            workspace: second);
 
         Assert.Equal(2, stream.CreatedCount);
     }
-
-    [Fact]
-    public async Task MissingApiKeyFailsWithoutCallingModel()
-    {
-        var settings = new FakeSettings();
-        settings.Current.ApiKey = string.Empty;
-        var stream = new ScriptedStreamFactory([]);
-        var runtime = new PiAgentRuntime(settings, stream);
-
-        var events = await CollectAsync(runtime, "你好");
-
-        Assert.Contains(events, e => e is AgentStreamEvent.RunFailed);
-        Assert.False(stream.Created);
-    }
-
-    [Fact]
-    public async Task SwitchingToReadOnlyRebuildsSessionAndBlocksMutatingTools()
-    {
-        var stream = new ScriptedStreamFactory(
-        [
-            Faux.Response.ToolUse(new ToolCallContent("call-1", "run_command", new { command = "echo hi" })),
-            Faux.Response.Text("好的，不执行。"),
-        ]);
-
-        var runtime = new PiAgentRuntime(new FakeSettings(), stream);
-        var sessionId = Guid.NewGuid().ToString("n");
-
-        // 第一轮工作区、无授权界面 → 被拦；第二轮切到只读 → 应在工具执行前被拦。
-        await CollectAsync(runtime, sessionId, "第一句", PermissionMode.Workspace, history: []);
-        var events = await CollectAsync(
-            runtime,
-            sessionId,
-            "帮我执行命令",
-            PermissionMode.ReadOnly,
-            history: [HistoryTurn.User("第一句"), HistoryTurn.Assistant("好的，不执行。")]);
-
-        var finished = Assert.Single(events.OfType<AgentStreamEvent.ToolFinished>());
-        Assert.True(finished.IsError);
-        Assert.Contains("只读", finished.Result);
-    }
-
-    private static async Task<List<AgentStreamEvent>> CollectAsync(
-        IAssistantRuntime runtime,
-        string prompt,
-        PermissionMode permission = PermissionMode.Workspace,
-        IToolApprovalGate? gate = null)
-        => await CollectAsync(runtime, Guid.NewGuid().ToString("n"), prompt, permission, gate, []);
 
     private static async Task<List<AgentStreamEvent>> CollectAsync(
         IAssistantRuntime runtime,
@@ -317,6 +289,7 @@ public sealed class PiAgentRuntimeTests
             sessionId,
             prompt,
             history ?? [],
+            "office",
             permission,
             workspace ?? Path.GetTempPath(),
             gate);
@@ -383,11 +356,13 @@ public sealed class PiAgentRuntimeTests
 
         public string? ToolName { get; private set; }
 
-        public Task<bool> RequestAsync(ToolApprovalRequest request, CancellationToken cancellationToken)
+        public Task<ToolApprovalDecision> RequestAsync(
+            ToolApprovalRequest request,
+            CancellationToken cancellationToken)
         {
             Called = true;
             ToolName = request.ToolName;
-            return Task.FromResult(approve);
+            return Task.FromResult(approve ? ToolApprovalDecision.Allow : ToolApprovalDecision.Deny);
         }
     }
 }

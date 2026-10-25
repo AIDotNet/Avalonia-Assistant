@@ -141,10 +141,28 @@ public static class CapabilityInstaller
             throw new InvalidOperationException($"已经有一个叫「{trimmedName}」的服务端了，换个名字再试。");
         }
 
-        var entry = new JsonObject
+        var entry = CreateStdioEntry(command, arguments);
+        servers[trimmedName] = entry;
+        root["mcpServers"] = servers;
+
+        var directory = Path.GetDirectoryName(configPath);
+        if (!string.IsNullOrEmpty(directory))
         {
-            ["exposure"] = "direct",
-        };
+            Directory.CreateDirectory(directory);
+        }
+
+        File.WriteAllText(configPath, root.ToJsonString(WriteOptions));
+    }
+
+    /// <summary>
+    /// 一条 stdio 服务端的 JSON。<c>exposure</c> 固定 direct，
+    /// Windows 上 npx 这类命令补 <c>cmd /c</c>——少了这层，服务端进程根本起不来。
+    /// <paramref name="basis"/> 非空时在它上面改：编辑已有条目要留着 env / cwd 这些表单表达不了的字段。
+    /// </summary>
+    private static JsonObject CreateStdioEntry(string command, string arguments, JsonObject? basis = null)
+    {
+        var entry = basis is null ? new JsonObject() : (JsonObject)basis.DeepClone();
+        entry["exposure"] = "direct";
 
         var args = (arguments ?? string.Empty)
             .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -160,17 +178,13 @@ public static class CapabilityInstaller
 
             entry["args"] = array;
         }
-
-        servers[trimmedName] = entry;
-        root["mcpServers"] = servers;
-
-        var directory = Path.GetDirectoryName(configPath);
-        if (!string.IsNullOrEmpty(directory))
+        else
         {
-            Directory.CreateDirectory(directory);
+            // 原来是带参数的，改成空参数时不能把旧 args 留在原地
+            entry.Remove("args");
         }
 
-        File.WriteAllText(configPath, root.ToJsonString(WriteOptions));
+        return entry;
     }
 
     /// <summary>
@@ -431,6 +445,148 @@ public static class CapabilityInstaller
 
         File.WriteAllText(configPath, root.ToJsonString(WriteOptions));
         return true;
+    }
+
+    /// <summary>
+    /// 读一个服务端的原始配置。删除前留档（撤销要用）、编辑时预填都用它。
+    /// 读不到或不是对象时返回 null。
+    /// </summary>
+    public static string? ReadMcpServer(string configPath, string name)
+    {
+        if (!File.Exists(configPath) || string.IsNullOrWhiteSpace(name))
+        {
+            return null;
+        }
+
+        try
+        {
+            if (JsonNode.Parse(File.ReadAllText(configPath)) is not JsonObject root
+                || root["mcpServers"] is not JsonObject servers
+                || servers[name] is not JsonObject entry)
+            {
+                return null;
+            }
+
+            return entry.ToJsonString(WriteOptions);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// 撤销删除。优先把删除前的<b>整份原文</b>写回去：格式、键顺序、末尾换行都不动——
+    /// 重新序列化会把用户手写的缩进和顺序全部洗掉，撤销看起来像「文件被改写了一遍」。
+    /// 只有文件在删除之后又被别处改过，才退回「把这一条插回去」的合并写法。
+    /// </summary>
+    public static void UndoRemoveMcpServer(
+        string configPath,
+        byte[] originalBytes,
+        byte[] bytesAfterRemove,
+        string name,
+        string entryJson)
+    {
+        // 按字节比、按字节写：用文本会把 BOM 丢掉（Windows 上另存为「UTF-8 带 BOM」很常见），
+        // 撤销回来就不是原来那个文件了。
+        var current = File.Exists(configPath) ? File.ReadAllBytes(configPath) : [];
+        if (originalBytes.Length > 0 && current.AsSpan().SequenceEqual(bytesAfterRemove))
+        {
+            File.WriteAllBytes(configPath, originalBytes);
+            return;
+        }
+
+        RestoreMcpServer(configPath, name, entryJson);
+    }
+
+    /// <summary>把删掉的服务端按原样放回去。撤销用：配置里 env / headers 一个字都不改。</summary>
+    public static void RestoreMcpServer(string configPath, string name, string entryJson)
+    {
+        if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(entryJson))
+        {
+            throw new InvalidOperationException("这条配置没法恢复。");
+        }
+
+        JsonObject root;
+        if (File.Exists(configPath))
+        {
+            try
+            {
+                root = JsonNode.Parse(File.ReadAllText(configPath)) as JsonObject ?? new JsonObject();
+            }
+            catch (JsonException ex)
+            {
+                throw new InvalidOperationException($"{Path.GetFileName(configPath)} 不是合法 JSON：{ex.Message}");
+            }
+        }
+        else
+        {
+            root = new JsonObject();
+        }
+
+        var servers = root["mcpServers"] as JsonObject ?? new JsonObject();
+        servers[name] = JsonNode.Parse(entryJson);
+        root["mcpServers"] = servers;
+        File.WriteAllText(configPath, root.ToJsonString(WriteOptions));
+    }
+
+    /// <summary>
+    /// 编辑一个已有服务端：原地替换它，其它条目原样保留。
+    /// 改名时先确认新名字没被别人占用。
+    /// </summary>
+    public static void ReplaceMcpServer(
+        string configPath,
+        string originalName,
+        string name,
+        string command,
+        string arguments)
+    {
+        var trimmedName = (name ?? string.Empty).Trim();
+        if (!IsValidServerName(trimmedName))
+        {
+            throw new InvalidOperationException("服务端名称只能用字母、数字、下划线和短横线。");
+        }
+
+        if (string.IsNullOrWhiteSpace(command))
+        {
+            throw new InvalidOperationException("启动命令不能为空，例如 npx。");
+        }
+
+        if (!File.Exists(configPath))
+        {
+            throw new InvalidOperationException("mcp.json 不存在，先新建一个服务端。");
+        }
+
+        JsonObject root;
+        try
+        {
+            root = JsonNode.Parse(File.ReadAllText(configPath)) as JsonObject
+                   ?? throw new InvalidOperationException($"{Path.GetFileName(configPath)} 不是一个 JSON 对象。");
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidOperationException($"{Path.GetFileName(configPath)} 不是合法 JSON：{ex.Message}");
+        }
+
+        var servers = root["mcpServers"] as JsonObject ?? new JsonObject();
+
+        if (!string.Equals(originalName, trimmedName, StringComparison.Ordinal) && servers.ContainsKey(trimmedName))
+        {
+            throw new InvalidOperationException($"已经有一个叫「{trimmedName}」的服务端了，换个名字再试。");
+        }
+
+        var basis = servers[originalName] as JsonObject;
+        if (basis?["url"] is not null)
+        {
+            // 远程服务端靠 url / headers 工作，表单表达不了：改它只能走 JSON，
+            // 否则会把 url 和 command 混在一条配置里
+            throw new InvalidOperationException("远程服务端（url / headers）请在 JSON 里改。");
+        }
+
+        servers.Remove(originalName);
+        servers[trimmedName] = CreateStdioEntry(command, arguments, basis);
+        root["mcpServers"] = servers;
+        File.WriteAllText(configPath, root.ToJsonString(WriteOptions));
     }
 
     private static bool IsValidServerName(string name)

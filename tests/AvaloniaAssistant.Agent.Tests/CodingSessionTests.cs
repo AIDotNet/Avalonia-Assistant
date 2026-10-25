@@ -24,6 +24,26 @@ public sealed class CodingSessionTests
     }
 
     [Fact]
+    public async Task DisabledSkillIsFilteredOutOfTheSession()
+    {
+        using var workspace = new TempWorkspace();
+        workspace.WriteSkill("hello", "打招呼的固定流程", "# 打招呼\n先问好。");
+        workspace.WriteSkill("review", "代码审查流程", "# 审查\n先看边界。");
+
+        var settings = new TestSettings().Current;
+        settings.DisabledSkills.Add("hello");
+
+        var session = await CodingSessionFactory.CreateAsync(
+            settings, workspace.Path, [], null, CancellationToken.None);
+
+        // 关掉的技能既不在加载结果里，也不进系统提示；另一个照常
+        Assert.DoesNotContain(session.ResourceLoader.Skills, skill => skill.Name == "hello");
+        Assert.Contains(session.ResourceLoader.Skills, skill => skill.Name == "review");
+        Assert.DoesNotContain("打招呼的固定流程", session.SystemPrompt);
+        Assert.Contains("代码审查流程", session.SystemPrompt);
+    }
+
+    [Fact]
     public async Task RegistersBuiltinAndCustomToolsInOneActivationSet()
     {
         using var workspace = new TempWorkspace();
@@ -32,6 +52,7 @@ public sealed class CodingSessionTests
             "session-1",
             "hi",
             [],
+            "office",
             PermissionMode.Workspace,
             workspace.Path,
             null);

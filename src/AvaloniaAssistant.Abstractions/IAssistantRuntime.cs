@@ -16,20 +16,24 @@ public interface IAssistantRuntime
         AgentRunRequest request,
         CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// 用给定的设置探一次模型服务。设置页的「测试连接」用：
-    /// 让「Key 填错 / Base URL 写错 / 模型名不存在」在保存后就暴露，而不是等发第一条消息。
-    /// </summary>
-    Task<ConnectionProbe> ProbeAsync(AssistantSettings settings, CancellationToken cancellationToken = default);
-
     /// <summary>中止指定会话正在进行的运行。没有运行时为空操作。</summary>
     void Abort(string sessionId);
 
     /// <summary>
-    /// 丢弃这一个会话的缓存，下次运行重新装配。重试要重跑某一轮时用：
-    /// 复用缓存会让模型在旧会话里看到一遍失败的回答，等于问了两次。
+    /// 用一份（可能还没保存的）设置发一次最小请求，验证 Key、地址、模型、协议能不能通。
+    /// 设置页的「测试连接」走这里，不依赖当前会话。
     /// </summary>
-    void InvalidateSession(string sessionId);
+    Task<ConnectionTestResult> TestConnectionAsync(
+        AssistantSettings settings,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 真去起一次进程并握手，回答「配置在，它到底连上没有」。
+    /// MCP 页用它显示状态；探测失败不影响后续会话自己的连接。
+    /// </summary>
+    Task<McpProbeResult> ProbeMcpServerAsync(
+        string serverName,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// 丢弃缓存中的会话，下次运行重新装配。装了新技能 / 改了 MCP 配置后调用，
@@ -38,10 +42,27 @@ public interface IAssistantRuntime
     void InvalidateSessions();
 }
 
+/// <summary>
+/// 一次授权的结论。
+/// <para>
+/// <see cref="CorrectedArguments"/> 非空表示「不放行原来这次调用，但用户把参数改好了」：
+/// SDK 的 <c>BeforeToolCallResult</c> 只能拦截、不能改写参数，所以运行时会把改后的参数
+/// 写进拒绝理由，让模型立刻用新参数重发一次。界面上要如实说明这一点，别说成「直接执行」。
+/// </para>
+/// </summary>
+public sealed record ToolApprovalDecision(bool Allowed, string? CorrectedArguments = null)
+{
+    public static readonly ToolApprovalDecision Allow = new(true);
+
+    public static readonly ToolApprovalDecision Deny = new(false);
+
+    public static ToolApprovalDecision Correct(string arguments) => new(false, arguments);
+}
+
 /// <summary>逐次工具授权的回调。UI 在对话里弹出允许/拒绝卡片并等待用户选择。</summary>
 public interface IToolApprovalGate
 {
-    Task<bool> RequestAsync(ToolApprovalRequest request, CancellationToken cancellationToken);
+    Task<ToolApprovalDecision> RequestAsync(ToolApprovalRequest request, CancellationToken cancellationToken);
 }
 
 /// <summary>麦克风录音 + 语音转写。实现放在基础设施层，UI 只负责按钮状态。</summary>
@@ -74,5 +95,9 @@ public interface ISettingsProvider
 
     Task SaveAsync(AssistantSettings settings, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// 保存成功后触发。<b>不保证在 UI 线程上</b>：实现里全程 ConfigureAwait(false)，
+    /// 事件往往从线程池上抛出来，订阅方要自己回 UI 线程再改绑定源。
+    /// </summary>
     event EventHandler? Changed;
 }

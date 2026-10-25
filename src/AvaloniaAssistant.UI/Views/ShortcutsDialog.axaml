@@ -1,0 +1,150 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:arc="https://github.com/AIDotNet/TKCode.Arc"
+        x:Class="AvaloniaAssistant.UI.Views.ShortcutsDialog"
+        Title="快捷键"
+        CanResize="False"
+        ShowInTaskbar="False"
+        WindowDecorations="None"
+        WindowStartupLocation="CenterOwner"
+        TransparencyLevelHint="Transparent"
+        Background="Transparent"
+        FontFamily="{StaticResource AppFontFamily}"
+        RequestedThemeVariant="Light">
+
+  <Window.Styles>
+    <Style Selector="Border.key">
+      <Setter Property="Background" Value="{StaticResource SurfaceMutedBrush}" />
+      <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Padding" Value="7,2" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Border.key > TextBlock">
+      <Setter Property="FontFamily" Value="{StaticResource MonoFontFamily}" />
+      <Setter Property="FontSize" Value="10.5" />
+      <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+    </Style>
+    <Style Selector="TextBlock.hint">
+      <Setter Property="FontSize" Value="11.5" />
+      <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+  </Window.Styles>
+
+  <Grid Background="#66000000">
+    <Border Width="640"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center"
+            Background="{StaticResource SurfaceBrush}"
+            BorderBrush="{StaticResource BorderStrongBrush}"
+            BorderThickness="1"
+            CornerRadius="18"
+            Padding="22,18,22,16"
+            BoxShadow="0 24 64 0 #33000000">
+      <StackPanel Spacing="14">
+        <Grid ColumnDefinitions="Auto,*,Auto">
+          <Border Width="26" Height="26" CornerRadius="8" Background="{StaticResource SurfaceMutedBrush}" VerticalAlignment="Top">
+            <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Command}"
+                          Size="14"
+                          Foreground="{StaticResource TextSecondaryBrush}"
+                          HorizontalAlignment="Center"
+                          VerticalAlignment="Center" />
+          </Border>
+          <StackPanel Grid.Column="1" Margin="10,0,8,0" Spacing="2" VerticalAlignment="Center">
+            <TextBlock Text="快捷键" FontSize="16" FontWeight="SemiBold" />
+            <TextBlock Text="随时按 Ctrl+/ 回来这里" Classes="caption" FontSize="10.5" />
+          </StackPanel>
+          <Button Grid.Column="2" Classes="icon" Click="OnCloseClick" ToolTip.Tip="关闭（Esc）">
+            <arc:ArcGlyph Data="{x:Static arc:ArcIcons.CircleX}" Size="15" />
+          </Button>
+        </Grid>
+
+        <Grid ColumnDefinitions="*,24,*">
+          <StackPanel Spacing="10">
+            <StackPanel Spacing="6">
+              <TextBlock Text="全局" Classes="section-title" />
+              <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="6">
+                <Border Classes="key"><TextBlock Text="Ctrl+N" /></Border>
+                <TextBlock Grid.Column="1" Classes="hint" Text="新建任务" Margin="8,0,0,0" />
+                <Border Grid.Row="1" Classes="key"><TextBlock Text="Ctrl+K" /></Border>
+                <TextBlock Grid.Row="1" Grid.Column="1" Classes="hint" Text="搜索任务" Margin="8,0,0,0" />
+                <Border Grid.Row="2" Classes="key"><TextBlock Text="Ctrl+F" /></Border>
+                <TextBlock Grid.Row="2" Grid.Column="1" Classes="hint" Text="在对话里查找" Margin="8,0,0,0" />
+                <Border Grid.Row="3" Classes="key"><TextBlock Text="Ctrl+/" /></Border>
+                <TextBlock Grid.Row="3" Grid.Column="1" Classes="hint" Text="这张表" Margin="8,0,0,0" />
+                <Border Grid.Row="4" Classes="key"><TextBlock Text="Ctrl+滚轮" /></Border>
+                <TextBlock Grid.Row="4" Grid.Column="1" Classes="hint" Text="缩放界面（90%–125%）" Margin="8,0,0,0" />
+                <Border Grid.Row="5" Classes="key"><TextBlock Text="Ctrl+0" /></Border>
+                <TextBlock Grid.Row="5" Grid.Column="1" Classes="hint" Text="恢复 100%" Margin="8,0,0,0" />
+              </Grid>
+            </StackPanel>
+
+            <Border Height="1" Background="{StaticResource BorderBrush}" />
+
+            <StackPanel Spacing="6">
+              <TextBlock Text="输入框" Classes="section-title" />
+              <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="6">
+                <Border Classes="key"><TextBlock Text="Enter" /></Border>
+                <TextBlock Grid.Column="1" Classes="hint" Text="发送" Margin="8,0,0,0" />
+                <Border Grid.Row="1" Classes="key"><TextBlock Text="Shift+Enter" /></Border>
+                <TextBlock Grid.Row="1" Grid.Column="1" Classes="hint" Text="换行" Margin="8,0,0,0" />
+                <Border Grid.Row="2" Classes="key"><TextBlock Text="@" /></Border>
+                <TextBlock Grid.Row="2" Grid.Column="1" Classes="hint" Text="引用工作区文件" Margin="8,0,0,0" />
+                <Border Grid.Row="3" Classes="key"><TextBlock Text="Ctrl+V" /></Border>
+                <TextBlock Grid.Row="3" Grid.Column="1" Classes="hint" Text="粘贴截图 / 图片" Margin="8,0,0,0" />
+              </Grid>
+            </StackPanel>
+          </StackPanel>
+
+          <StackPanel Grid.Column="2" Spacing="10">
+            <StackPanel Spacing="6">
+              <TextBlock Text="任务运行中" Classes="section-title" />
+              <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto" RowSpacing="6">
+                <Border Classes="key"><TextBlock Text="Enter" /></Border>
+                <TextBlock Grid.Column="1" Classes="hint" Text="排队，本轮结束后自动发送" Margin="8,0,0,0" />
+                <Border Grid.Row="1" Classes="key"><TextBlock Text="Esc" /></Border>
+                <TextBlock Grid.Row="1" Grid.Column="1" Classes="hint" Text="关掉 @ 浮层 / 取消录音" Margin="8,0,0,0" />
+              </Grid>
+            </StackPanel>
+
+            <Border Height="1" Background="{StaticResource BorderBrush}" />
+
+            <StackPanel Spacing="6">
+              <TextBlock Text="审批卡片" Classes="section-title" />
+              <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto" RowSpacing="6">
+                <Border Classes="key"><TextBlock Text="Ctrl+Enter" /></Border>
+                <TextBlock Grid.Column="1" Classes="hint" Text="允许一次" Margin="8,0,0,0" />
+                <Border Grid.Row="1" Classes="key"><TextBlock Text="Ctrl+Shift+Enter" /></Border>
+                <TextBlock Grid.Row="1" Grid.Column="1" Classes="hint" Text="本会话都允许这个工具" Margin="8,0,0,0" />
+                <Border Grid.Row="2" Classes="key"><TextBlock Text="Esc" /></Border>
+                <TextBlock Grid.Row="2" Grid.Column="1" Classes="hint" Text="拒绝（安全默认）" Margin="8,0,0,0" />
+              </Grid>
+            </StackPanel>
+
+            <Border Height="1" Background="{StaticResource BorderBrush}" />
+
+            <StackPanel Spacing="6">
+              <TextBlock Text="窗口" Classes="section-title" />
+              <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto" RowSpacing="6">
+                <Border Classes="key"><TextBlock Text="拖动分隔条" /></Border>
+                <TextBlock Grid.Column="1" Classes="hint" Text="调整侧栏宽度" Margin="8,0,0,0" />
+              </Grid>
+            </StackPanel>
+          </StackPanel>
+        </Grid>
+
+        <Grid ColumnDefinitions="*,Auto">
+          <TextBlock Text="关闭时记住窗口位置、侧栏宽度和界面缩放；下次打开直接回到上次的样子。"
+                     Classes="caption"
+                     FontSize="10.5"
+                     TextWrapping="Wrap"
+                     VerticalAlignment="Center" />
+          <Button Grid.Column="1" Classes="chip" Content="知道了（Esc）" Click="OnCloseClick" Margin="12,0,0,0" />
+        </Grid>
+      </StackPanel>
+    </Border>
+  </Grid>
+</Window>

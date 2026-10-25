@@ -71,6 +71,47 @@ public sealed partial class ToolItemViewModel : ObservableObject
 
 public delegate void ToolToggle(string name, bool enabled);
 
+/// <summary>
+/// 技能卡片。开关只改「这一轮要不要把它放进系统提示」，不碰磁盘上的 SKILL.md；
+/// 卡片本身还能点开看正文——以前只能看到两行描述，想确认它到底干什么得去资源管理器翻。
+/// </summary>
+public sealed partial class SkillItemViewModel : ObservableObject
+{
+    private readonly ToolToggle _toggle;
+    private bool _initializing = true;
+
+    public SkillItemViewModel(AgentSkillInfo info, bool enabled, ToolToggle toggle)
+    {
+        Info = info;
+        _toggle = toggle;
+        IsEnabled = enabled;
+        _initializing = false;
+    }
+
+    public AgentSkillInfo Info { get; }
+
+    public string Name => Info.Name;
+
+    public string Description => Info.Description;
+
+    public string Directory => Info.Directory;
+
+    public bool IsProjectScope => Info.IsProjectScope;
+
+    public string ScopeText => IsProjectScope ? "项目级" : "用户级";
+
+    [ObservableProperty]
+    private bool isEnabled;
+
+    partial void OnIsEnabledChanged(bool value)
+    {
+        if (!_initializing)
+        {
+            _toggle(Name, value);
+        }
+    }
+}
+
 public sealed partial class ToolsViewModel : ObservableObject
 {
     private const string AllCategory = "全部";
@@ -97,6 +138,7 @@ public sealed partial class ToolsViewModel : ObservableObject
         }
 
         SelectedCategory = AllCategory;
+        Refresh();
         RefreshCapabilities();
     }
 
@@ -105,10 +147,7 @@ public sealed partial class ToolsViewModel : ObservableObject
 
     public ObservableCollection<ToolItemViewModel> VisibleTools { get; } = [];
 
-    public ObservableCollection<AgentSkillInfo> Skills { get; } = [];
-
-    /// <summary>按搜索词过滤后的技能。搜索框叫「搜索技能」，技能卡片必须跟着一起筛。</summary>
-    public ObservableCollection<AgentSkillInfo> VisibleSkills { get; } = [];
+    public ObservableCollection<SkillItemViewModel> Skills { get; } = [];
 
     public bool HasSkills => Skills.Count > 0;
 
@@ -119,10 +158,7 @@ public sealed partial class ToolsViewModel : ObservableObject
     /// <summary>技能目录，用户目录已缩成 ~。</summary>
     public string SkillsRootText => _skillsRoot;
 
-    /// <summary>技能数量。搜索时有筛选就显示「命中 / 总数」，免得以为技能被删了。</summary>
-    public string CapabilityText => string.IsNullOrWhiteSpace(SearchText)
-        ? $"{Skills.Count} 个技能"
-        : $"{VisibleSkills.Count} / {Skills.Count} 个技能";
+    public string CapabilityText => $"{Skills.Count} 个技能";
 
     public string SubtitleText => $"{_all.Count} 个内置工具 · {_all.Count(tool => tool.IsEnabled)} 个已启用";
 
@@ -156,8 +192,14 @@ public sealed partial class ToolsViewModel : ObservableObject
     [RelayCommand]
     private void ClearSearch() => SearchText = string.Empty;
 
+    /// <summary>有来源任务时写清返回哪里：从对话页来查技能，返回不该落在首页。</summary>
+    public string BackHint => _host.ReturnHint;
+
+    /// <summary>页头那条面包屑显不显示：有「刚才那条任务」才显示。</summary>
+    public bool HasReturnTarget => _host.HasReturnTarget;
+
     [RelayCommand]
-    private void Back() => _host.OpenHome();
+    private void Back() => _host.GoBack();
 
     /// <summary>选一个含 SKILL.md 的文件夹，复制进技能目录。</summary>
     [RelayCommand]
@@ -211,10 +253,7 @@ public sealed partial class ToolsViewModel : ObservableObject
         }
 
         Directory.CreateDirectory(_skillsRootRaw);
-        if (!Ui.OpenExternal(_skillsRootRaw))
-        {
-            ShowNotice("打不开技能目录，可能被系统策略拦住了。", isError: true);
-        }
+        Ui.OpenExternal(_skillsRootRaw);
     }
 
     private void ShowNotice(string message, bool isError)
@@ -233,25 +272,25 @@ public sealed partial class ToolsViewModel : ObservableObject
         _skillsRootRaw = capabilities.SkillsRoot;
         _skillsRoot = Ui.ShortenPath(capabilities.SkillsRoot);
 
+        var disabled = _host.Settings.DisabledSkills;
         Skills.Clear();
         foreach (var skill in capabilities.Skills)
         {
-            Skills.Add(skill);
+            Skills.Add(new SkillItemViewModel(
+                skill,
+                !disabled.Contains(skill.Name, StringComparer.OrdinalIgnoreCase),
+                ToggleSkill));
         }
 
         OnPropertyChanged(nameof(HasSkills));
         OnPropertyChanged(nameof(SkillsEmptyHint));
         OnPropertyChanged(nameof(SkillsRootText));
         OnPropertyChanged(nameof(CapabilityText));
-
-        // 技能列表换了，过滤结果要跟着重算（构造函数里也是先扫目录再 Refresh）。
-        Refresh();
     }
 
     private void Refresh()
     {
         VisibleTools.Clear();
-        VisibleSkills.Clear();
 
         var keyword = SearchText.Trim();
         foreach (var tool in _all)
@@ -271,23 +310,9 @@ public sealed partial class ToolsViewModel : ObservableObject
             VisibleTools.Add(tool);
         }
 
-        foreach (var skill in Skills)
-        {
-            if (keyword.Length == 0 || Matches(skill, keyword))
-            {
-                VisibleSkills.Add(skill);
-            }
-        }
-
-        HasNothing = VisibleTools.Count == 0 && VisibleSkills.Count == 0;
+        HasNothing = VisibleTools.Count == 0;
         OnPropertyChanged(nameof(SubtitleText));
-        OnPropertyChanged(nameof(CapabilityText));
     }
-
-    private static bool Matches(AgentSkillInfo skill, string keyword)
-        => skill.Name.Contains(keyword, StringComparison.OrdinalIgnoreCase)
-           || skill.Description.Contains(keyword, StringComparison.OrdinalIgnoreCase)
-           || skill.Directory.Contains(keyword, StringComparison.OrdinalIgnoreCase);
 
     private void Toggle(string name, bool enabled)
     {
@@ -301,7 +326,50 @@ public sealed partial class ToolsViewModel : ObservableObject
         _ = _host.SettingsProvider.SaveAsync(settings);
         OnPropertyChanged(nameof(SubtitleText));
     }
+
+    private void ToggleSkill(string name, bool enabled)
+    {
+        var settings = _host.Settings;
+        settings.DisabledSkills.RemoveAll(item => string.Equals(item, name, StringComparison.OrdinalIgnoreCase));
+        if (!enabled)
+        {
+            settings.DisabledSkills.Add(name);
+        }
+
+        _ = _host.SettingsProvider.SaveAsync(settings);
+        ShowNotice(
+            enabled
+                ? $"已启用「{name}」：下一轮生效。"
+                : $"已关掉「{name}」：下一轮不再把它放进系统提示，SKILL.md 还在原处。",
+            isError: false);
+    }
+
+    /// <summary>读出 SKILL.md 原文，交给视图弹窗。读文件放 VM，视图只管显示。</summary>
+    [RelayCommand]
+    private async Task PreviewSkillAsync(SkillItemViewModel? skill)
+    {
+        if (skill is null)
+        {
+            return;
+        }
+
+        var path = Path.Combine(skill.Directory, "SKILL.md");
+        try
+        {
+            var content = await File.ReadAllTextAsync(path);
+            PreviewRequested?.Invoke(this, new SkillPreview(skill.Name, path, content));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            ShowNotice($"读不了 {path}：{ex.Message}", isError: true);
+        }
+    }
+
+    public event EventHandler<SkillPreview>? PreviewRequested;
 }
+
+/// <summary>技能正文弹窗要的东西：名字、路径、原文。</summary>
+public sealed record SkillPreview(string Name, string Path, string Content);
 
 /// <summary>给分类配一套图标和配色，让卡片像一列有辨识度的技能。</summary>
 internal static class ToolPalette

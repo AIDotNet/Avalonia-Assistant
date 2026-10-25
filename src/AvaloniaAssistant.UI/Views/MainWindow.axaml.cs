@@ -1,10 +1,12 @@
+using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
+using Avalonia.Media;
 using Avalonia.Threading;
-using AvaloniaAssistant.Storage;
+using AvaloniaAssistant.UI.Services;
 using AvaloniaAssistant.UI.ViewModels;
 
 namespace AvaloniaAssistant.UI.Views;
@@ -12,167 +14,402 @@ namespace AvaloniaAssistant.UI.Views;
 public partial class MainWindow : Window
 {
     private readonly MainWindowViewModel _viewModel;
-    private readonly DispatcherTimer _boundsTimer;
-    private bool _restoringBounds;
+
+    /// <summary>用户已经在关窗确认里选了「停止并退出」，第二次 Close 不再拦。</summary>
+    private bool _closeConfirmed;
+
+    /// <summary>确认框开着的时候再点一次关闭，不要叠第二个。</summary>
+    private bool _closeDialogOpen;
+
+    private bool _resizingSidebar;
+    private double _resizeStartX;
+    private double _resizeStartWidth;
+
+    private DispatcherTimer? _windowStateTimer;
+    private DispatcherTimer? _scaleSaveTimer;
 
     public MainWindow(MainWindowViewModel viewModel)
     {
         AvaloniaXamlLoader.Load(this);
-
-        _viewModel = viewModel;
         DataContext = viewModel;
+        _viewModel = viewModel;
 
-        RestoreBounds();
-
-        // 拖窗口时不用每一帧都写盘，停手 700ms 记一次。
-        _boundsTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(700) };
-        _boundsTimer.Tick += (_, _) =>
-        {
-            _boundsTimer.Stop();
-            SaveBounds();
-        };
-
-        SizeChanged += (_, _) => QueueBoundsSave();
-        PropertyChanged += (_, e) =>
-        {
-            if (e.Property == WindowStateProperty)
-            {
-                QueueBoundsSave();
-            }
-        };
-
-        // 桌面上这几下是肌肉记忆，缺了会觉得「不像本地应用」。
-        KeyBindings.Add(new KeyBinding
-        {
-            Gesture = new KeyGesture(Key.N, KeyModifiers.Control),
-            Command = viewModel.NewTaskCommand,
-        });
-        KeyBindings.Add(new KeyBinding
-        {
-            Gesture = new KeyGesture(Key.OemComma, KeyModifiers.Control),
-            Command = viewModel.OpenSettingsCommand,
-        });
-
-        // 走隧道阶段：焦点在输入框里时也要能收到。
+        // 全局快捷键在窗口层收：输入框里打字时也能用，又不至于和 Textarea 自己的按键打架。
         AddHandler(KeyDownEvent, OnWindowKeyDown, RoutingStrategies.Tunnel);
-    }
 
-    protected override void OnClosing(WindowClosingEventArgs e)
-    {
-        _boundsTimer.Stop();
-        SaveBounds();
-        base.OnClosing(e);
-    }
+        // Ctrl+滚轮缩放：放在隧道阶段，先于聊天区的滚动处理拿事件。
+        AddHandler(PointerWheelChangedEvent, OnWindowPointerWheelChanged, RoutingStrategies.Tunnel);
 
-    private void QueueBoundsSave()
-    {
-        if (_restoringBounds)
+        _viewModel.AttentionRequested += OnAttentionRequested;
+        _viewModel.FontScaleChanged += OnFontScaleChanged;
+
+        PositionChanged += OnWindowPositionChanged;
+        SizeChanged += OnWindowSizeChanged;
+
+        Closed += (_, _) =>
         {
-            return;
-        }
-
-        _boundsTimer.Stop();
-        _boundsTimer.Start();
+            _viewModel.AttentionRequested -= OnAttentionRequested;
+            _viewModel.FontScaleChanged -= OnFontScaleChanged;
+            _windowStateTimer?.Stop();
+            _scaleSaveTimer?.Stop();
+        };
     }
 
     /// <summary>
-    /// 恢复上次的尺寸。位置不记：多显示器拔掉之后窗口会跑到屏幕外，
-    /// 每次居中显示反而更稳。
+    /// 启动时把上次的窗口位置、尺寸、界面缩放摆回去。
+    /// 由 App 在 Show() 之前调用，否则会先居中再跳一下。
     /// </summary>
-    private void RestoreBounds()
+    public void ApplySavedWindowState()
     {
-        if (WindowBounds.TryRead() is not { } bounds)
+        // 截图模式用固定尺寸：文档配图不该跟着本机的窗口大小和缩放变。
+        if (IsScreenshotRun)
         {
             return;
         }
 
-        _restoringBounds = true;
-        try
-        {
-            if (bounds.Width >= MinWidth && bounds.Height >= MinHeight)
-            {
-                var scaling = RenderScaling > 0 ? RenderScaling : 1;
+        var settings = _viewModel.Settings;
 
-                // 换了更小的屏幕时不要把窗口撑出可视区。
-                var maxWidth = double.PositiveInfinity;
-                var maxHeight = double.PositiveInfinity;
-                if (Screens.Primary?.WorkingArea is { } area)
-                {
-                    maxWidth = area.Width / scaling;
-                    maxHeight = area.Height / scaling;
-                }
+        Width = Math.Max(MinWidth, settings.WindowWidth);
+        Height = Math.Max(MinHeight, settings.WindowHeight);
 
-                var width = Math.Min(bounds.Width, maxWidth);
-                var height = Math.Min(bounds.Height, maxHeight);
-                if (width >= MinWidth && height >= MinHeight)
-                {
-                    Width = width;
-                    Height = height;
-                }
-            }
-
-            if (bounds.Maximized)
-            {
-                WindowState = WindowState.Maximized;
-            }
-        }
-        catch (Exception)
+        if (settings.WindowLeft is int left
+            && settings.WindowTop is int top
+            && Screens.ScreenFromPoint(new PixelPoint(left, top)) is not null)
         {
-            // 记不住尺寸不该拦住启动，按默认值显示。
-        }
-        finally
-        {
-            _restoringBounds = false;
-        }
-    }
-
-    private void SaveBounds()
-    {
-        // 截图/自动化跑完就退出，不把临时窗口尺寸写进用户数据目录。
-        if (Services.AppLaunchOptions.ScreenshotPath is not null)
-        {
-            return;
+            // 只要求左上角还落在某块屏幕上：拔掉外接屏之后不要把窗口恢复到看不见的地方。
+            WindowStartupLocation = WindowStartupLocation.Manual;
+            Position = new PixelPoint(left, top);
         }
 
-        // 最小化时的 Width/Height 不是用户想要的还原尺寸，别拿它覆盖已有记录。
-        if (WindowState == WindowState.Minimized)
+        if (settings.WindowMaximized)
         {
-            return;
+            WindowState = WindowState.Maximized;
         }
 
-        if (WindowState == WindowState.Maximized)
-        {
-            // 最大化时 Width/Height 是铺满屏幕的值。没有历史尺寸就存 0，
-            // 下次启动按默认尺寸打开再最大化，取消最大化时才不会得到一个满屏大的窗口。
-            var previous = WindowBounds.TryRead();
-            WindowBounds.Write(new WindowBounds(previous?.Width ?? 0, previous?.Height ?? 0, true));
-            return;
-        }
-
-        if (double.IsNaN(Width) || double.IsNaN(Height))
-        {
-            return;
-        }
-
-        WindowBounds.Write(new WindowBounds(Width, Height, false));
+        ApplyFontScale();
     }
 
     private void OnWindowKeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.Key != Key.K || !e.KeyModifiers.HasFlag(KeyModifiers.Control))
+        if (!e.KeyModifiers.HasFlag(KeyModifiers.Control))
         {
             return;
         }
 
-        e.Handled = true;
-
-        // 侧栏收起来时先展开，再把焦点放进搜索框。
-        if (!_viewModel.IsSidebarVisible)
+        switch (e.Key)
         {
-            _viewModel.ToggleSidebarCommand.Execute(null);
+            case Key.N:
+                _viewModel.NewTaskCommand.Execute(null);
+                e.Handled = true;
+                break;
+
+            case Key.K:
+                _viewModel.RequestSearch();
+                e.Handled = true;
+                break;
+
+            case Key.F:
+                // 只在对话页有意义：首页/设置页没有可查的消息流
+                if (_viewModel.CurrentPage is ChatViewModel chat)
+                {
+                    chat.OpenSearchCommand.Execute(null);
+                    e.Handled = true;
+                }
+
+                break;
+
+            // Ctrl+/：快捷键总览。数字键盘的除号也认，用户按哪个都行。
+            case Key.OemQuestion:
+            case Key.Divide:
+                _ = ShortcutsDialog.ShowAsync(this);
+                e.Handled = true;
+                break;
+
+            case Key.OemPlus:
+            case Key.Add:
+                ChangeFontScale(0.05);
+                e.Handled = true;
+                break;
+
+            case Key.OemMinus:
+            case Key.Subtract:
+                ChangeFontScale(-0.05);
+                e.Handled = true;
+                break;
+
+            case Key.D0:
+            case Key.NumPad0:
+                _viewModel.SetFontScale(1, persist: true);
+                e.Handled = true;
+                break;
+        }
+    }
+
+    // ---- 界面缩放 ----
+
+    private void OnWindowPointerWheelChanged(object? sender, PointerWheelEventArgs e)
+    {
+        if (!e.KeyModifiers.HasFlag(KeyModifiers.Control) || e.Delta.Y == 0)
+        {
+            return;
         }
 
-        var sidebar = this.FindControl<SidebarView>("Sidebar");
-        Dispatcher.UIThread.Post(() => sidebar?.FocusSearch(), DispatcherPriority.Input);
+        ChangeFontScale(e.Delta.Y > 0 ? 0.05 : -0.05);
+        e.Handled = true;
     }
+
+    private void ChangeFontScale(double delta)
+    {
+        _viewModel.SetFontScale(_viewModel.FontScale + delta, persist: false);
+        ScheduleScaleSave();
+    }
+
+    /// <summary>滚轮会连着触发几十次，停手半秒再写文件。</summary>
+    private void ScheduleScaleSave()
+    {
+        _scaleSaveTimer?.Stop();
+        _scaleSaveTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
+        _scaleSaveTimer.Tick += (_, _) =>
+        {
+            _scaleSaveTimer?.Stop();
+            _scaleSaveTimer = null;
+            _ = _viewModel.SaveSettingsQuietlyAsync();
+        };
+        _scaleSaveTimer.Start();
+    }
+
+    private void OnFontScaleChanged(object? sender, EventArgs e) => ApplyFontScale();
+
+    private void ApplyFontScale()
+    {
+        if (this.FindControl<LayoutTransformControl>("RootTransform") is not { } root)
+        {
+            return;
+        }
+
+        var scale = _viewModel.FontScale;
+        root.LayoutTransform = Math.Abs(scale - 1) < 0.001
+            ? null
+            : new ScaleTransform(scale, scale);
+    }
+
+    // ---- 窗口位置/尺寸 ----
+
+    private void OnWindowPositionChanged(object? sender, PixelPointEventArgs e) => ScheduleWindowStateSave();
+
+    private void OnWindowSizeChanged(object? sender, SizeChangedEventArgs e) => ScheduleWindowStateSave();
+
+    /// <summary>截图/自动化跑批不该把临时窗口尺寸写回用户设置；隔离数据目录除外。</summary>
+    private static bool IsScreenshotRun
+        => !string.IsNullOrWhiteSpace(AppLaunchOptions.ScreenshotPath) && !AppLaunchOptions.IsolatedData;
+
+    private void ScheduleWindowStateSave()
+    {
+        if (IsScreenshotRun)
+        {
+            return;
+        }
+
+        _windowStateTimer?.Stop();
+        _windowStateTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(700) };
+        _windowStateTimer.Tick += (_, _) =>
+        {
+            _windowStateTimer?.Stop();
+            _windowStateTimer = null;
+            CaptureWindowState();
+            _ = _viewModel.SaveSettingsQuietlyAsync();
+        };
+        _windowStateTimer.Start();
+    }
+
+    private void CaptureWindowState()
+    {
+        var settings = _viewModel.Settings;
+        settings.WindowMaximized = WindowState == WindowState.Maximized;
+
+        // 最大化时记的是「还原后的尺寸」：这时候 Bounds 是整块屏幕，存下去下次还原就回不来了。
+        if (WindowState != WindowState.Normal)
+        {
+            return;
+        }
+
+        settings.WindowWidth = Math.Max(MinWidth, Bounds.Width);
+        settings.WindowHeight = Math.Max(MinHeight, Bounds.Height);
+        settings.WindowLeft = Position.X;
+        settings.WindowTop = Position.Y;
+    }
+
+    // ---- 侧栏拖宽 ----
+
+    private void OnSidebarResizerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is not Control target)
+        {
+            return;
+        }
+
+        _resizingSidebar = true;
+        _resizeStartX = e.GetPosition(this).X;
+        _resizeStartWidth = _viewModel.SidebarWidth;
+        e.Pointer.Capture(target);
+        e.Handled = true;
+    }
+
+    private void OnSidebarResizerMoved(object? sender, PointerEventArgs e)
+    {
+        if (!_resizingSidebar)
+        {
+            return;
+        }
+
+        // 捕获丢了（切窗口、弹系统菜单）时不会再收到 Released，这里兜一次。
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        {
+            EndSidebarResize();
+            return;
+        }
+
+        // 窗口坐标是缩放前的逻辑像素，侧栏宽度也是；界面放大后同样的鼠标位移要按比例折算。
+        var delta = (e.GetPosition(this).X - _resizeStartX) / _viewModel.FontScale;
+        _viewModel.SidebarWidth = _resizeStartWidth + delta;
+        e.Handled = true;
+    }
+
+    private void OnSidebarResizerReleased(object? sender, PointerReleasedEventArgs e) => EndSidebarResize();
+
+    private void EndSidebarResize()
+    {
+        if (!_resizingSidebar)
+        {
+            return;
+        }
+
+        _resizingSidebar = false;
+        _ = _viewModel.PersistSidebarWidthAsync();
+    }
+
+    /// <summary>
+    /// 后台跑完一轮：窗口不在前台就闪一下任务栏。这不是系统通知，
+    /// 但比"什么都不发生"强——用户切回来能看见任务栏在亮。
+    /// </summary>
+    private void OnAttentionRequested(object? sender, EventArgs e)
+    {
+        if (IsActive)
+        {
+            return;
+        }
+
+        FlashTaskbar();
+    }
+
+    private void FlashTaskbar()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var handle = TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
+        if (handle == IntPtr.Zero)
+        {
+            return;
+        }
+
+        var info = new FlashWindowInfo
+        {
+            Size = (uint)Marshal.SizeOf<FlashWindowInfo>(),
+            Window = handle,
+            Flags = FlashTray | FlashUntilFocused,
+            Count = 3,
+        };
+
+        _ = FlashWindowEx(ref info);
+    }
+
+    /// <summary>
+    /// 关窗前如果还有任务在跑，先说清楚会中断什么；
+    /// 然后记下窗口状态并同步落盘，再真的退出——异步等写入会被退出流程打断。
+    /// </summary>
+    protected override void OnClosing(WindowClosingEventArgs e)
+    {
+        if (!_closeConfirmed && !_closeDialogOpen && _viewModel.RunningChatCount > 0)
+        {
+            e.Cancel = true;
+            _ = ConfirmCloseAsync();
+            return;
+        }
+
+        SaveWindowState();
+
+        // 读完直接关窗：把当前任务的位置记下来，下次进来接着读
+        _viewModel.PersistReadingPosition();
+
+        base.OnClosing(e);
+    }
+
+    private async Task ConfirmCloseAsync()
+    {
+        _closeDialogOpen = true;
+        try
+        {
+            var stopAndExit = await RunningTasksDialog.ShowAsync(this, _viewModel.RunningChatCount);
+            if (!stopAndExit)
+            {
+                return;
+            }
+
+            _viewModel.StopAllRuns();
+            _closeConfirmed = true;
+            SaveWindowState();
+            Close();
+        }
+        finally
+        {
+            _closeDialogOpen = false;
+        }
+    }
+
+    /// <summary>
+    /// 同步写一次设置。SaveAsync 内部全部 ConfigureAwait(false)，
+    /// 在 UI 线程上等待不会死锁；写的是几百字节的 JSON，阻塞可以忽略。
+    /// </summary>
+    private void SaveWindowState()
+    {
+        if (IsScreenshotRun)
+        {
+            return;
+        }
+
+        try
+        {
+            CaptureWindowState();
+            _viewModel.SettingsProvider
+                .SaveAsync(_viewModel.Settings)
+                .GetAwaiter()
+                .GetResult();
+        }
+        catch
+        {
+            // 关窗时保存失败不该阻止退出。
+        }
+    }
+
+    // ---- 任务栏闪烁（Windows） ----
+
+    private const uint FlashTray = 0x00000002;
+    private const uint FlashUntilFocused = 0x0000000C;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct FlashWindowInfo
+    {
+        public uint Size;
+        public IntPtr Window;
+        public uint Flags;
+        public uint Count;
+        public uint Timeout;
+    }
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool FlashWindowEx(ref FlashWindowInfo info);
 }

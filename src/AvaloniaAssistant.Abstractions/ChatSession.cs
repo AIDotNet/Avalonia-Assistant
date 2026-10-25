@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace AvaloniaAssistant.Abstractions;
 
 public enum ChatEntryKind
@@ -19,6 +21,21 @@ public sealed class ChatSession
 
     public string? WorkspacePath { get; set; }
 
+    public string Mode { get; set; } = "office";
+
+    /// <summary>
+    /// 置顶。常用任务不该被新任务一路挤到看不见的地方。
+    /// 只影响侧栏排序，不改 <see cref="UpdatedAt"/>。
+    /// </summary>
+    public bool Pinned { get; set; }
+
+    /// <summary>
+    /// 上次读到哪儿：0 是顶部，1 是底部，负数表示没记录过。
+    /// 存比例而不是像素：换窗口宽度、换字号都会改变总高度，像素值一换就偏。
+    /// 旧存档没有这个字段，读出来是 -1，仍然按原来的「打开就到底部」处理。
+    /// </summary>
+    public double ReadingRatio { get; set; } = -1;
+
     public List<ChatEntry> Entries { get; set; } = [];
 }
 
@@ -36,7 +53,16 @@ public sealed class ChatEntry
 
     public List<ToolCallRecord> ToolCalls { get; set; } = [];
 
+    /// <summary>这一轮用户 @ 引用进来的文件。内容留快照，重试或第二天接着聊都是同一份上下文。</summary>
+    public List<ChatAttachment> Attachments { get; set; } = [];
+
+    /// <summary>这一轮用户粘贴进来的图片。</summary>
+    public List<ChatImage> Images { get; set; } = [];
+
     public string? Error { get; set; }
+
+    /// <summary>这一轮是用户自己按停的，不是出错。存档里要分开，重新打开不能画成红色故障。</summary>
+    public bool Stopped { get; set; }
 
     public string? Model { get; set; }
 
@@ -45,9 +71,169 @@ public sealed class ChatEntry
     public long OutputTokens { get; set; }
 }
 
-public sealed class ToolCallRecord
+/// <summary>
+/// 一轮提问里引用的一份文件。只带模型真正需要的东西：
+/// 展示用路径、正文快照、以及读取时有没有被截断。
+/// </summary>
+public sealed class ChatAttachment
 {
     public string Id { get; set; } = string.Empty;
+
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>展示与引用用的相对路径。</summary>
+    public string? Path { get; set; }
+
+    /// <summary>
+    /// 绝对路径。界面上「在资源管理器中显示」要用它；
+    /// 旧存档没有这个字段，读出来为空时退回 <see cref="Path"/>。
+    /// </summary>
+    public string? FullPath { get; set; }
+
+    /// <summary>文件从哪来，目前只有 <c>workspace</c>。</summary>
+    public string Source { get; set; } = "workspace";
+
+    public string Kind { get; set; } = "FILE";
+
+    public long Size { get; set; }
+
+    /// <summary>正文快照，限长在读取时已经裁过；二进制文件为 null。</summary>
+    public string? Text { get; set; }
+
+    /// <summary>读取失败的原因。有值时正文为空，模型会看到「这个文件没读到」而不是一片空白。</summary>
+    public string? Error { get; set; }
+
+    public int LineCount { get; set; }
+
+    /// <summary>是否只读了一部分（行数或字数到达上限）。</summary>
+    public bool Truncated { get; set; }
+
+    public bool HasText => !string.IsNullOrEmpty(Text);
+
+    public string DisplayPath => string.IsNullOrWhiteSpace(Path) ? Name : Path!;
+
+    /// <summary>文件大小，给气泡里那枚引用标签用。</summary>
+    [JsonIgnore]
+    public string DisplaySize => Size switch
+    {
+        >= 1024 * 1024 => $"{Size / 1024.0 / 1024.0:0.#} MB",
+        >= 1024 => $"{Size / 1024.0:0.#} KB",
+        > 0 => $"{Size} B",
+        _ => string.Empty,
+    };
+
+    /// <summary>
+    /// 引用标签下面那行小字：多大、读了多少行、有没有被截断或读失败。
+    /// 以前只显示文件名，用户以为模型看完了整份日志。
+    /// </summary>
+    [JsonIgnore]
+    public string Caption
+    {
+        get
+        {
+            var parts = new List<string>(4);
+            if (DisplaySize.Length > 0)
+            {
+                parts.Add(DisplaySize);
+            }
+
+            if (LineCount > 0)
+            {
+                parts.Add($"{LineCount} 行");
+            }
+
+            if (!string.IsNullOrWhiteSpace(Error))
+            {
+                parts.Add("读取失败");
+            }
+            else if (!HasText)
+            {
+                parts.Add("无正文");
+            }
+            else if (Truncated)
+            {
+                parts.Add("已截断");
+            }
+
+            return string.Join(" · ", parts);
+        }
+    }
+
+    /// <summary>悬停提示：完整路径 + 失败原因 / 截断说明。</summary>
+    [JsonIgnore]
+    public string Detail
+    {
+        get
+        {
+            var path = FullPath ?? DisplayPath;
+            if (!string.IsNullOrWhiteSpace(Error))
+            {
+                return $"{path}{Environment.NewLine}{Error}";
+            }
+
+            return Truncated
+                ? $"{path}{Environment.NewLine}只读了前 {LineCount} 行，后面的内容没有交给模型。"
+                : path;
+        }
+    }
+}
+
+/// <summary>
+/// 粘贴进对话的一张图片。二进制落在数据目录的 <c>images/</c> 下，会话只记路径和尺寸——
+/// 把 base64 塞进 session.json 会让存档几十倍地涨。
+/// </summary>
+public sealed class ChatImage
+{
+    public string Id { get; set; } = string.Empty;
+
+    /// <summary>PNG 文件的绝对路径。</summary>
+    public string Path { get; set; } = string.Empty;
+
+    public string MimeType { get; set; } = "image/png";
+
+    public int Width { get; set; }
+
+    public int Height { get; set; }
+
+    /// <summary>粘贴进来时的原始像素宽。落盘前缩过的图，<see cref="Width"/> 是压缩后的尺寸。</summary>
+    public int OriginalWidth { get; set; }
+
+    /// <summary>粘贴进来时的原始像素高。</summary>
+    public int OriginalHeight { get; set; }
+
+    /// <summary>落盘前缩过。长边超过视觉模型的常用输入上限时才会发生。</summary>
+    public bool Compressed { get; set; }
+
+    public long Size { get; set; }
+
+    [JsonIgnore]
+    public string DisplaySize => Size >= 1024 * 1024
+        ? $"{Size / 1024.0 / 1024.0:0.#} MB"
+        : $"{Size / 1024.0:0.#} KB";
+
+    [JsonIgnore]
+    public string Caption => $"{Width}×{Height} · {DisplaySize}";
+
+    /// <summary>
+    /// 悬停提示：带上原图尺寸和估算 token。视觉模型按分辨率折算 token，
+    /// 一张 4K 截图能吃掉上千 token——不说的话，用户以为只是"顺手贴一张"。
+    /// </summary>
+    [JsonIgnore]
+    public string DetailCaption
+    {
+        get
+        {
+            var tokens = Math.Max(1, (int)Math.Ceiling((long)Width * Height / 750d));
+            var size = Compressed
+                ? $"{Width}×{Height}（原图 {OriginalWidth}×{OriginalHeight}，已压缩）"
+                : $"{Width}×{Height}";
+            return $"{size} · {DisplaySize} · 约 {tokens} token";
+        }
+    }
+}
+
+public sealed class ToolCallRecord
+{    public string Id { get; set; } = string.Empty;
 
     public string Name { get; set; } = string.Empty;
 
@@ -58,6 +244,9 @@ public sealed class ToolCallRecord
     public string? Result { get; set; }
 
     public bool IsError { get; set; }
+
+    /// <summary>这一轮被用户按停时，这个工具还没跑完。和失败分开记：停止不是故障。</summary>
+    public bool Aborted { get; set; }
 
     public long? DurationMs { get; set; }
 }

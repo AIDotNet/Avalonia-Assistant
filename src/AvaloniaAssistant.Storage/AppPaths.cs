@@ -14,6 +14,9 @@ public static class AppPaths
 
     public static string Sessions => Path.Combine(Root, "sessions");
 
+    /// <summary>粘贴进对话的图片。会话 JSON 里只存这里的路径。</summary>
+    public static string Images => Path.Combine(Root, "images");
+
     public static string SettingsFile => Path.Combine(Root, "settings.json");
 
     public static string DefaultWorkspace => Path.Combine(
@@ -36,6 +39,7 @@ public static class AppPaths
     {
         Directory.CreateDirectory(Root);
         Directory.CreateDirectory(Sessions);
+        Directory.CreateDirectory(Images);
         Directory.CreateDirectory(DefaultWorkspace);
     }
 }

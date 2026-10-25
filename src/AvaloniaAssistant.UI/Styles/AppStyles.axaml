@@ -1,6 +1,6 @@
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:arc="https://github.com/AtomUICommunity/TKCode.Arc">
+        xmlns:arc="https://github.com/AIDotNet/TKCode.Arc">
   <!-- Arc 主题把 Button 的内容对齐默认设成 Stretch，纯文字按钮的文字会贴着上沿。
        统一改成居中，带图标的按钮靠内容自身的 VerticalAlignment 对齐，不受影响。 -->
   <Style Selector="Button">
@@ -9,6 +9,11 @@
   </Style>
 
   <Style Selector="Button.nav">
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.12" />
+      </Transitions>
+    </Setter>
     <Setter Property="Height" Value="36" />
     <Setter Property="Padding" Value="9,0" />
     <Setter Property="HorizontalAlignment" Value="Stretch" />
@@ -31,6 +36,11 @@
   </Style>
 
   <Style Selector="Button.task">
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.12" />
+      </Transitions>
+    </Setter>
     <Setter Property="Padding" Value="9,6" />
     <Setter Property="HorizontalAlignment" Value="Stretch" />
     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
@@ -48,13 +58,18 @@
 
   <!-- 对话行：默认显示时间；鼠标移到这一行，时间淡出、「⋯」出现，点击才展开菜单 -->
   <Style Selector="Grid.task-row TextBlock.row-time">
-    <Setter Property="Opacity" Value="0" />
+    <Setter Property="Opacity" Value="1" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <DoubleTransition Property="Opacity" Duration="0:0:0.12" />
+      </Transitions>
+    </Setter>
   </Style>
   <Style Selector="Grid.task-row:pointerover TextBlock.row-time">
     <Setter Property="Opacity" Value="0" />
   </Style>
   <Style Selector="Button.row-more">
-    <Setter Property="IsVisible" Value="True" />
+    <Setter Property="IsVisible" Value="False" />
   </Style>
   <Style Selector="Grid.task-row:pointerover Button.row-more">
     <Setter Property="IsVisible" Value="True" />
@@ -77,11 +92,33 @@
     <Setter Property="Padding" Value="5,1" />
   </Style>
 
-  <!-- 卡片自带一层皮，去掉 ToolTip 默认的内边距和底色，只留我们自己的 Border -->
+  <!--
+    悬停提示：一律是一张小白卡。
+    这里以前为了「悬停信息卡」把 ToolTip 掏成透明底 + 零内边距（卡片自带一层皮），
+    但信息卡早改成 Popup 自绘了（SidebarView.axaml 里的 Border.hover-card），
+    剩下 80 多处纯文字提示全变成飘在内容上的黑字——侧栏空间行的「新建会话」、工具行的
+    「展开看参数与结果」都压在正文上，看起来就是重影。现在恢复成正常气泡。
+  -->
   <Style Selector="ToolTip">
-    <Setter Property="Padding" Value="0" />
-    <Setter Property="Background" Value="Transparent" />
-    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="9,5,9,6" />
+    <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource BorderStrongBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="6" />
+    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+    <Setter Property="FontSize" Value="11.5" />
+    <Setter Property="MaxWidth" Value="420" />
+    <!-- 提示里会出现完整路径、完整时间，得折行，否则会拉成横穿窗口的一条 -->
+    <Setter Property="ContentTemplate">
+      <DataTemplate>
+        <TextBlock Text="{Binding}"
+                   TextWrapping="Wrap"
+                   LineHeight="16" />
+      </DataTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="ToolTip Border">
+    <Setter Property="BoxShadow" Value="{StaticResource CardShadow}" />
   </Style>
 
   <!-- 空间标题：比导航项矮一档，左边留出展开箭头的位置 -->
@@ -92,7 +129,26 @@
     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
   </Style>
 
+  <!--
+    两区标题（任务 / 空间）共用这一套：高度和左距一致，折叠箭头在文字右侧。
+    箭头放右边，标题就不需要左侧槽位去凑对齐——之前两区差 40px 就是那么来的。
+  -->
+  <Style Selector="Button.nav.section-head">
+    <Setter Property="Height" Value="32" />
+    <Setter Property="Padding" Value="8,0" />
+    <Setter Property="HorizontalContentAlignment" Value="Left" />
+  </Style>
+
+  <Style Selector="Button.nav.section-head:pointerover">
+    <Setter Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+  </Style>
+
   <Style Selector="Button.icon">
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.12" />
+      </Transitions>
+    </Setter>
     <Setter Property="Width" Value="30" />
     <Setter Property="Height" Value="30" />
     <Setter Property="Padding" Value="0" />
@@ -108,7 +164,25 @@
     <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
   </Style>
 
+  <!-- 行内小图标（对话行的「⋯」、空间的「+」「⋯」）已经躺在一条高亮行里，
+       自己再叠一层底色就成了两个圆角块套在一起，看着很脏。
+       这一类只提亮图标，不加底。 -->
+  <Style Selector="Button.icon.row-more:pointerover">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Button.icon.ws-add:pointerover">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Button.icon.ws-more:pointerover">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
   <Style Selector="Button.chip">
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.12" />
+      </Transitions>
+    </Setter>
     <Setter Property="Height" Value="34" />
     <Setter Property="Padding" Value="14,0" />
     <Setter Property="CornerRadius" Value="17" />
@@ -127,13 +201,18 @@
     <Setter Property="HorizontalContentAlignment" Value="Center" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
   </Style>
+  <!-- 只动底色和文字色。原来连边框一起加深，底色和边框同时变，像框在闪。 -->
   <Style Selector="Button.chip:pointerover">
     <Setter Property="Background" Value="{StaticResource SurfaceMutedBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource BorderStrongBrush}" />
     <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
   </Style>
 
   <Style Selector="Button.pill">
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.12" />
+      </Transitions>
+    </Setter>
     <Setter Property="Height" Value="30" />
     <Setter Property="Padding" Value="10,0" />
     <Setter Property="CornerRadius" Value="15" />
@@ -157,6 +236,11 @@
 
   <!-- 权限浮层里的档位行 -->
   <Style Selector="Button.permission-option">
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.12" />
+      </Transitions>
+    </Setter>
     <Setter Property="Padding" Value="8,7" />
     <Setter Property="CornerRadius" Value="9" />
     <Setter Property="Background" Value="Transparent" />
@@ -242,6 +326,11 @@
   </Style>
 
   <Style Selector="Button.ghost-action">
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.12" />
+      </Transitions>
+    </Setter>
     <Setter Property="Height" Value="26" />
     <Setter Property="Padding" Value="7,0" />
     <Setter Property="CornerRadius" Value="7" />
@@ -303,6 +392,11 @@
   </Style>
 
   <Style Selector="Border.tool-tile">
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.12" />
+      </Transitions>
+    </Setter>
     <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
     <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
     <Setter Property="BorderThickness" Value="1" />
@@ -361,16 +455,59 @@
     <Setter Property="Background" Value="{StaticResource SurfaceMutedBrush}" />
   </Style>
 
-  <!-- 工作区的「⋯」平时藏起来，鼠标进这一行才露出来，免得侧栏一直挂着一排点 -->
-  <Style Selector="Border.ws-chip:pointerover Button.ws-more">
-    <Setter Property="Opacity" Value="1" />
+  <!-- 卡片右上角的「直接开始」：平时只是一枚灰色箭头，hover 才亮起来。
+       它和卡身是两个动作，所以必须是独立的按钮，不能只是一个图标。 -->
+  <Style Selector="Button.card-run">
+    <Setter Property="Width" Value="26" />
+    <Setter Property="Height" Value="26" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.card-run:pointerover">
+    <Setter Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+  </Style>
+
+  <!-- 工作区的「+」「⋯」平时藏起来，鼠标进这一行才露出来，免得侧栏一直挂着一排图标。
+       顺序有讲究：Avalonia 按声明顺序应用样式，后声明的会盖掉前面那条，
+       所以默认值必须写在 hover 规则前面——写反了图标就永远出不来。 -->
+  <Style Selector="Button.ws-add">
+    <Setter Property="Opacity" Value="0" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <DoubleTransition Property="Opacity" Duration="0:0:0.12" />
+        <BrushTransition Property="Background" Duration="0:0:0.12" />
+      </Transitions>
+    </Setter>
   </Style>
   <Style Selector="Button.ws-more">
     <Setter Property="Opacity" Value="0" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <DoubleTransition Property="Opacity" Duration="0:0:0.12" />
+        <BrushTransition Property="Background" Duration="0:0:0.12" />
+      </Transitions>
+    </Setter>
+  </Style>
+  <Style Selector="Border.ws-chip:pointerover Button.ws-add">
+    <Setter Property="Opacity" Value="1" />
+  </Style>
+  <Style Selector="Border.ws-chip:pointerover Button.ws-more">
+    <Setter Property="Opacity" Value="1" />
   </Style>
 
   <!-- 空间这一行整块亮：名字和「⋯」落在同一个圆角块里，不在按钮和图标之间断开 -->
   <Style Selector="Border.ws-chip">
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.12" />
+      </Transitions>
+    </Setter>
     <Setter Property="Background" Value="Transparent" />
   </Style>
   <Style Selector="Border.ws-chip:pointerover">
@@ -390,6 +527,11 @@
   </Style>
 
   <Style Selector="Button.tool-head">
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.12" />
+      </Transitions>
+    </Setter>
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="Padding" Value="10,8" />
@@ -413,6 +555,15 @@
   </Style>
   <Style Selector="Button.approve:pointerover">
     <Setter Property="Background" Value="#3A3A36" />
+  </Style>
+  <!-- 禁用要有禁用样子：设置页字段没填对时按钮是禁用的，画成黑的等于没提示 -->
+  <Style Selector="Button.approve:disabled">
+    <Setter Property="Background" Value="{StaticResource BorderBrush}" />
+    <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
+  </Style>
+  <Style Selector="Button.approve:disabled /template/ ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource BorderBrush}" />
+    <Setter Property="TextBlock.Foreground" Value="{StaticResource TextMutedBrush}" />
   </Style>
   <Style Selector="Button.deny">
     <Setter Property="Height" Value="32" />
@@ -452,5 +603,18 @@
   <Style Selector="Border.save-toast.error">
     <Setter Property="Background" Value="{StaticResource DangerSubtleBrush}" />
     <Setter Property="BorderBrush" Value="#F0CFCB" />
+  </Style>
+
+  <!-- 滚动条：主题给的是一条 8px 宽的实心灰棒，压在浅色底上像根柱子。
+       收成 4px（横竖一致），轨道透明，只留滑块本身。 -->
+  <Style Selector="ScrollBar:vertical">
+    <Setter Property="Width" Value="4" />
+    <Setter Property="MinWidth" Value="4" />
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="ScrollBar:horizontal">
+    <Setter Property="Height" Value="4" />
+    <Setter Property="MinHeight" Value="4" />
+    <Setter Property="Background" Value="Transparent" />
   </Style>
 </Styles>

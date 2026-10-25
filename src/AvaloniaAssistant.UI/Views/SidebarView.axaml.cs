@@ -5,6 +5,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Markup.Xaml;
+using System.Globalization;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -18,73 +19,42 @@ namespace AvaloniaAssistant.UI.Views;
 public partial class SidebarView : UserControl
 {
     private Flyout? _menuFlyout;
-    private DispatcherTimer? _cardTimer;
 
     public SidebarView()
     {
         AvaloniaXamlLoader.Load(this);
-    }
-
-    /// <summary>Ctrl+K 用：把焦点放进任务搜索框。</summary>
-    public void FocusSearch()
-    {
-        var field = this.FindControl<Control>("TaskSearch");
-        if (field is null)
-        {
-            return;
-        }
-
-        // Arc 的 SearchField 自己处理键盘输入（内部的 TextPresenter 不接收焦点），
-        // 所以聚焦控件本身即可；Focus() 失败再往下找可聚焦的输入控件兜底。
-        if (field.Focus())
-        {
-            return;
-        }
-
-        field.GetVisualDescendants()
-            .OfType<InputElement>()
-            .FirstOrDefault(element => element.Focusable)
-            ?.Focus();
+        AttachedToVisualTree += OnSidebarAttached;
     }
 
     /// <summary>
-    /// 鼠标在这一行停一会儿再弹信息卡。直接跟着 PointerEntered 弹，
-    /// 扫过列表时会一路连开好几张，看着像界面在抖。
+    /// 侧栏是从 MainWindow.axaml 实例化的，构造函数里命名控件还没填充，
+    /// FindControl 会拿到 null；等进了可视树再挂 Esc。
     /// </summary>
-    private void OnSessionRowPointerEntered(object? sender, PointerEventArgs e)
+    private void OnSidebarAttached(object? sender, VisualTreeAttachmentEventArgs e)
     {
-        if (sender is not Control row || row.DataContext is not SessionItemViewModel item)
+        if (_searchWired)
         {
             return;
         }
 
-        _cardTimer?.Stop();
-
-        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(420) };
-        timer.Tick += (_, _) =>
+        if (this.FindControl<Control>("TaskSearch") is { } search)
         {
-            timer.Stop();
-            if (ReferenceEquals(_cardTimer, timer))
-            {
-                _cardTimer = null;
-            }
-
-            item.IsCardOpen = true;
-        };
-
-        _cardTimer = timer;
-        timer.Start();
+            search.AddHandler(KeyDownEvent, OnSearchKeyDown, RoutingStrategies.Tunnel);
+            _searchWired = true;
+        }
     }
 
-    private void OnSessionRowPointerExited(object? sender, PointerEventArgs e)
-    {
-        _cardTimer?.Stop();
-        _cardTimer = null;
+    private bool _searchWired;
 
-        if (sender is Control row && row.DataContext is SessionItemViewModel item)
+    private void OnSearchKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Escape || _host is null || !_host.IsSearching)
         {
-            item.IsCardOpen = false;
+            return;
         }
+
+        _host.ClearSearchCommand.Execute(null);
+        e.Handled = true;
     }
 
     /// <summary>
@@ -110,10 +80,140 @@ public partial class SidebarView : UserControl
 
         // 打开之后再挂「点外面收起」：刚开始展开时，打开它的那一下点击还在路上，
         // 提前挂上去会把菜单自己关掉，看着像点了没反应。
-        flyout.Opened += (_, _) => AttachDismiss(flyout, target);
+        flyout.Opened += (_, _) => FlyoutDismiss.Attach(flyout, target);
 
         _menuFlyout = flyout;
         flyout.ShowAt(target);
+    }
+
+    /// <summary>
+    /// 鼠标进到一条对话上：等一会儿再开信息卡。只是路过侧栏也会弹一张卡出来盖住聊天区，
+    /// 所以给 450ms 的犹豫期，真的停下来了才显示。
+    /// </summary>
+    private void OnSessionRowPointerEntered(object? sender, PointerEventArgs e)
+    {
+        if (sender is not Control { DataContext: SessionItemViewModel item } row)
+        {
+            return;
+        }
+
+        // 标题没被截断时不弹卡：信息卡会盖住对话正文，而"所属空间/更新时间"
+        // 现在行内和页头都能看到，只为一行看得全的标题去挡正文不划算。
+        if (!IsTitleTruncated(row, item))
+        {
+            CancelCardTimer();
+            item.IsCardOpen = false;
+            return;
+        }
+
+        CancelCardTimer();
+        _cardTarget = item;
+        _cardTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(450) };
+        _cardTimer.Tick += (_, _) =>
+        {
+            var target = _cardTarget;
+            _cardTimer?.Stop();
+            _cardTimer = null;
+            if (target is not null)
+            {
+                target.IsCardOpen = true;
+            }
+        };
+        _cardTimer.Start();
+    }
+
+    /// <summary>
+    /// 鼠标离开这条对话：立刻收卡，不等。
+    /// PointerEntered/Exited 是 Direct 路由，只是在行内部换到子控件上不会触发，所以卡片不会自己闪。
+    /// </summary>
+    private void OnSessionRowPointerExited(object? sender, PointerEventArgs e)
+    {
+        CancelCardTimer();
+        if (sender is Control { DataContext: SessionItemViewModel item })
+        {
+            item.IsCardOpen = false;
+        }
+    }
+
+    /// <summary>量一下标题全文的宽度，和实际可用宽度比——真的放不下才值得弹卡。</summary>
+    private static bool IsTitleTruncated(Control row, SessionItemViewModel item)
+    {
+        var title = row.GetVisualDescendants()
+            .OfType<TextBlock>()
+            .FirstOrDefault(block => block.Classes.Contains("row-title"));
+
+        if (title is null || title.Bounds.Width <= 0)
+        {
+            return false;
+        }
+
+        var formatted = new FormattedText(
+            item.DisplayTitle,
+            CultureInfo.CurrentCulture,
+            FlowDirection.LeftToRight,
+            new Typeface(title.FontFamily, title.FontStyle, title.FontWeight),
+            title.FontSize,
+            Brushes.Black);
+
+        return formatted.Width > title.Bounds.Width + 1;
+    }
+
+    private DispatcherTimer? _cardTimer;
+    private SessionItemViewModel? _cardTarget;
+
+    private void CancelCardTimer()
+    {
+        _cardTimer?.Stop();
+        _cardTimer = null;
+        _cardTarget = null;
+    }
+
+    /// <summary>Ctrl+K：把侧栏打开，光标落到搜索框里。</summary>
+    private void OnSearchRequested(object? sender, EventArgs e)
+    {
+        if (_host is not null && !_host.IsSidebarVisible)
+        {
+            _host.IsSidebarVisible = true;
+        }
+
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                var box = this.FindControl<Control>("TaskSearch");
+                box?.Focus();
+                box?.GetVisualDescendants().OfType<TextBox>().FirstOrDefault()?.Focus();
+            },
+            DispatcherPriority.Input);
+    }
+
+    private MainWindowViewModel? _host;
+
+    protected override void OnDataContextChanged(EventArgs e)
+    {
+        if (_host is not null)
+        {
+            _host.SearchRequested -= OnSearchRequested;
+        }
+
+        _host = DataContext as MainWindowViewModel;
+        if (_host is not null)
+        {
+            _host.SearchRequested += OnSearchRequested;
+        }
+
+        base.OnDataContextChanged(e);
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        if (_host is not null)
+        {
+            _host.SearchRequested -= OnSearchRequested;
+            _host = null;
+        }
+
+        CancelCardTimer();
+        base.OnDetachedFromVisualTree(e);
     }
 
     /// <summary>
@@ -127,10 +227,9 @@ public partial class SidebarView : UserControl
             return;
         }
 
-        // 悬停信息卡可能还开着，点「⋯」时一起收掉，免得卡片和菜单叠在一起
+        // 悬停信息卡可能还开着，点「⋯」时一起收掉，免得卡片和菜单叠在一起。
+        // 这时指针还在行内，不会再触发 Entered，所以不会马上又弹回来。
         item.IsCardOpen = false;
-        _cardTimer?.Stop();
-        _cardTimer = null;
 
         CloseFlyouts();
 
@@ -140,7 +239,7 @@ public partial class SidebarView : UserControl
         };
 
         flyout.Content = BuildSessionMenu(flyout, item);
-        flyout.Opened += (_, _) => AttachDismiss(flyout, target);
+        flyout.Opened += (_, _) => FlyoutDismiss.Attach(flyout, target);
 
         _menuFlyout = flyout;
         flyout.ShowAt(target);
@@ -154,6 +253,13 @@ public partial class SidebarView : UserControl
         {
             CloseFlyouts();
             item.OpenCommand.Execute(null);
+        }));
+
+        // 常用任务不该被新任务一路挤到看不见的地方
+        rows.Children.Add(MenuRow(item.PinLabel, ArcIcons.ArrowUp, () =>
+        {
+            CloseFlyouts();
+            item.TogglePin();
         }));
 
         var (renameCard, input) = BuildSessionRename(flyout, item);
@@ -358,6 +464,17 @@ public partial class SidebarView : UserControl
     private Control BuildMenu(Flyout flyout, WorkspaceItemViewModel item)    {
         var rows = new StackPanel { Spacing = 1 };
 
+        // 切换当前工作区是个会改变「下一个任务落在哪」的动作，不能藏在展开/收起里。
+        // 展开只是为了看内容，所以这里给一个明确的入口。
+        if (!item.IsActive && _host is not null)
+        {
+            rows.Children.Add(MenuRow("设为当前工作区", ArcIcons.Check, () =>
+            {
+                CloseFlyouts();
+                _ = _host.SelectWorkspaceAsync(item.Path);
+            }));
+        }
+
         rows.Children.Add(MenuRow("打开文件夹", ArcIcons.FolderOpen, () =>
         {
             CloseFlyouts();
@@ -511,66 +628,6 @@ public partial class SidebarView : UserControl
 
         return (card, input);
     }
-
-    /// <summary>
-    /// 当前主题下弹层自带的 light dismiss 不生效（点窗口别处不收起），这里自己接管：
-    /// 窗口里任何一次按下、或者按 Esc，都把弹层收起来。弹层关掉时解绑，避免越挂越多。
-    /// </summary>
-    private void AttachDismiss(Flyout flyout, Control owner)
-    {
-        if (TopLevel.GetTopLevel(this) is not { } topLevel)
-        {
-            return;
-        }
-
-        var openedAt = DateTime.UtcNow;
-
-        void OnPointerPressed(object? sender, PointerPressedEventArgs e)
-        {
-            // 打开弹层的那一下点击可能还在路上，别把它当「点外面」
-            if ((DateTime.UtcNow - openedAt).TotalMilliseconds < 200)
-            {
-                return;
-            }
-
-            if (e.Source is Visual source)
-            {
-                // 弹层自己也挂在另一个 TopLevel 上：它的点击不该把弹层关掉
-                if (TopLevel.GetTopLevel(source) is { } sourceTop && !ReferenceEquals(sourceTop, topLevel))
-                {
-                    return;
-                }
-
-                // 点在自己的「⋯」上交给 Click 处理，不然会先收起再弹出，看着像没反应
-                if (IsWithin(source, owner))
-                {
-                    return;
-                }
-            }
-
-            flyout.Hide();
-        }
-
-        void OnKeyDown(object? sender, KeyEventArgs e)
-        {
-            if (e.Key == Key.Escape)
-            {
-                flyout.Hide();
-            }
-        }
-
-        topLevel.AddHandler(InputElement.PointerPressedEvent, OnPointerPressed, RoutingStrategies.Tunnel, handledEventsToo: true);
-        topLevel.AddHandler(InputElement.KeyDownEvent, OnKeyDown, RoutingStrategies.Tunnel, handledEventsToo: true);
-
-        flyout.Closed += (_, _) =>
-        {
-            topLevel.RemoveHandler(InputElement.PointerPressedEvent, OnPointerPressed);
-            topLevel.RemoveHandler(InputElement.KeyDownEvent, OnKeyDown);
-        };
-    }
-
-    private static bool IsWithin(Visual source, Visual? owner)
-        => owner is not null && (source == owner || source.GetVisualAncestors().Contains(owner));
 
     private Button MenuRow(string text, Geometry icon, Action invoke, IBrush? accent = null)
     {

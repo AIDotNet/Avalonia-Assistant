@@ -1,6 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:arc="https://github.com/AtomUICommunity/TKCode.Arc"
+             xmlns:arc="https://github.com/AIDotNet/TKCode.Arc"
              x:Class="AvaloniaAssistant.UI.Views.ComposerView">
   <UserControl.Resources>
     <!-- 基于 Arc 默认主题派生，只替换模板：直接新建 ControlTheme 会丢掉
@@ -76,51 +76,319 @@
     </ControlTheme>
   </UserControl.Resources>
 
+  <UserControl.Styles>
+    <!-- @ 浮层里的候选行：整行可点，选中态用浅底，不用描边 -->
+    <Style Selector="Button.mention-row">
+      <Setter Property="Padding" Value="7,5" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.mention-row:pointerover">
+      <Setter Property="Background" Value="{StaticResource SurfaceMutedBrush}" />
+    </Style>
+    <Style Selector="Button.mention-row.selected">
+      <Setter Property="Background" Value="{StaticResource SurfaceMutedBrush}" />
+    </Style>
+
+    <!-- 模型浮层里的一行：整行可点，选中项靠勾和「使用中」区分 -->
+    <Style Selector="Button.model-row">
+      <Setter Property="Transitions">
+        <Transitions>
+          <BrushTransition Property="Background" Duration="0:0:0.12" />
+        </Transitions>
+      </Setter>
+    </Style>
+    <Style Selector="Button.model-row:pointerover">
+      <Setter Property="Background" Value="{StaticResource SurfaceMutedBrush}" />
+    </Style>
+
+    <!-- 已引用的资料做成小标签，点 × 撤销 -->
+    <Style Selector="Border.ref-chip">
+      <Setter Property="Background" Value="{StaticResource SurfaceMutedBrush}" />
+      <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="7" />
+      <Setter Property="Padding" Value="7,3,4,3" />
+    </Style>
+    <!-- 文件被挪走或删掉：chip 立刻变红，不用等模型回一句「没有这个文件」 -->
+    <Style Selector="Border.ref-chip.missing">
+      <Setter Property="Background" Value="{StaticResource DangerSubtleBrush}" />
+      <Setter Property="BorderBrush" Value="{StaticResource DangerBrush}" />
+    </Style>
+    <Style Selector="Button.ref-remove">
+      <Setter Property="Width" Value="16" />
+      <Setter Property="Height" Value="16" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <!-- 图片右上角的删除：图可能很亮，按钮带半透明黑底才看得清 -->
+    <Style Selector="Button.image-remove">
+      <Setter Property="Width" Value="17" />
+      <Setter Property="Height" Value="17" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="CornerRadius" Value="9" />
+      <Setter Property="Background" Value="#B3000000" />
+      <Setter Property="Foreground" Value="#FFFFFF" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.image-remove:pointerover">
+      <Setter Property="Background" Value="#E6000000" />
+    </Style>
+
+    <Style Selector="Button.ref-remove:pointerover">
+      <Setter Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+      <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+    </Style>
+  </UserControl.Styles>
+
   <StackPanel>
-    <Border Background="{StaticResource SurfaceBrush}"
+    <!-- 生成期间按过 Enter：内容已经收走，这里明确说一声它还在，并且能取消 -->
+    <Border IsVisible="{Binding HasQueued}"
+            Background="{StaticResource SurfaceMutedBrush}"
+            BorderBrush="{StaticResource BorderBrush}"
+            BorderThickness="1"
+            CornerRadius="9"
+            Padding="10,6"
+            Margin="0,0,0,7">
+      <Grid ColumnDefinitions="Auto,*,Auto">
+        <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Clock}"
+                      Size="12"
+                      Foreground="{StaticResource TextSecondaryBrush}"
+                      VerticalAlignment="Center" />
+        <TextBlock Grid.Column="1"
+                   Text="{Binding QueuedHint}"
+                   FontSize="11.5"
+                   TextTrimming="CharacterEllipsis"
+                   Margin="7,0,8,0"
+                   VerticalAlignment="Center" />
+        <Button Grid.Column="2"
+                Classes="ghost-action"
+                Command="{Binding CancelQueueCommand}"
+                Content="{Binding QueuedCancelLabel}" />
+      </Grid>
+    </Border>
+
+    <Border x:Name="ComposerFrame"
+            Background="{StaticResource SurfaceBrush}"
             BorderBrush="{StaticResource BorderStrongBrush}"
             BorderThickness="1"
             CornerRadius="22"
             Padding="14,10,12,9"
             BoxShadow="{StaticResource ComposerShadow}">
-      <Grid RowDefinitions="Auto,Auto">
-        <arc:Textarea x:Name="Input"
+      <Grid RowDefinitions="Auto,Auto,Auto,Auto">
+        <!-- 待发送的内容：图片在上，引用的文件在下，都没有时整行塌掉 -->
+        <StackPanel Grid.Row="0" Spacing="6" Margin="0,0,0,7">
+          <ItemsControl ItemsSource="{Binding Images}" IsVisible="{Binding HasImages}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <WrapPanel ItemSpacing="6" LineSpacing="6" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Border Width="68"
+                        Height="68"
+                        CornerRadius="10"
+                        ClipToBounds="True"
+                        Background="{StaticResource SurfaceMutedBrush}"
+                        ToolTip.Tip="{Binding Caption}">
+                  <Panel>
+                    <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" />
+
+                    <!-- 4K 截图落盘前被缩到长边 1568：角上标一下，别让用户以为原图进了上下文 -->
+                    <Border IsVisible="{Binding IsCompressed}"
+                            Background="#CC000000"
+                            CornerRadius="5"
+                            Padding="4,1"
+                            Margin="3"
+                            HorizontalAlignment="Left"
+                            VerticalAlignment="Bottom">
+                      <TextBlock Text="已压缩"
+                                 FontSize="10.5"
+                                 LineHeight="13"
+                                 Foreground="White" />
+                    </Border>
+
+                    <Button Classes="image-remove"
+                            Command="{Binding RemoveCommand}"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Top"
+                            Margin="3"
+                            ToolTip.Tip="移除这张图">
+                      <arc:ArcGlyph Data="{x:Static arc:ArcIcons.CircleX}" Size="11" />
+                    </Button>
+                  </Panel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+
+          <!-- 贴到第 4 张：说清这一轮会明显变贵，别让用户以为图片不要钱 -->
+          <TextBlock Text="{Binding ManyImagesHint}"
+                     IsVisible="{Binding ShowManyImagesHint}"
+                     FontSize="10.5"
+                     Foreground="{StaticResource WarningBrush}"
+                     Margin="2,1,0,0"
+                     TextWrapping="Wrap" />
+
+          <ItemsControl ItemsSource="{Binding References}" IsVisible="{Binding HasReferences}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <WrapPanel ItemSpacing="6" LineSpacing="6" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Border Classes="ref-chip"
+                        Classes.missing="{Binding IsMissing}"
+                        ToolTip.Tip="{Binding DetailOrMissing}">
+                  <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                    <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Paperclip}"
+                                  Size="11"
+                                  Foreground="{StaticResource TextMutedBrush}" />
+                    <TextBlock Text="{Binding Name}"
+                               FontSize="11.5"
+                               MaxWidth="180"
+                               TextTrimming="CharacterEllipsis"
+                               VerticalAlignment="Center" />
+                    <Button Classes="ref-remove"
+                            Command="{Binding $parent[ItemsControl].DataContext.RemoveReferenceCommand}"
+                            CommandParameter="{Binding}"
+                            ToolTip.Tip="取消引用">
+                      <arc:ArcGlyph Data="{x:Static arc:ArcIcons.CircleX}" Size="11" />
+                    </Button>
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+
+        <!-- @ 资料浮层：贴在输入框上沿，打字时不用挪手 -->
+        <Border Grid.Row="1"
+                IsVisible="{Binding ShowMention}"
+                Background="{StaticResource SurfaceBrush}"
+                BorderBrush="{StaticResource BorderStrongBrush}"
+                BorderThickness="1"
+                CornerRadius="12"
+                Padding="5"
+                Margin="0,0,0,7">
+          <StackPanel>
+            <TextBlock Text="引用文件"
+                       Classes="section-title"
+                       FontSize="10"
+                       Margin="7,2,0,4"
+                       IsVisible="{Binding HasMentionItems}" />
+
+            <ItemsControl ItemsSource="{Binding MentionItems}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Button Classes="mention-row"
+                          Classes.selected="{Binding IsSelected}"
+                          Command="{Binding $parent[ItemsControl].DataContext.AcceptMentionCommand}"
+                          CommandParameter="{Binding}"
+                          ToolTip.Tip="{Binding Detail}">
+                    <Grid ColumnDefinitions="Auto,*,Auto" VerticalAlignment="Center">
+                      <Border Width="24"
+                              Height="24"
+                              CornerRadius="6"
+                              Background="{Binding TileBackground}">
+                        <arc:ArcGlyph Data="{Binding Icon}"
+                                      Size="12"
+                                      Foreground="{Binding IconBrush}"
+                                      HorizontalAlignment="Center"
+                                      VerticalAlignment="Center" />
+                      </Border>
+                      <StackPanel Grid.Column="1" Margin="9,0,8,0" Spacing="1">
+                        <TextBlock Text="{Binding Name}"
+                                   FontSize="12"
+                                   TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding Detail}"
+                                   Classes="caption"
+                                   FontSize="10"
+                                   MaxLines="1"
+                                   TextTrimming="CharacterEllipsis" />
+                      </StackPanel>
+                      <TextBlock Grid.Column="2"
+                                 Text="{Binding SizeText}"
+                                 Classes="caption"
+                                 FontSize="9.5"
+                                 VerticalAlignment="Center" />
+                    </Grid>
+                  </Button>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <TextBlock Text="{Binding MentionEmptyText}"
+                       IsVisible="{Binding !HasMentionItems}"
+                       Classes="caption"
+                       FontSize="11"
+                       LineHeight="16"
+                       TextWrapping="Wrap"
+                       Margin="8,6,8,7" />
+          </StackPanel>
+        </Border>
+
+        <arc:Textarea Grid.Row="2"
+                      x:Name="Input"
                       Classes="composer"
                       Theme="{StaticResource ComposerTextarea}"
                       Text="{Binding Text, Mode=TwoWay}"
                       Placeholder="{Binding Placeholder}"
+                      AcceptsReturn="True"
                       IsResizable="False"
                       MinHeight="64"
                       MaxHeight="160"
                       FocusAdorner="{x:Null}" />
 
-        <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" Margin="0,6,0,0">
-          <Button Classes="icon"
-                  Command="{Binding AttachCommand}"
-                  ToolTip.Tip="把文件路径交给助手">
-            <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Paperclip}" Size="16" />
-          </Button>
+        <Grid Grid.Row="3" ColumnDefinitions="Auto,*,Auto" Margin="0,6,0,0">
+          <StackPanel Orientation="Horizontal" Spacing="2">
+            <Button Classes="icon"
+                    Command="{Binding AttachCommand}"
+                    ToolTip.Tip="添加文件引用（也可以直接拖进来；发送时才读正文）">
+              <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Paperclip}" Size="16" />
+            </Button>
+            <Button Classes="icon"
+                    Command="{Binding OpenMentionCommand}"
+                    ToolTip.Tip="引用工作区里的文件（输入 @）">
+              <TextBlock Text="@" FontSize="15" FontWeight="Medium" VerticalAlignment="Center" />
+            </Button>
+          </StackPanel>
 
           <TextBlock Grid.Column="1"
-                     Text="Enter 发送 · Shift+Enter 换行"
+                     Text="{Binding InputHint}"
                      Classes="caption"
                      FontSize="10"
                      Margin="7,0,0,0"
                      VerticalAlignment="Center" />
 
           <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
-            <Button Classes="pill" Click="OnModelClick" ToolTip.Tip="切换模型">
+            <Button x:Name="ModelButton" Classes="pill" Click="OnModelClick" ToolTip.Tip="{Binding ModelTooltip}">
               <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
                 <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Monitor}" Size="13" />
-                <TextBlock Text="{Binding ModelLabel}" FontSize="12" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding ModelLabel}"
+                           FontSize="12"
+                           MaxWidth="180"
+                           TextTrimming="CharacterEllipsis"
+                           VerticalAlignment="Center" />
                 <arc:ArcGlyph Data="{x:Static arc:ArcIcons.ChevronDown}" Size="12" />
               </StackPanel>
             </Button>
 
             <Button Classes="pill permission-pill"
                     Classes.full="{Binding IsFullAccess}"
-                    IsEnabled="{Binding CanChangePermission}"
-                    ToolTip.ShowOnDisabled="True"
                     Click="OnPermissionClick"
                     ToolTip.Tip="{Binding PermissionTooltip}">
               <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
@@ -131,6 +399,31 @@
                            FontSize="12"
                            Foreground="{Binding PermissionForeground}"
                            VerticalAlignment="Center" />
+                <!-- 生成中切了档位：这一轮仍按旧的跑，标签必须说清楚 -->
+                <Border IsVisible="{Binding PermissionPendingNextRun}"
+                        Background="{StaticResource WarningSubtleBrush}"
+                        CornerRadius="5"
+                        Padding="5,2"
+                        VerticalAlignment="Center"
+                        ToolTip.Tip="这一轮仍按切换前的档位执行，下一轮开始生效">
+                  <TextBlock Text="下一轮生效"
+                             FontSize="10"
+                             FontWeight="Medium"
+                             Foreground="{StaticResource WarningBrush}"
+                             VerticalAlignment="Center" />
+                </Border>
+                <Border IsVisible="{Binding HasSessionAllowedTools}"
+                        Background="{StaticResource WarningSubtleBrush}"
+                        CornerRadius="5"
+                        Padding="4,1"
+                        Margin="1,0,0,0"
+                        VerticalAlignment="Center"
+                        ToolTip.Tip="本次对话里点过「都允许」的工具，点这里可以恢复逐次确认">
+                  <TextBlock Text="{Binding SessionAllowedBadge}"
+                             FontSize="9.5"
+                             Foreground="{StaticResource WarningBrush}"
+                             VerticalAlignment="Center" />
+                </Border>
                 <arc:ArcGlyph Data="{x:Static arc:ArcIcons.ChevronDown}"
                               Size="12"
                               Foreground="{Binding PermissionForeground}" />
@@ -139,23 +432,9 @@
 
             <Button Classes="icon"
                     Command="{Binding ToggleVoiceCommand}"
-                    IsEnabled="{Binding IsMicEnabled}"
-                    ToolTip.ShowOnDisabled="True"
+                    IsEnabled="{Binding CanUseVoice}"
                     ToolTip.Tip="{Binding MicTooltip}">
-              <Panel>
-                <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Mic}"
-                              Size="16"
-                              Foreground="{Binding MicBrush}"
-                              IsVisible="{Binding !IsTranscribing}"
-                              HorizontalAlignment="Center"
-                              VerticalAlignment="Center" />
-                <arc:ArcSpinner Width="14"
-                                Height="14"
-                                IsVisible="{Binding IsTranscribing}"
-                                Foreground="{StaticResource TextMutedBrush}"
-                                HorizontalAlignment="Center"
-                                VerticalAlignment="Center" />
-              </Panel>
+              <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Mic}" Size="16" Foreground="{Binding MicBrush}" />
             </Button>
 
             <Button Classes="send"
@@ -173,6 +452,73 @@
             </Button>
           </StackPanel>
         </Grid>
+
+        <!-- 拖文件进来时铺在输入框上：只给一层提示，不改布局。 -->
+        <Border x:Name="DropOverlay"
+                Grid.RowSpan="4"
+                IsVisible="False"
+                IsHitTestVisible="False"
+                Background="{StaticResource SurfaceBrush}"
+                BorderBrush="{StaticResource AccentBrush}"
+                BorderThickness="2"
+                CornerRadius="16">
+          <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="5">
+            <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Paperclip}"
+                          Size="18"
+                          HorizontalAlignment="Center"
+                          Foreground="{StaticResource TextPrimaryBrush}" />
+            <TextBlock x:Name="DropOverlayText"
+                       Text="松开即引用"
+                       FontSize="12.5"
+                       HorizontalAlignment="Center" />
+            <TextBlock x:Name="DropOverlayHint"
+                       Text="和 @ 引用走同一条路，发送时才读正文"
+                       Classes="caption"
+                       FontSize="10.5"
+                       HorizontalAlignment="Center" />
+          </StackPanel>
+        </Border>
+      </Grid>
+    </Border>
+
+    <!-- 正在读引用 / 正在录音：这些等待以前在界面上没有痕迹 -->
+    <StackPanel Orientation="Horizontal"
+                Spacing="6"
+                IsVisible="{Binding HasActivity}"
+                Margin="6,7,4,0"
+                VerticalAlignment="Center">
+      <arc:ArcSpinner Width="12" Height="12" Foreground="{StaticResource TextMutedBrush}" />
+      <TextBlock Text="{Binding ActivityText}"
+                 FontSize="11"
+                 Foreground="{StaticResource TextSecondaryBrush}"
+                 VerticalAlignment="Center" />
+    </StackPanel>
+
+    <!-- 没配模型服务：留在原地提示，不把人踢去设置页，也不动已经写好的字 -->
+    <Border IsVisible="{Binding HasSetupHint}"
+            Background="{StaticResource WarningSubtleBrush}"
+            BorderBrush="#EFD9B8"
+            BorderThickness="1"
+            CornerRadius="10"
+            Padding="11,8"
+            Margin="0,7,0,0">
+      <Grid ColumnDefinitions="Auto,*,Auto">
+        <arc:ArcGlyph Data="{x:Static arc:ArcIcons.CircleAlert}"
+                      Size="13"
+                      Foreground="{StaticResource WarningBrush}"
+                      VerticalAlignment="Center" />
+        <TextBlock Grid.Column="1"
+                   Text="{Binding SetupHint}"
+                   FontSize="11.5"
+                   LineHeight="17"
+                   TextWrapping="Wrap"
+                   Margin="7,0,8,0"
+                   VerticalAlignment="Center" />
+        <Button Grid.Column="2"
+                Classes="ghost-action"
+                Command="{Binding OpenSettingsCommand}"
+                Foreground="{StaticResource TextPrimaryBrush}"
+                Content="去设置" />
       </Grid>
     </Border>
 
@@ -183,12 +529,32 @@
                TextWrapping="Wrap"
                Margin="4,7,4,0" />
 
+    <!-- 贴图存盘失败：以前异常被吞掉，用户只看到「粘了没反应」 -->
+    <TextBlock Text="{Binding ImageError}"
+               IsVisible="{Binding HasImageError}"
+               Foreground="{StaticResource WarningBrush}"
+               FontSize="11"
+               TextWrapping="Wrap"
+               Margin="4,7,4,0" />
+
     <Grid ColumnDefinitions="*,Auto" Margin="4,7,4,0">
       <StackPanel Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
-        <Button Classes="pill" Click="OnWorkspaceClick" ToolTip.Tip="{Binding WorkspacePath}">
+        <Button x:Name="WorkspaceButton" Classes="pill" Click="OnWorkspaceClick" ToolTip.Tip="{Binding WorkspacePathHint}">
           <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
             <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Folder}" Size="12" />
             <TextBlock Text="{Binding WorkspaceLabel}" FontSize="11.5" />
+            <!-- 已开口的任务钉在开始的目录上：给一枚角标，别让用户以为下面这一条能改当前任务 -->
+            <Border IsVisible="{Binding IsWorkspacePinned}"
+                    Background="{StaticResource SurfaceMutedBrush}"
+                    CornerRadius="4"
+                    Padding="4,1"
+                    VerticalAlignment="Center"
+                    ToolTip.Tip="{Binding WorkspacePathHint}">
+              <TextBlock Text="已固定"
+                         FontSize="9"
+                         Foreground="{StaticResource TextMutedBrush}"
+                         VerticalAlignment="Center" />
+            </Border>
             <arc:ArcGlyph Data="{x:Static arc:ArcIcons.ChevronDown}" Size="11" />
           </StackPanel>
         </Button>

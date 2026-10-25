@@ -22,14 +22,6 @@ namespace AvaloniaAssistant.Agent;
 /// </remarks>
 public sealed class PiAgentRuntime : IAssistantRuntime
 {
-    private static readonly Dictionary<AgentProviderKind, string[]> KnownModels = new()
-    {
-        [AgentProviderKind.DeepSeek] = ["deepseek-flash", "deepseek-v4-pro"],
-        [AgentProviderKind.OpenAI] = ["gpt-6.1-sol", "gpt-6-astra", "gpt-6-luna"],
-        [AgentProviderKind.Anthropic] = ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-fable-5-1"],
-        [AgentProviderKind.Custom] = ["qwen3.8:27b", "qwen3.8-flash"],
-    };
-
     private readonly ISettingsProvider _settings;
     private readonly IPiStreamFactory? _streams;
     private readonly AgentToolRegistry _registry;
@@ -46,6 +38,39 @@ public sealed class PiAgentRuntime : IAssistantRuntime
     public IReadOnlyList<ModelOption> Models => BuildModels(_settings.Current);
 
     public IReadOnlyList<AgentToolInfo> Tools => _registry.Tools;
+
+    /// <inheritdoc />
+    public Task<ConnectionTestResult> TestConnectionAsync(
+        AssistantSettings settings,
+        CancellationToken cancellationToken = default)
+        => ConnectionProbe.TestAsync(settings, cancellationToken);
+
+    /// <inheritdoc />
+    public Task<McpProbeResult> ProbeMcpServerAsync(
+        string serverName,
+        CancellationToken cancellationToken = default)
+    {
+        var capabilities = CapabilityScanner.Scan(_settings.Current);
+
+        // 同名时项目级优先，和 Pi 加载 .pi 的覆盖关系保持一致
+        var server = capabilities.McpServers.FirstOrDefault(item => item.Name == serverName && item.IsProjectScope)
+                     ?? capabilities.McpServers.FirstOrDefault(item => item.Name == serverName);
+
+        if (server is null)
+        {
+            return Task.FromResult(McpProbeResult.Failed("配置里找不到这个服务端，可能刚被删掉"));
+        }
+
+        var configPath = server.IsProjectScope
+            ? capabilities.McpConfigPath
+            : Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                ".pi",
+                "agent",
+                "mcp.json");
+
+        return McpProber.ProbeAsync(configPath, serverName, cancellationToken);
+    }
 
     public AgentCapabilities Capabilities => CapabilityScanner.Scan(_settings.Current);
 
@@ -74,6 +99,9 @@ public sealed class PiAgentRuntime : IAssistantRuntime
 
         var writer = channel.Writer;
         var modelOption = ResolveModel(settings);
+
+        // 消息下面那行字写的是模型名，不是模型配置的 id：两套配置可以指向同一个模型。
+        var runModel = string.IsNullOrWhiteSpace(settings.Model) ? modelOption.Name : settings.Model;
         var cwd = ResolveWorkspace(request.WorkspacePath);
 
         SessionHolder? holder = null;
@@ -136,8 +164,11 @@ public sealed class PiAgentRuntime : IAssistantRuntime
         {
             try
             {
-                await writer.WriteAsync(new AgentStreamEvent.RunStarted(request.SessionId, modelOption.Id)).ConfigureAwait(false);
-                await session.PromptAsync(request.Prompt, new PromptOptions { Source = "interactive" }).ConfigureAwait(false);
+                await writer.WriteAsync(new AgentStreamEvent.RunStarted(request.SessionId, runModel)).ConfigureAwait(false);
+                await session.PromptAsync(
+                        request.Prompt,
+                        new PromptOptions { Source = "interactive", Images = LoadImages(request.Images) })
+                    .ConfigureAwait(false);
 
                 var last = session.Messages.OfType<AssistantMessage>().LastOrDefault();
                 var stats = session.GetSessionStats();
@@ -146,11 +177,11 @@ public sealed class PiAgentRuntime : IAssistantRuntime
                     last?.ErrorMessage,
                     stats.Tokens.Input,
                     stats.Tokens.Output,
-                    modelOption.Id)).ConfigureAwait(false);
+                    runModel)).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
-                writer.TryWrite(new AgentStreamEvent.RunCompleted(AgentStopReason.Aborted, null, 0, 0, modelOption.Id));
+                writer.TryWrite(new AgentStreamEvent.RunCompleted(AgentStopReason.Aborted, null, 0, 0, runModel));
             }
             catch (Exception ex)
             {
@@ -182,112 +213,6 @@ public sealed class PiAgentRuntime : IAssistantRuntime
         if (holder is not null)
         {
             _ = holder.Session.AbortAsync();
-        }
-    }
-
-    /// <summary>
-    /// 探一次 /models。只读接口，不产生生成费用；失败时把请求的 URL 和状态码一起带回去，
-    /// 因为「401」和「404」对应的修法完全不同（Key 错 vs Base URL 多/少了 /v1）。
-    /// Anthropic 的模型列表在 /v1/models，且要带 anthropic-version。
-    /// </summary>
-    public async Task<ConnectionProbe> ProbeAsync(
-        AssistantSettings settings,
-        CancellationToken cancellationToken = default)
-    {
-        if (string.IsNullOrWhiteSpace(settings.ApiKey))
-        {
-            return new ConnectionProbe(false, "还没有填 API Key。", []);
-        }
-
-        if (string.IsNullOrWhiteSpace(settings.BaseUrl))
-        {
-            return new ConnectionProbe(false, "Base URL 是空的。", []);
-        }
-
-        var anthropic = settings.Protocol == AgentProtocol.AnthropicMessages;
-        var baseUrl = settings.BaseUrl.TrimEnd('/');
-        var url = anthropic ? baseUrl + "/v1/models" : baseUrl + "/models";
-
-        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
-        using var request = new HttpRequestMessage(HttpMethod.Get, url);
-        if (anthropic)
-        {
-            request.Headers.TryAddWithoutValidation("x-api-key", settings.ApiKey);
-            request.Headers.TryAddWithoutValidation("anthropic-version", "2023-06-01");
-        }
-        else
-        {
-            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", settings.ApiKey);
-        }
-
-        try
-        {
-            using var response = await http.SendAsync(request, cancellationToken).ConfigureAwait(false);
-            var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-
-            if (!response.IsSuccessStatusCode)
-            {
-                return new ConnectionProbe(
-                    false,
-                    $"GET {url} 返回 {(int)response.StatusCode}：{Snippet(body)}",
-                    []);
-            }
-
-            var models = ParseModelIds(body);
-            return models.Count > 0
-                ? new ConnectionProbe(true, $"连接正常，{models.Count} 个模型可用。", models)
-                : new ConnectionProbe(true, $"连接正常（GET {url} 返回 200）。", []);
-        }
-        catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
-        {
-            return new ConnectionProbe(false, $"请求超时（15 秒）：GET {url}", []);
-        }
-        catch (Exception ex)
-        {
-            return new ConnectionProbe(false, $"{ex.Message}（GET {url}）", []);
-        }
-    }
-
-    private static IReadOnlyList<string> ParseModelIds(string body)
-    {
-        try
-        {
-            using var document = JsonDocument.Parse(body);
-            if (!document.RootElement.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Array)
-            {
-                return [];
-            }
-
-            var ids = new List<string>();
-            foreach (var item in data.EnumerateArray())
-            {
-                if (item.TryGetProperty("id", out var id)
-                    && id.ValueKind == JsonValueKind.String
-                    && id.GetString() is { Length: > 0 } value)
-                {
-                    ids.Add(value);
-                }
-            }
-
-            return ids;
-        }
-        catch (JsonException)
-        {
-            return [];
-        }
-    }
-
-    private static string Snippet(string body)
-    {
-        var text = body.ReplaceLineEndings(" ").Trim();
-        return text.Length <= 200 ? text : text[..200] + "…";
-    }
-
-    public void InvalidateSession(string sessionId)
-    {
-        lock (_sessions)
-        {
-            _sessions.Remove(sessionId);
         }
     }
 
@@ -343,14 +268,16 @@ public sealed class PiAgentRuntime : IAssistantRuntime
                 LastHistory = history,
                 Cwd = cwd,
                 Permission = request.Permission,
+                ModelProfileId = settings.ActiveModelId ?? string.Empty,
                 Model = settings.Model,
                 ApiKey = settings.ApiKey,
                 BaseUrl = settings.BaseUrl,
-                Protocol = settings.Protocol,
+                Protocol = settings.EffectiveProtocol,
                 Temperature = settings.Temperature,
                 MaxTokens = settings.MaxTokens,
                 TrustWorkspace = settings.TrustWorkspace,
                 DisabledTools = [.. settings.DisabledTools],
+                DisabledSkills = [.. settings.DisabledSkills],
             };
 
             lock (_sessions)
@@ -396,7 +323,7 @@ public sealed class PiAgentRuntime : IAssistantRuntime
             {
                 return new BeforeToolCallResult(
                     Block: true,
-                    Reason: $"当前是只读模式，已阻止「{label}」。需要修改时请把权限切换为「默认权限」或「完全访问」。");
+                    Reason: $"当前是只读模式，已阻止「{label}」。需要修改时请把权限切换为「工作区可写」或「完全访问」。");
             }
 
             // 完全访问直接放行：不弹确认、不问原因。
@@ -410,7 +337,7 @@ public sealed class PiAgentRuntime : IAssistantRuntime
                 return new BeforeToolCallResult(Block: true, Reason: "没有可用的授权界面，已阻止该操作。");
             }
 
-            var approved = await request.ApprovalGate.RequestAsync(
+            var decision = await request.ApprovalGate.RequestAsync(
                 new ToolApprovalRequest(
                     request.SessionId,
                     name,
@@ -420,9 +347,23 @@ public sealed class PiAgentRuntime : IAssistantRuntime
                     request.Permission),
                 token).ConfigureAwait(false);
 
-            return approved
-                ? null
-                : new BeforeToolCallResult(Block: true, Reason: "用户拒绝了该操作。请停下来说明原因，不要重复尝试。");
+            if (decision.Allowed)
+            {
+                return null;
+            }
+
+            // 用户在卡片里改了参数：SDK 不允许改写 context.Args，只能拦下这次调用，
+            // 把改后的参数写进理由，让模型在下一步原样重发。措辞要足够硬，否则模型会自由发挥。
+            if (!string.IsNullOrWhiteSpace(decision.CorrectedArguments))
+            {
+                return new BeforeToolCallResult(
+                    Block: true,
+                    Reason: $"用户没有允许原来的参数，而是把它改成了下面这份。"
+                            + $"请立刻用这份参数重新调用 {name} 一次，不要解释、不要改动其它字段：\n"
+                            + decision.CorrectedArguments);
+            }
+
+            return new BeforeToolCallResult(Block: true, Reason: "用户拒绝了该操作。请停下来说明原因，不要重复尝试。");
         };
     }
 
@@ -459,9 +400,9 @@ public sealed class PiAgentRuntime : IAssistantRuntime
     /// 判断这次带来的历史，是不是在上一轮记录的历史后面继续长的。
     /// </summary>
     /// <remarks>
-    /// 这里不能要求全等：正常追问时，界面送来的历史一定比上一轮多出「上一轮的问 + 答」。
-    /// 早先按全等比较，缓存永远不命中，每发一条消息都要重建会话（重跑 ModelRuntime、
-    /// 重扫技能、重启 MCP 子进程），而且重建时只灌得进问答文本，上一轮的工具结果全丢。
+    /// 不能要求全等：正常追问时，界面送来的历史一定比上一轮多出「上一轮的问 + 答」，
+    /// 按全等比较会让缓存永远不命中，每发一条消息都重建会话（重跑 ModelRuntime、重扫技能、
+    /// 重启 MCP 子进程），而且重建时只灌得进问答文本，上一轮的工具结果全丢。
     /// 反过来，历史比记录的短，说明用户重试、截掉了后面的轮次，必须重建——
     /// 否则旧回复还留在会话里，模型会看到两遍。
     /// </remarks>
@@ -483,38 +424,64 @@ public sealed class PiAgentRuntime : IAssistantRuntime
         return true;
     }
 
-    private static string ResolveWorkspace(string? workspacePath)
-    {
-        if (!string.IsNullOrWhiteSpace(workspacePath) && Directory.Exists(workspacePath))
-        {
-            return Path.GetFullPath(workspacePath);
-        }
+    /// <summary>没选工作区的任务落在 ~/.avaloniaassistant，不再拿整个用户目录当工作区。</summary>
+    private static string ResolveWorkspace(string? workspacePath) => PlainWorkspace.Resolve(workspacePath);
 
-        var fallback = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        return Directory.Exists(fallback) ? fallback : Environment.CurrentDirectory;
-    }
-
+    /// <summary>
+    /// 输入框里的模型列表就是用户配的那几套，不再按服务商预设脑补。
+    /// 以前这里按 <c>KnownModels[provider]</c> 列一长串：连着公司网关、只配了一个 deepseek-flash，
+    /// 却能把 OpenAI 预设里的三个 GPT 模型全摆出来，点了必然报错——那些模型端点根本没有。
+    /// </summary>
     private static IReadOnlyList<ModelOption> BuildModels(AssistantSettings settings)
     {
-        var preset = ProviderPreset.For(settings.Provider);
-        var models = new List<ModelOption>();
-        foreach (var id in KnownModels[settings.Provider])
+        if (settings.Models.Count == 0)
         {
-            models.Add(new ModelOption(id, id, preset.Name, preset.Description));
+            return [];
         }
 
-        if (models.All(option => option.Id != settings.Model))
-        {
-            models.Insert(0, new ModelOption(settings.Model, settings.Model, preset.Name, "当前配置"));
-        }
+        return settings.Models.Select(CreateOption).ToList();
+    }
 
-        return models;
+    /// <summary>带上本地目录里的上下文窗口；模型配置里写了覆盖值就用它，查不到才标成估算。</summary>
+    private static ModelOption CreateOption(ModelProfile profile)
+    {
+        var window = profile.ContextWindow ?? ModelContextCatalog.Find(profile.Model);
+        return new ModelOption(
+            profile.Id,
+            profile.DisplayName,
+            profile.ProviderName,
+            Describe(profile),
+            window ?? ModelContextCatalog.FallbackWindow,
+            window is null);
     }
 
     private static ModelOption ResolveModel(AssistantSettings settings)
+        => settings.ActiveModel is { } profile
+            ? CreateOption(profile)
+            : new ModelOption(string.Empty, string.Empty, string.Empty, string.Empty, ModelContextCatalog.FallbackWindow, true);
+
+    /// <summary>浮层第二行：模型名 / 协议 / 主机。同名时不重复写两遍。</summary>
+    private static string Describe(ModelProfile profile)
     {
-        var preset = ProviderPreset.For(settings.Provider);
-        return new ModelOption(settings.Model, settings.Model, preset.Name, preset.Description);
+        var parts = new List<string>(3);
+        if (!string.Equals(profile.Model, profile.DisplayName, StringComparison.Ordinal))
+        {
+            parts.Add(profile.Model);
+        }
+
+        parts.Add(profile.EffectiveProtocol switch
+        {
+            AgentProtocol.AnthropicMessages => "Messages",
+            AgentProtocol.OpenAiResponses => "Responses",
+            _ => "Chat",
+        });
+
+        if (Uri.TryCreate(profile.BaseUrl, UriKind.Absolute, out var uri))
+        {
+            parts.Add(uri.Host);
+        }
+
+        return string.Join(" · ", parts.Where(part => !string.IsNullOrWhiteSpace(part)));
     }
 
     private static AgentStopReason MapStop(StopReason? reason) => reason switch
@@ -524,6 +491,40 @@ public sealed class PiAgentRuntime : IAssistantRuntime
         StopReason.Length => AgentStopReason.Length,
         _ => AgentStopReason.Completed,
     };
+
+    /// <summary>
+    /// 把磁盘上的图片读成模型要的 base64 内容块。单张读不到就跳过——
+    /// 一张坏图不该把整轮对话打死。
+    /// </summary>
+    private static IReadOnlyList<ImageContent>? LoadImages(IReadOnlyList<ChatImage>? images)
+    {
+        if (images is not { Count: > 0 })
+        {
+            return null;
+        }
+
+        var contents = new List<ImageContent>(images.Count);
+        foreach (var image in images)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(image.Path) || !File.Exists(image.Path))
+                {
+                    continue;
+                }
+
+                contents.Add(new ImageContent(
+                    Convert.ToBase64String(File.ReadAllBytes(image.Path)),
+                    string.IsNullOrWhiteSpace(image.MimeType) ? "image/png" : image.MimeType));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // 读失败只丢这一张
+            }
+        }
+
+        return contents.Count > 0 ? contents : null;
+    }
 
     private static string FormatArguments(object? args)
     {
@@ -561,13 +562,12 @@ public sealed class PiAgentRuntime : IAssistantRuntime
 
         public required IReadOnlyDictionary<string, AgentToolInfo> Catalog { get; init; }
 
-        /// <summary>上一轮提问之前的界面历史。判断能否复用时要看这次是否在它后面接着长。</summary>
         public IReadOnlyList<HistoryTurn> LastHistory { get; set; } = [];
 
-        /// <summary>会话装配时的工作目录。换了工作区必须重建，否则工具还在旧目录里干活。</summary>
-        public required string Cwd { get; init; }
-
         public required PermissionMode Permission { get; init; }
+
+        /// <summary>建会话时用的是哪一套模型配置。两套配置可能模型名、端点都一样，但上下文窗口覆盖不同。</summary>
+        public required string ModelProfileId { get; init; }
 
         public required string Model { get; init; }
 
@@ -575,8 +575,14 @@ public sealed class PiAgentRuntime : IAssistantRuntime
 
         public required string BaseUrl { get; init; }
 
-        /// <summary>协议由服务商推出，但 BaseUrl / Model 可能刚好不变，单独比一次。</summary>
         public required AgentProtocol Protocol { get; init; }
+
+        public required IReadOnlyList<string> DisabledTools { get; init; }
+
+        public required IReadOnlyList<string> DisabledSkills { get; init; }
+
+        /// <summary>会话装配时的工作目录。换了工作区必须重建，否则工具还在旧目录里干活。</summary>
+        public required string Cwd { get; init; }
 
         /// <summary>采样参数在装配时被 StreamSimple 的闭包捕获，改了必须重建才生效。</summary>
         public required double Temperature { get; init; }
@@ -586,13 +592,11 @@ public sealed class PiAgentRuntime : IAssistantRuntime
         /// <summary>决定项目级 .pi 配置读不读，同样在建会话时定下。</summary>
         public required bool TrustWorkspace { get; init; }
 
-        public required IReadOnlyList<string> DisabledTools { get; init; }
-
         /// <summary>
-        /// 会话复用条件：工作目录一致，模型 / 端点 / 工具开关都没变，这次请求的权限档位和
-        /// 建会话时一样，且历史是在上一轮后面接着长的。
-        /// 权限变了必须重建——BeforeToolCall 闭包和内置工具集都是建会话时定下的。
-        /// 这里比的是 request 里的档位，不是设置里的：钩子当初就是按 request 装的。
+        /// 会话复用条件：工作目录一致，模型档案 / 模型 / 端点 / 协议 / 采样参数 / 工具与技能开关都没变，
+        /// 本次请求的权限档位和建会话时一样，且历史是在上一轮后面接着长的。
+        /// 权限变了必须重建——BeforeToolCall 闭包和内置工具集都是建会话时定下的；
+        /// 协议变了也必须重建——流式函数是建会话时按协议选定的。
         /// </summary>
         public bool Matches(
             IReadOnlyList<HistoryTurn> history,
@@ -601,14 +605,16 @@ public sealed class PiAgentRuntime : IAssistantRuntime
             PermissionMode permission)
             => string.Equals(Cwd, cwd, StringComparison.OrdinalIgnoreCase)
                && Permission == permission
+               && ModelProfileId == (settings.ActiveModelId ?? string.Empty)
                && Model == settings.Model
                && ApiKey == settings.ApiKey
                && BaseUrl == settings.BaseUrl
-               && Protocol == settings.Protocol
+               && Protocol == settings.EffectiveProtocol
                && Temperature.Equals(settings.Temperature)
                && MaxTokens == settings.MaxTokens
                && TrustWorkspace == settings.TrustWorkspace
                && DisabledTools.SequenceEqual(settings.DisabledTools)
+               && DisabledSkills.SequenceEqual(settings.DisabledSkills)
                && ContinuesHistory(LastHistory, history);
     }
 }

@@ -1,16 +1,38 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:arc="https://github.com/AtomUICommunity/TKCode.Arc"
+             xmlns:arc="https://github.com/AIDotNet/TKCode.Arc"
              x:Class="AvaloniaAssistant.UI.Views.McpView">
   <Grid RowDefinitions="Auto,*">
     <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="18,10,20,10">
       <Grid ColumnDefinitions="Auto,*,Auto">
-        <Button Classes="icon" Command="{Binding BackCommand}" ToolTip.Tip="返回">
+        <Button Classes="icon" Command="{Binding BackCommand}" ToolTip.Tip="{Binding BackHint}">
           <arc:ArcGlyph Data="{x:Static arc:ArcIcons.ChevronLeft}" Size="16" />
         </Button>
         <StackPanel Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Center" Spacing="1">
           <TextBlock Text="MCP" FontSize="14" FontWeight="Medium" />
           <TextBlock Text="{Binding CountText}" Classes="caption" FontSize="10.5" />
+          <!-- 从哪条任务进来的写在页头上：只挂返回键的悬停提示，用户得先知道要悬停 -->
+          <Button Classes="ghost-action"
+                  Margin="-6,2,0,0"
+                  HorizontalAlignment="Left"
+                  IsVisible="{Binding HasReturnTarget}"
+                  Command="{Binding BackCommand}"
+                  ToolTip.Tip="{Binding BackHint}">
+            <StackPanel Orientation="Horizontal" Spacing="5">
+              <arc:ArcGlyph Data="{x:Static arc:ArcIcons.ChevronLeft}"
+                            Size="11"
+                            VerticalAlignment="Center"
+                            Foreground="{StaticResource TextMutedBrush}" />
+              <TextBlock Text="{Binding BackHint}"
+                         FontSize="11"
+                         VerticalAlignment="Center"
+                         Foreground="{StaticResource TextSecondaryBrush}" />
+              <TextBlock Text="改完回来接着看"
+                         FontSize="11"
+                         VerticalAlignment="Center"
+                         Foreground="{StaticResource TextMutedBrush}" />
+            </StackPanel>
+          </Button>
         </StackPanel>
         <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6">
           <Button Classes="pill"
@@ -43,7 +65,7 @@
 
     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
       <StackPanel Margin="96,16,96,24" Spacing="12">
-        <TextBlock Text="MCP 服务端给模型接外部工具。配置写在 mcp.json，新加的条目在下一个会话启动时连接；工具名是 mcp__&lt;服务端&gt;__&lt;工具&gt;。"
+        <TextBlock Text="MCP 服务端给模型接外部工具。配置写在 mcp.json，新加的条目在下一个会话启动时连接；工具名是 mcp__&lt;服务端&gt;__&lt;工具&gt;。下面每张卡的状态是页面真的起一次进程握手的结果——配置在，不代表连得上。"
                    Classes="caption"
                    TextWrapping="Wrap"
                    LineHeight="19" />
@@ -52,11 +74,22 @@
                 Background="{Binding NoticeBackground}"
                 CornerRadius="8"
                 Padding="12,8">
-          <TextBlock Text="{Binding Notice}"
-                     Foreground="{Binding NoticeForeground}"
-                     FontSize="11.5"
-                     TextWrapping="Wrap"
-                     LineHeight="17" />
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Text="{Binding Notice}"
+                       Foreground="{Binding NoticeForeground}"
+                       FontSize="11.5"
+                       TextWrapping="Wrap"
+                       LineHeight="17"
+                       VerticalAlignment="Center" />
+            <!-- 删除后 10 秒内可以按原样放回去，env / headers 不改 -->
+            <Button Grid.Column="1"
+                    Classes="ghost-action"
+                    Margin="10,0,0,0"
+                    VerticalAlignment="Center"
+                    Command="{Binding UndoRemoveCommand}"
+                    IsVisible="{Binding CanUndo}"
+                    Content="撤销" />
+          </Grid>
         </Border>
 
         <!-- 导入 JSON：主路径，粘一段标准配置就行 -->
@@ -128,7 +161,7 @@
         <!-- 表单：只想加一个 stdio 服务端时更直接 -->
         <Border Classes="tool-tile" IsVisible="{Binding IsFormOpen}" Padding="14,12">
           <StackPanel Spacing="10">
-            <TextBlock Text="添加 MCP 服务端（stdio）"
+            <TextBlock Text="{Binding FormTitle}"
                        FontSize="12.5"
                        FontWeight="Medium" />
             <Grid ColumnDefinitions="56,*"
@@ -178,23 +211,24 @@
                         Content="取消"
                         Command="{Binding CancelFormCommand}" />
                 <Button Classes="pill"
-                        Content="保存"
+                        Content="{Binding SaveLabel}"
                         Command="{Binding SaveCommand}" />
               </StackPanel>
             </Grid>
           </StackPanel>
         </Border>
 
+        <!-- 两张一行：MCP 卡片要放下 target 和连接状态，三列会把失败原因挤成一条省略号 -->
         <ItemsControl ItemsSource="{Binding Servers}" Margin="0,0,-12,0">
           <ItemsControl.ItemsPanel>
             <ItemsPanelTemplate>
-              <UniformGrid Columns="3" />
+              <UniformGrid Columns="2" />
             </ItemsPanelTemplate>
           </ItemsControl.ItemsPanel>
           <ItemsControl.ItemTemplate>
             <DataTemplate>
               <Border Classes="tool-tile" Margin="0,0,12,12" ToolTip.Tip="{Binding Target}">
-                <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="Auto,*,Auto">
+                <Grid RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="Auto,*,Auto">
                   <Border Width="34"
                           Height="34"
                           CornerRadius="10"
@@ -230,26 +264,95 @@
                     </Border>
                   </Grid>
 
-                  <Button Grid.Column="2"
-                          Classes="icon"
-                          Margin="6,0,0,0"
-                          VerticalAlignment="Center"
-                          Command="{Binding $parent[ItemsControl].DataContext.RemoveCommand}"
-                          CommandParameter="{Binding}"
-                          ToolTip.Tip="从 mcp.json 移除">
-                    <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Trash2}"
-                                  Size="13"
-                                  Foreground="{StaticResource TextMutedBrush}" />
-                  </Button>
+                  <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="1" VerticalAlignment="Center">
+                    <Button Classes="icon"
+                            Width="22"
+                            Height="22"
+                            Command="{Binding $parent[ItemsControl].DataContext.EditCommand}"
+                            CommandParameter="{Binding}"
+                            ToolTip.Tip="编辑这条配置（命令、参数、名称）">
+                      <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Pencil}"
+                                    Size="12"
+                                    Foreground="{StaticResource TextMutedBrush}" />
+                    </Button>
+                    <Button Classes="icon"
+                            Width="22"
+                            Height="22"
+                            Command="{Binding StartDeleteCommand}"
+                            ToolTip.Tip="从 mcp.json 移除">
+                      <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Trash2}"
+                                    Size="13"
+                                    Foreground="{StaticResource TextMutedBrush}" />
+                    </Button>
+                  </StackPanel>
 
-                  <TextBlock Grid.Row="1"
-                             Grid.ColumnSpan="3"
-                             Margin="0,9,0,0"
-                             Text="{Binding Target}"
-                             FontFamily="{StaticResource MonoFontFamily}"
-                             FontSize="10.5"
-                             Foreground="{StaticResource TextMutedBrush}"
-                             TextTrimming="CharacterEllipsis" />
+                  <StackPanel Grid.Row="1"
+                              Grid.ColumnSpan="3"
+                              Margin="0,9,0,0"
+                              Spacing="4">
+                    <TextBlock Text="{Binding Target}"
+                               FontFamily="{StaticResource MonoFontFamily}"
+                               FontSize="10.5"
+                               Foreground="{StaticResource TextMutedBrush}"
+                               TextTrimming="CharacterEllipsis" />
+
+                    <!-- 配置在 ≠ 连上了。这一行是真起进程握手之后的结果 -->
+                    <Grid ColumnDefinitions="Auto,*,Auto" ToolTip.Tip="{Binding Detail}">
+                      <Border Width="6"
+                              Height="6"
+                              CornerRadius="3"
+                              Background="{Binding StatusBrush}"
+                              VerticalAlignment="Center"
+                              Margin="0,0,6,0" />
+                      <TextBlock Grid.Column="1"
+                                 Text="{Binding StatusText}"
+                                 FontSize="10.5"
+                                 Foreground="{StaticResource TextMutedBrush}"
+                                 TextWrapping="Wrap"
+                                 MaxLines="2"
+                                 VerticalAlignment="Center" />
+                      <Button Grid.Column="2"
+                              Classes="ghost-action"
+                              Content="重试"
+                              FontSize="10"
+                              Padding="4,0"
+                              Margin="8,0,0,0"
+                              Command="{Binding $parent[ItemsControl].DataContext.ProbeCommand}"
+                              CommandParameter="{Binding}"
+                              IsVisible="{Binding ShowRetry}"
+                              ToolTip.Tip="重新起一次进程做握手" />
+                    </Grid>
+                  </StackPanel>
+
+                  <!-- 删除确认就地展开：删掉的是整段配置，别让它一键消失 -->
+                  <Border Grid.Row="2"
+                          Grid.ColumnSpan="3"
+                          IsVisible="{Binding IsConfirmingDelete}"
+                          Background="{StaticResource DangerSubtleBrush}"
+                          BorderBrush="#F0CFCB"
+                          BorderThickness="1"
+                          CornerRadius="9"
+                          Padding="9,7"
+                          Margin="0,9,0,0">
+                    <StackPanel Spacing="7">
+                      <TextBlock Text="从 mcp.json 移除这个服务端？env 和 headers 会一起删掉。"
+                                 FontSize="11"
+                                 LineHeight="16"
+                                 TextWrapping="Wrap"
+                                 Foreground="{StaticResource DangerBrush}" />
+                      <StackPanel Orientation="Horizontal"
+                                  HorizontalAlignment="Right"
+                                  Spacing="8">
+                        <Button Classes="ghost-action"
+                                Content="取消"
+                                Command="{Binding CancelDeleteCommand}" />
+                        <Button Classes="danger"
+                                Content="删除"
+                                Command="{Binding $parent[ItemsControl].DataContext.RemoveCommand}"
+                                CommandParameter="{Binding}" />
+                      </StackPanel>
+                    </StackPanel>
+                  </Border>
                 </Grid>
               </Border>
             </DataTemplate>

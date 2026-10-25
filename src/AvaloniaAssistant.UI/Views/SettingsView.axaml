@@ -1,188 +1,473 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:arc="https://github.com/AtomUICommunity/TKCode.Arc"
+             xmlns:arc="https://github.com/AIDotNet/TKCode.Arc"
              x:Class="AvaloniaAssistant.UI.Views.SettingsView">
   <Grid RowDefinitions="Auto,*,Auto">
     <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="18,12,20,12">
       <Grid ColumnDefinitions="Auto,*">
-        <Button Classes="icon" Command="{Binding BackCommand}" ToolTip.Tip="返回">
+        <Button Classes="icon" Command="{Binding BackCommand}" ToolTip.Tip="{Binding BackHint}">
           <arc:ArcGlyph Data="{x:Static arc:ArcIcons.ChevronLeft}" Size="16" />
         </Button>
         <StackPanel Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Center" Spacing="1">
           <TextBlock Text="设置" FontSize="14" FontWeight="Medium" />
           <TextBlock Text="模型服务、权限与工作区" Classes="caption" FontSize="10.5" />
+          <!-- 从哪条任务进来的写在页头上：只挂返回键的悬停提示，用户得先知道要悬停 -->
+          <Button Classes="ghost-action"
+                  Margin="-6,2,0,0"
+                  HorizontalAlignment="Left"
+                  IsVisible="{Binding HasReturnTarget}"
+                  Command="{Binding BackCommand}"
+                  ToolTip.Tip="{Binding BackHint}">
+            <StackPanel Orientation="Horizontal" Spacing="5">
+              <arc:ArcGlyph Data="{x:Static arc:ArcIcons.ChevronLeft}"
+                            Size="11"
+                            VerticalAlignment="Center"
+                            Foreground="{StaticResource TextMutedBrush}" />
+              <TextBlock Text="{Binding BackHint}"
+                         FontSize="11"
+                         VerticalAlignment="Center"
+                         Foreground="{StaticResource TextSecondaryBrush}" />
+              <TextBlock Text="改完回来接着看"
+                         FontSize="11"
+                         VerticalAlignment="Center"
+                         Foreground="{StaticResource TextMutedBrush}" />
+            </StackPanel>
+          </Button>
         </StackPanel>
       </Grid>
     </Border>
 
-    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-      <StackPanel Margin="96,22,96,26" Spacing="20">
+    <Grid Grid.Row="1" RowDefinitions="Auto,*">
+      <!-- 分两栏：模型那摊东西和日常偏好互不打扰，切过去只换内容，保存条一直在 -->
+      <Border Padding="72,18,72,0">
+        <arc:SegmentedControl AutomationProperties.Name="设置分区"
+                              HorizontalAlignment="Left"
+                              SelectedValue="{Binding SelectedSection, Mode=TwoWay}">
+          <arc:SegmentedOption Value="system" Label="系统设置" />
+          <arc:SegmentedOption Value="models" Label="模型设置" />
+        </arc:SegmentedControl>
+      </Border>
 
-        <StackPanel Spacing="12">
-          <TextBlock Text="模型服务" FontSize="15" FontWeight="SemiBold" />
-          <TextBlock Text="所有请求直接发往你填写的端点；密钥只保存在本机的 settings.json。"
-                     Classes="caption"
-                     TextWrapping="Wrap" />
+      <ScrollViewer x:Name="PageScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="72,16,72,26" Spacing="20">
 
-          <ItemsControl ItemsSource="{Binding Providers}" Margin="0,2,0,4">
-            <ItemsControl.ItemsPanel>
-              <ItemsPanelTemplate>
-                <UniformGrid Columns="2" />
-              </ItemsPanelTemplate>
-            </ItemsControl.ItemsPanel>
-            <ItemsControl.ItemTemplate>
-              <DataTemplate>
-                <Button Classes="provider"
-                        Classes.selected="{Binding IsSelected}"
-                        Command="{Binding SelectCommand}"
-                        Margin="0,0,8,8">
-                  <StackPanel Spacing="3">
-                    <TextBlock Text="{Binding Name}" FontSize="12.5" FontWeight="Medium" />
-                    <TextBlock Text="{Binding Description}"
+          <!-- ============ 模型设置 ============ -->
+          <StackPanel Spacing="14" IsVisible="{Binding IsModelSection}">
+            <StackPanel Spacing="4">
+              <TextBlock Text="模型" FontSize="15" FontWeight="SemiBold" />
+              <TextBlock Text="可以配多套模型：每套有自己的地址、Key 和协议，输入框下方随时切换。密钥只保存在本机的 settings.json。"
+                         Classes="caption"
+                         TextWrapping="Wrap"
+                         LineHeight="18" />
+            </StackPanel>
+
+            <Grid ColumnDefinitions="268,*" ColumnSpacing="16">
+              <!-- 左：配好的模型。点一行在右边编辑；「使用中」是输入框当前在用的那一套 -->
+              <StackPanel Spacing="6">
+                <ScrollViewer MaxHeight="392"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
+                <ItemsControl ItemsSource="{Binding Profiles}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <Button Classes="provider"
+                              Classes.selected="{Binding IsSelected}"
+                              Command="{Binding SelectCommand}"
+                              Padding="12,10"
+                              Margin="0,0,0,6">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                          <StackPanel Spacing="2">
+                            <TextBlock Text="{Binding DisplayName}"
+                                       FontSize="12.5"
+                                       FontWeight="Medium"
+                                       TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{Binding Summary}"
+                                       Classes="caption"
+                                       FontSize="10.5"
+                                       TextTrimming="CharacterEllipsis" />
+                          </StackPanel>
+                          <Border Grid.Column="1"
+                                  Classes="tag"
+                                  VerticalAlignment="Center"
+                                  IsVisible="{Binding IsActive}">
+                            <TextBlock Text="使用中" FontSize="9.5" />
+                          </Border>
+                        </Grid>
+                      </Button>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                </ScrollViewer>
+
+                <Button Classes="ghost-action"
+                        HorizontalAlignment="Left"
+                        Command="{Binding AddProfileCommand}"
+                        Content="+ 添加模型" />
+
+                <TextBlock Text="同一家也可以配两套：比如官方直连和公司网关各留一份，切的时候只换一行。"
+                           Classes="caption"
+                           FontSize="10.5"
+                           LineHeight="16"
+                           TextWrapping="Wrap"
+                           Margin="2,4,0,0" />
+              </StackPanel>
+
+              <!-- 右：选中那套的详细配置 -->
+              <Border Grid.Column="1" Classes="card" Padding="18,16">
+                <StackPanel Spacing="10" IsVisible="{Binding HasSelectedProfile}">
+                  <arc:Input Label="名称"
+                             Placeholder="例如 公司网关"
+                             Text="{Binding SelectedProfile.Name, Mode=TwoWay}"
+                             Description="留空就显示模型名。" />
+
+                  <StackPanel Spacing="7">
+                    <TextBlock Text="服务商预设"
+                               FontSize="11"
+                               FontWeight="Medium"
+                               Foreground="{StaticResource TextMutedBrush}" />
+                    <ItemsControl ItemsSource="{Binding Providers}">
+                      <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                          <!-- 缩放 125% 时四个 chip 一行放不下，换行比裁掉「自定义」好 -->
+                          <WrapPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                      </ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                          <Button Classes="chip"
+                                  Classes.active="{Binding IsSelected}"
+                                  Command="{Binding SelectCommand}"
+                                  Content="{Binding Name}"
+                                  Padding="12,0"
+                                  Margin="0,0,6,6" />
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock Text="换预设会覆盖地址、模型和协议；自建网关选「自定义」。"
                                Classes="caption"
-                               FontSize="10.5"
+                               FontSize="11"
+                               LineHeight="17"
                                TextWrapping="Wrap" />
                   </StackPanel>
-                </Button>
-              </DataTemplate>
-            </ItemsControl.ItemTemplate>
-          </ItemsControl>
 
-          <arc:Input x:Name="KeyBox"
-                     Label="API Key"
-                     Placeholder="sk-..."
-                     Text="{Binding ApiKey, Mode=TwoWay}"
-                     PasswordChar="●">
-            <arc:Input.Suffix>
-              <Button Classes="icon"
-                      Click="OnRevealKeyClick"
-                      ToolTip.Tip="显示/隐藏密钥">
-                <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Eye}" Size="15" />
-              </Button>
-            </arc:Input.Suffix>
-          </arc:Input>
+                  <Border Height="1" Background="{StaticResource BorderBrush}" />
 
-          <arc:Input Label="Base URL"
-                     Placeholder="https://api.deepseek.com/v1"
-                     Text="{Binding BaseUrl, Mode=TwoWay}" />
+                  <StackPanel Spacing="9">
+                    <TextBlock Text="连接"
+                               FontSize="11"
+                               FontWeight="Medium"
+                               Foreground="{StaticResource TextMutedBrush}" />
 
-          <arc:Input Label="模型"
-                     Placeholder="deepseek-flash"
-                     Text="{Binding Model, Mode=TwoWay}" />
+                    <arc:Input Label="Base URL"
+                               Placeholder="https://api.deepseek.com/v1"
+                               Text="{Binding SelectedProfile.BaseUrl, Mode=TwoWay}"
+                               Description="填到 /v1 为止，末尾斜杠可有可无。" />
 
-          <Grid ColumnDefinitions="Auto,*">
-            <Button Classes="chip"
-                    Command="{Binding ProbeCommand}"
-                    VerticalAlignment="Top">
-              <TextBlock Text="{Binding ProbeButtonText}"
-                         FontSize="12.5"
-                         Foreground="{StaticResource TextPrimaryBrush}" />
-            </Button>
-            <TextBlock Grid.Column="1"
-                       Text="{Binding ProbeText}"
-                       IsVisible="{Binding HasProbeResult}"
-                       Foreground="{Binding ProbeBrush}"
-                       FontSize="11"
-                       LineHeight="17"
-                       TextWrapping="Wrap"
-                       Margin="10,2,0,0"
-                       VerticalAlignment="Top" />
-          </Grid>
+                    <arc:PasswordField Label="API Key"
+                                       Placeholder="sk-..."
+                                       Text="{Binding SelectedProfile.ApiKey, Mode=TwoWay}"
+                                       Description="只保存在本机 settings.json。"
+                                       ShowPasswordText="显示密钥"
+                                       HidePasswordText="隐藏密钥" />
+                  </StackPanel>
 
-          <Grid ColumnDefinitions="*,*">
-            <arc:Input Label="Temperature"
-                       Text="{Binding Temperature, Mode=TwoWay}"
-                       Margin="0,0,8,0" />
-            <arc:Input Grid.Column="1"
-                       Label="Max tokens"
-                       Text="{Binding MaxTokens, Mode=TwoWay}"
-                       Margin="8,0,0,0" />
-          </Grid>
-        </StackPanel>
+                  <Border Height="1" Background="{StaticResource BorderBrush}" />
 
-        <Border Height="1" Background="{StaticResource BorderBrush}" />
+                  <StackPanel Spacing="9">
+                    <TextBlock Text="模型与协议"
+                               FontSize="11"
+                               FontWeight="Medium"
+                               Foreground="{StaticResource TextMutedBrush}" />
 
-        <StackPanel Spacing="10">
-          <TextBlock Text="权限与工作区" FontSize="15" FontWeight="SemiBold" />
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="16">
+                      <arc:Input Label="模型"
+                                 Placeholder="deepseek-flash"
+                                 Text="{Binding SelectedProfile.ModelId, Mode=TwoWay}"
+                                 Description="端点上的 model 字段。" />
+                      <arc:Input Grid.Column="1"
+                                 Label="上下文窗口"
+                                 Placeholder="留空自动"
+                                 Text="{Binding SelectedProfile.ContextWindowText, Mode=TwoWay}"
+                                 Description="{Binding SelectedProfile.ContextWindowHint}"
+                                 ErrorMessage="{Binding SelectedProfile.ContextWindowError}" />
+                    </Grid>
 
-          <StackPanel Orientation="Horizontal" Spacing="8">
-            <Button Classes="chip"
-                    Classes.active="{Binding IsReadOnlySelected}"
-                    Command="{Binding SetPermissionCommand}"
-                    CommandParameter="readonly"
-                    Content="只读" />
-            <Button Classes="chip"
-                    Classes.active="{Binding IsWorkspaceSelected}"
-                    Command="{Binding SetPermissionCommand}"
-                    CommandParameter="workspace"
-                    Content="默认权限" />
-            <Button Classes="chip"
-                    Classes.active="{Binding IsFullAccessSelected}"
-                    Click="OnFullAccessClick"
-                    Content="完全访问" />
+                    <StackPanel Spacing="7">
+                      <TextBlock Text="{Binding SelectedProfile.ProtocolLabel}"
+                                 FontSize="11"
+                                 FontWeight="Medium"
+                                 Foreground="{StaticResource TextMutedBrush}" />
+                      <WrapPanel Orientation="Horizontal">
+                        <Button Classes="chip"
+                                Classes.active="{Binding SelectedProfile.IsChatProtocolSelected}"
+                                Command="{Binding SelectedProfile.SetProtocolCommand}"
+                                CommandParameter="chat"
+                                Content="Chat"
+                                Padding="12,0"
+                                Margin="0,0,6,6" />
+                        <Button Classes="chip"
+                                Classes.active="{Binding SelectedProfile.IsResponsesProtocolSelected}"
+                                Command="{Binding SelectedProfile.SetProtocolCommand}"
+                                CommandParameter="responses"
+                                Content="Responses"
+                                Padding="12,0"
+                                Margin="0,0,6,6" />
+                        <Button Classes="chip"
+                                Classes.active="{Binding SelectedProfile.IsMessagesProtocolSelected}"
+                                Command="{Binding SelectedProfile.SetProtocolCommand}"
+                                CommandParameter="messages"
+                                Content="Messages"
+                                Padding="12,0"
+                                Margin="0,0,6,6" />
+                      </WrapPanel>
+                      <TextBlock Text="{Binding SelectedProfile.ProtocolHint}"
+                                 Classes="caption"
+                                 FontSize="11"
+                                 TextWrapping="Wrap"
+                                 LineHeight="17" />
+                    </StackPanel>
+                  </StackPanel>
+
+                  <Border Height="1" Background="{StaticResource BorderBrush}" />
+
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button Classes="chip"
+                            Command="{Binding UseSelectedProfileCommand}"
+                            IsEnabled="{Binding !SelectedProfile.IsActive}"
+                            Content="设为当前模型" />
+                    <Button Classes="ghost-action"
+                            Command="{Binding DeleteSelectedProfileCommand}"
+                            IsEnabled="{Binding CanDeleteProfile}"
+                            Foreground="{StaticResource DangerBrush}"
+                            Content="删除这一套" />
+                    <TextBlock Text="改完点右下角保存"
+                               Classes="caption"
+                               FontSize="11"
+                               VerticalAlignment="Center" />
+                  </StackPanel>
+                </StackPanel>
+              </Border>
+            </Grid>
+
+            <Border Classes="card" Padding="18,16">
+              <StackPanel Spacing="9">
+                <TextBlock Text="采样参数" FontSize="13" FontWeight="SemiBold" />
+                <TextBlock Text="Temperature 与 Max tokens 由所有模型共用，不跟着模型切换。"
+                           Classes="caption"
+                           FontSize="10.5"
+                           TextWrapping="Wrap" />
+
+                <Grid ColumnDefinitions="*,*" ColumnSpacing="16">
+                  <arc:Input Label="Temperature"
+                             Text="{Binding TemperatureText, Mode=TwoWay}"
+                             Description="0 到 2，越高越发散。"
+                             ErrorMessage="{Binding TemperatureError}" />
+                  <arc:Input Grid.Column="1"
+                             Label="Max tokens"
+                             Text="{Binding MaxTokensText, Mode=TwoWay}"
+                             Description="单次回复的上限。"
+                             ErrorMessage="{Binding MaxTokensError}" />
+                </Grid>
+              </StackPanel>
+            </Border>
           </StackPanel>
 
-          <TextBlock Text="只读：只读工作区，不改文件、不执行命令。默认权限：工作区可读写，执行命令与调用 MCP 前先问你。完全访问：所有工具直接执行，不再逐次确认。"
-                     Classes="caption"
-                     TextWrapping="Wrap"
-                     LineHeight="18" />
+          <!-- ============ 系统设置 ============ -->
+          <StackPanel Spacing="14" IsVisible="{Binding IsSystemSection}">
+            <StackPanel Spacing="4">
+              <TextBlock Text="系统" FontSize="15" FontWeight="SemiBold" />
+              <TextBlock Text="权限决定工具能做什么；工作区、缩放和启动页都是本机偏好。"
+                         Classes="caption"
+                         TextWrapping="Wrap"
+                         LineHeight="18" />
+            </StackPanel>
 
-          <Grid ColumnDefinitions="*,Auto">
-            <arc:Input Label="工作区"
-                       Text="{Binding WorkspacePath}"
-                       IsReadOnly="True" />
-            <Button Grid.Column="1"
-                    Classes="ghost-action"
-                    Height="36"
-                    Padding="12,0"
-                    Margin="8,22,0,0"
-                    VerticalAlignment="Center"
-                    Command="{Binding BrowseWorkspaceCommand}"
-                    Content="选择…" />
-          </Grid>
+            <Border Classes="card" Padding="18,16">
+              <StackPanel Spacing="10">
+                <TextBlock Text="权限与工作区" FontSize="13" FontWeight="SemiBold" />
+
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <Button Classes="chip"
+                          Classes.active="{Binding IsReadOnlySelected}"
+                          Command="{Binding SetPermissionCommand}"
+                          CommandParameter="readonly"
+                          Content="只读" />
+                  <Button Classes="chip"
+                          Classes.active="{Binding IsWorkspaceSelected}"
+                          Command="{Binding SetPermissionCommand}"
+                          CommandParameter="workspace"
+                          Content="工作区可写" />
+                  <Button Classes="chip"
+                          Classes.active="{Binding IsFullAccessSelected}"
+                          Click="OnFullAccessClick"
+                          Content="完全访问" />
+                </StackPanel>
+
+                <TextBlock Text="只读：只读工作区，不改文件、不执行命令。工作区可写：工作区内读写自由，执行命令与调用 MCP 前先问你。完全访问：所有工具直接执行，不再逐次确认。"
+                           Classes="caption"
+                           FontSize="10.5"
+                           TextWrapping="Wrap"
+                           LineHeight="17" />
+
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                  <arc:Input Label="工作区"
+                             Text="{Binding WorkspacePath}"
+                             IsReadOnly="True"
+                             Description="任务默认在这个目录里读写；新建任务时可以另选。" />
+                  <Button Grid.Column="1"
+                          Classes="ghost-action"
+                          Height="36"
+                          Padding="12,0"
+                          Margin="0,26,0,0"
+                          VerticalAlignment="Top"
+                          Command="{Binding BrowseWorkspaceCommand}"
+                          Content="选择…" />
+                </Grid>
+              </StackPanel>
+            </Border>
+
+            <Border Classes="card" Padding="18,16">
+              <StackPanel Spacing="10">
+                <TextBlock Text="界面与启动" FontSize="13" FontWeight="SemiBold" />
+
+                <Grid ColumnDefinitions="86,*" RowDefinitions="Auto,Auto" RowSpacing="10">
+                  <TextBlock Text="界面缩放" FontSize="12" VerticalAlignment="Center" />
+                  <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <Button Classes="chip"
+                            Classes.active="{Binding IsScale90}"
+                            Command="{Binding SetScaleCommand}"
+                            CommandParameter="0.9"
+                            Content="90%" />
+                    <Button Classes="chip"
+                            Classes.active="{Binding IsScale100}"
+                            Command="{Binding SetScaleCommand}"
+                            CommandParameter="1"
+                            Content="100%" />
+                    <Button Classes="chip"
+                            Classes.active="{Binding IsScale110}"
+                            Command="{Binding SetScaleCommand}"
+                            CommandParameter="1.1"
+                            Content="110%" />
+                    <Button Classes="chip"
+                            Classes.active="{Binding IsScale125}"
+                            Command="{Binding SetScaleCommand}"
+                            CommandParameter="1.25"
+                            Content="125%" />
+                    <TextBlock Text="{Binding ScaleText}"
+                               Classes="caption"
+                               VerticalAlignment="Center"
+                               Margin="4,0,0,0" />
+                  </StackPanel>
+
+                  <TextBlock Grid.Row="1" Text="启动时" FontSize="12" VerticalAlignment="Center" />
+                  <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <Button Classes="chip"
+                            Classes.active="{Binding IsStartupHome}"
+                            Command="{Binding SetStartupCommand}"
+                            CommandParameter="home"
+                            Content="首页" />
+                    <Button Classes="chip"
+                            Classes.active="{Binding IsStartupLast}"
+                            Command="{Binding SetStartupCommand}"
+                            CommandParameter="last"
+                            Content="上次会话" />
+                  </StackPanel>
+                </Grid>
+
+                <TextBlock Text="缩放立即生效并自动保存；也可以随时按住 Ctrl 滚滚轮，Ctrl+0 回到 100%。窗口位置、尺寸和侧栏宽度在关窗时记住。"
+                           Classes="caption"
+                           FontSize="10.5"
+                           TextWrapping="Wrap"
+                           LineHeight="17" />
+              </StackPanel>
+            </Border>
+
+            <Border Classes="card" Padding="18,16">
+              <StackPanel Spacing="8">
+                <TextBlock Text="关于" FontSize="13" FontWeight="SemiBold" />
+                <Grid ColumnDefinitions="86,*" RowDefinitions="Auto,Auto,Auto,Auto">
+                  <TextBlock Text="版本" FontSize="12" Margin="0,4" Foreground="{StaticResource TextSecondaryBrush}" />
+                  <TextBlock Grid.Column="1" Text="Avalonia Assistant 1.0.0" FontSize="12" Margin="0,4" />
+                  <TextBlock Grid.Row="1" Text="技术栈" FontSize="12" Margin="0,4" Foreground="{StaticResource TextSecondaryBrush}" />
+                  <TextBlock Grid.Row="1" Grid.Column="1" Text="Avalonia 12 · TKCode.Arc · pi.net" FontSize="12" Margin="0,4" />
+                  <TextBlock Grid.Row="2" Text="数据目录" FontSize="12" Margin="0,4" Foreground="{StaticResource TextSecondaryBrush}" />
+                  <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding DataFolder}" FontSize="12" Margin="0,4" TextTrimming="CharacterEllipsis" />
+                  <TextBlock Grid.Row="3" Text="快捷键" FontSize="12" Margin="0,4" Foreground="{StaticResource TextSecondaryBrush}" />
+                  <TextBlock Grid.Row="3" Grid.Column="1" Text="Ctrl+/ 查看全部" FontSize="12" Margin="0,4" />
+                </Grid>
+                <Button Classes="ghost-action"
+                        HorizontalAlignment="Left"
+                        Command="{Binding OpenDataFolderCommand}"
+                        Content="打开数据目录" />
+              </StackPanel>
+            </Border>
+          </StackPanel>
         </StackPanel>
-
-        <Border Height="1" Background="{StaticResource BorderBrush}" />
-
-        <StackPanel Spacing="8">
-          <TextBlock Text="关于" FontSize="15" FontWeight="SemiBold" />
-          <Grid ColumnDefinitions="86,*" RowDefinitions="Auto,Auto,Auto">
-            <TextBlock Text="版本" FontSize="12" Margin="0,4" />
-            <TextBlock Grid.Column="1" Text="Avalonia Assistant 1.0.0" FontSize="12" Margin="0,4" />
-            <TextBlock Grid.Row="1" Text="技术栈" FontSize="12" Margin="0,4" />
-            <TextBlock Grid.Row="1" Grid.Column="1" Text="Avalonia 12 · TKCode.Arc · pi.net" FontSize="12" Margin="0,4" />
-            <TextBlock Grid.Row="2" Text="数据目录" FontSize="12" Margin="0,4" />
-            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding DataFolder}" FontSize="12" Margin="0,4" TextTrimming="CharacterEllipsis" />
-          </Grid>
-          <Button Classes="ghost-action"
-                  HorizontalAlignment="Left"
-                  Command="{Binding OpenDataFolderCommand}"
-                  Content="打开数据目录" />
-        </StackPanel>
-      </StackPanel>
-    </ScrollViewer>
+      </ScrollViewer>
+    </Grid>
 
     <Border Grid.Row="2" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0" Padding="28,12">
       <Grid ColumnDefinitions="*,Auto">
-        <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+        <StackPanel VerticalAlignment="Center" Spacing="2">
+          <!-- 有改动又点了返回：给两条明确的路，不静默丢弃 -->
+          <StackPanel Orientation="Horizontal"
+                      Spacing="8"
+                      VerticalAlignment="Center"
+                      IsVisible="{Binding ShowLeavePrompt}">
+            <arc:ArcGlyph Data="{x:Static arc:ArcIcons.CircleAlert}"
+                          Size="13"
+                          Foreground="{StaticResource WarningBrush}"
+                          VerticalAlignment="Center" />
+            <TextBlock Text="改动还没保存"
+                       FontSize="11.5"
+                       Foreground="{StaticResource WarningBrush}"
+                       VerticalAlignment="Center" />
+            <Button Classes="ghost-action"
+                    Command="{Binding SaveAndLeaveCommand}"
+                    IsEnabled="{Binding CanSave}"
+                    Foreground="{StaticResource TextPrimaryBrush}"
+                    Content="保存并返回" />
+            <Button Classes="ghost-action"
+                    Command="{Binding DiscardAndLeaveCommand}"
+                    Content="放弃改动" />
+          </StackPanel>
+
+          <!-- 测试连接的结果：成功绿、失败红，改过相关字段就自动消失 -->
+          <TextBlock Text="{Binding TestResultText}"
+                     IsVisible="{Binding ShowTestResult}"
+                     Foreground="{Binding TestBrush}"
+                     FontSize="11.5"
+                     LineHeight="17"
+                     TextWrapping="Wrap"
+                     MaxWidth="640" />
+
           <TextBlock Text="{Binding SavedText}"
+                     IsVisible="{Binding !ShowLeavePrompt}"
                      Classes="caption"
                      Foreground="{Binding SaveToastBrush}"
                      VerticalAlignment="Center"
                      TextTrimming="CharacterEllipsis" />
-          <TextBlock Text="有未保存的修改"
-                     IsVisible="{Binding IsDirty}"
-                     FontSize="11"
-                     Foreground="{StaticResource WarningBrush}"
-                     VerticalAlignment="Center" />
         </StackPanel>
-        <Button Grid.Column="1"
-                Classes="approve"
-                Height="34"
-                Padding="18,0"
-                Command="{Binding SaveCommand}"
-                IsEnabled="{Binding !IsSaving}"
-                Content="{Binding SaveButtonText}" />
+
+        <StackPanel Grid.Column="1"
+                    Orientation="Horizontal"
+                    Spacing="8"
+                    VerticalAlignment="Center">
+          <!-- 测试的是选中的那套模型配置，基础设置页里没有目标，就别挂着 -->
+          <Button Classes="chip"
+                  Height="34"
+                  Padding="14,0"
+                  IsVisible="{Binding IsModelSection}"
+                  Command="{Binding TestConnectionCommand}"
+                  IsEnabled="{Binding CanTestConnection}"
+                  Content="{Binding TestButtonText}" />
+          <Button Classes="approve"
+                  Height="34"
+                  Padding="18,0"
+                  Command="{Binding SaveCommand}"
+                  IsEnabled="{Binding CanSave}"
+                  Content="{Binding SaveButtonText}" />
+        </StackPanel>
       </Grid>
     </Border>
 
