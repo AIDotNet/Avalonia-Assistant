@@ -101,6 +101,9 @@ public sealed partial class SessionItemViewModel : ObservableObject
         UpdatedText = "更新于 " + session.UpdatedAt.LocalDateTime.ToString("yyyy/MM/dd HH:mm");
     }
 
+    /// <summary>重算相对时间。侧栏每分钟调一次，避免「5 分钟前」一直挂在那儿。</summary>
+    public void RefreshTime() => TimeText = SessionText.RelativeTime(UpdatedAt);
+
     [ObservableProperty]
     private bool isActive;
 

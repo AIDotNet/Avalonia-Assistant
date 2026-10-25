@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using Avalonia.Threading;
 using AvaloniaAssistant.Abstractions;
 using AvaloniaAssistant.Storage;
 using AvaloniaAssistant.UI.Services;
@@ -34,6 +35,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// <summary>「任务」区是展开还是收起。null 表示用户还没动过，按有没有空间来定。</summary>
     private bool? _taskSectionExpanded;
 
+    /// <summary>每分钟把侧栏的相对时间重算一遍；跨天时还要重排「今天 / 昨天」。</summary>
+    private readonly DispatcherTimer _relativeTimeTimer;
+
+    private DateOnly _lastGroupDate = DateOnly.FromDateTime(DateTime.Now);
+
     public MainWindowViewModel(
         IAssistantRuntime runtime,
         ISettingsProvider settings,
@@ -49,6 +55,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
         Voice = voice;
         FileSearch = fileSearch;
         Home = new HomeViewModel(this);
+
+        _relativeTimeTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(1) };
+        _relativeTimeTimer.Tick += (_, _) => RefreshRelativeTimes();
+        _relativeTimeTimer.Start();
 
         // SaveAsync 是在线程池上抛事件的，界面更新必须回 UI 线程，否则属性变更会跨线程打到绑定上。
         SettingsProvider.Changed += (_, _) => Ui.Post(() =>
@@ -1122,6 +1132,26 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// 两张表看的是同一批会话——空间是归类，不是把任务藏起来的地方。
     /// 空间顺序只看添加顺序，点和展开都不改变它。
     /// </summary>
+    /// <summary>
+    /// 相对时间是算出来的快照：只有「这一行刚被保存」时才会更新，
+    /// 别的行放一小时也还写着「5 分钟前」。每分钟统一重算一次，跨天时重排分组。
+    /// </summary>
+    private void RefreshRelativeTimes()
+    {
+        foreach (var item in SessionGroups.SelectMany(group => group.Items)
+                     .Concat(Workspaces.SelectMany(workspace => workspace.Sessions)))
+        {
+            item.RefreshTime();
+        }
+
+        var today = DateOnly.FromDateTime(DateTime.Now);
+        if (today != _lastGroupDate)
+        {
+            _lastGroupDate = today;
+            RebuildSidebar();
+        }
+    }
+
     private void RebuildSidebar()
     {
         var settings = Settings;

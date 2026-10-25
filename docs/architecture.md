@@ -92,9 +92,9 @@ ChatViewModel 更新 MessageViewModel
 它由 `ChatViewModel` 实现，把授权卡片插进当前对话并等待用户选择：
 允许一次 / 本会话都允许（按工具名记住，只在这一个对话实例里生效）/ 拒绝。
 
-设置的「测试连接」走 `IAssistantRuntime.ProbeAsync`，只请求 `GET /models`：
-验证地址、密钥和模型名，不产生生成费用；失败时把 URL 与状态码原样带回，
-因为 401 和 404 对应的修法不同。
+设置的「测试连接」走 `IAssistantRuntime.TestConnectionAsync`：用界面上选中、可能还没保存的那套
+配置发一次最小请求，回显成功或失败原因；改任何一个字段，上一次的结论就会清掉，免得旧的
+「连上了」挂在改过的表单上。
 
 会话缓存按「这次带来的历史是不是在上一轮历史后面接着长的」判断复用（`SessionHolder.Matches`）：
 工作区、模型、端点、协议、采样参数（Temperature / MaxTokens）、工具开关、权限档位、
@@ -104,8 +104,9 @@ ChatViewModel 更新 MessageViewModel
 
 采样参数也要比：它们在建会话时被 `StreamSimple` 的闭包捕获，漏比的话改了设置下一轮仍是旧值。
 
-换页或换任务时 `ChatViewModel.Dispose` 会取消本轮并 `Abort`：授权卡片随页面一起消失后
-没人能再点，不取消的话这一轮会永久挂在等待授权上。
+换页不会掐断正在跑的那一轮：`MainWindowViewModel` 把仍在运行的对话托管在后台，侧栏显示
+运行中 / 待确认，跑完再释放；`ChatViewModel.Dispose` 负责把草稿与阅读位置落盘，
+重新打开时从存档读回。
 
 ## 5. 权限模型
 
