@@ -16,6 +16,12 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
     private readonly IVoiceInput _voice;
     private readonly EventHandler _settingsChanged;
 
+    /// <summary>是否已绑定到会话。false 时跟随全局设置（首页就是这样）。</summary>
+    private bool _workspaceBound;
+
+    /// <summary>会话自己的工作区；为 null 表示这个任务没有工作区（普通对话）。</summary>
+    private string? _boundWorkspace;
+
     public ComposerViewModel(
         IAssistantRuntime runtime,
         ISettingsProvider settings,
@@ -42,6 +48,9 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
     /// <summary>权限档位变化。对话页据此插一条提示，让用户知道确认行为变了。</summary>
     public event EventHandler<PermissionMode>? PermissionChanged;
 
+    /// <summary>工作区换了。对话页要跟着改会话自己的工作区，否则界面显示新目录、工具还在旧目录里跑。</summary>
+    public event EventHandler<string>? WorkspaceChanged;
+
     public ObservableCollection<ModelOption> Models { get; } = [];
 
     [ObservableProperty]
@@ -52,6 +61,10 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
     [NotifyCanExecuteChangedFor(nameof(SendCommand))]
     [NotifyPropertyChangedFor(nameof(ShowSend))]
     [NotifyPropertyChangedFor(nameof(ShowStop))]
+    [NotifyPropertyChangedFor(nameof(CanChangePermission))]
+    [NotifyPropertyChangedFor(nameof(PermissionTooltip))]
+    [NotifyPropertyChangedFor(nameof(IsMicEnabled))]
+    [NotifyPropertyChangedFor(nameof(MicTooltip))]
     private bool isBusy;
 
     public bool ShowSend => !IsBusy;
@@ -66,9 +79,23 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
     [NotifyPropertyChangedFor(nameof(HasVoiceError))]
     private string? voiceError;
 
+    /// <summary>录音已经结束、正在等转写结果。这期间既不能发送，也不该让人以为界面卡住了。</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SendCommand))]
+    [NotifyPropertyChangedFor(nameof(MicTooltip))]
+    [NotifyPropertyChangedFor(nameof(IsMicEnabled))]
+    private bool isTranscribing;
+
     public bool HasVoiceError => !string.IsNullOrWhiteSpace(VoiceError);
 
-    public string MicTooltip => IsRecording ? "停止并转写" : "语音输入";
+    public string MicTooltip => IsTranscribing
+        ? "正在转写，稍候…"
+        : IsRecording
+            ? "停止并转写"
+            : "语音输入";
+
+    /// <summary>转写期间禁掉麦克风，避免连点重复提交。</summary>
+    public bool IsMicEnabled => !IsTranscribing && !IsBusy;
 
     public IBrush MicBrush => IsRecording
         ? new SolidColorBrush(Color.Parse("#B3261E"))
@@ -88,7 +115,15 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
     /// <summary>权限说明，展示在权限浮层顶部。</summary>
     public string PermissionDetail => PermissionModeText.Detail(_settings.Current.Permission);
 
-    public string PermissionTooltip => $"工具权限：{PermissionLabel}";
+    public string PermissionTooltip => IsBusy
+        ? "正在运行，本轮结束后才能切换工具权限"
+        : $"工具权限：{PermissionLabel}";
+
+    /// <summary>
+    /// 运行中不给切档。这一轮的授权钩子和工具集在建会话时就按当时的档位定死了，
+    /// 中途改设置只会让界面显示新档位、实际还按旧档位跑。
+    /// </summary>
+    public bool CanChangePermission => !IsBusy;
 
     /// <summary>是否处于完全访问。开关直接绑定这个属性，读写都走 <see cref="SetPermissionAsync"/>。</summary>
     public bool IsFullAccess
@@ -115,9 +150,24 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
     /// <summary>完全访问时在输入框下方给一条常驻提醒。</summary>
     public bool ShowFullAccessNotice => _settings.Current.Permission == PermissionMode.FullAccess;
 
-    public string WorkspaceLabel => ShortWorkspace(_settings.Current.WorkspacePath);
+    public string WorkspaceLabel => ShortWorkspace(WorkspacePath);
 
-    public string WorkspacePath => _settings.Current.WorkspacePath;
+    /// <summary>
+    /// 当前输入框指向的工作区。对话页绑会话自己的路径，首页不绑、跟随全局设置。
+    /// 之前两种场景都读全局设置：从侧栏切了工作区，胶囊显示新目录，而这一轮仍然写在旧目录里。
+    /// </summary>
+    public string WorkspacePath => _workspaceBound
+        ? _boundWorkspace ?? string.Empty
+        : _settings.Current.WorkspacePath;
+
+    /// <summary>对话页创建时调用：把显示和切换都固定到会话自己的工作区上。</summary>
+    public void BindWorkspace(string? path)
+    {
+        _workspaceBound = true;
+        _boundWorkspace = string.IsNullOrWhiteSpace(path) ? null : path;
+        OnPropertyChanged(nameof(WorkspaceLabel));
+        OnPropertyChanged(nameof(WorkspacePath));
+    }
 
     public bool IsConfigured => !string.IsNullOrWhiteSpace(_settings.Current.ApiKey);
 
@@ -147,7 +197,7 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
         SendRequested?.Invoke(this, value);
     }
 
-    private bool CanSend() => !IsBusy && !IsRecording && !string.IsNullOrWhiteSpace(Text);
+    private bool CanSend() => !IsBusy && !IsRecording && !IsTranscribing && !string.IsNullOrWhiteSpace(Text);
 
     [RelayCommand]
     private void Stop() => StopRequested?.Invoke(this, EventArgs.Empty);
@@ -166,7 +216,7 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private async Task ToggleVoiceAsync()
     {
-        if (IsBusy)
+        if (IsBusy || IsTranscribing)
         {
             return;
         }
@@ -189,7 +239,18 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
             }
 
             IsRecording = false;
-            var text = await _voice.StopAndTranscribeAsync();
+            IsTranscribing = true;
+
+            string text;
+            try
+            {
+                text = await _voice.StopAndTranscribeAsync();
+            }
+            finally
+            {
+                IsTranscribing = false;
+            }
+
             if (!string.IsNullOrWhiteSpace(text))
             {
                 Text = string.IsNullOrWhiteSpace(Text) ? text : $"{Text.TrimEnd()} {text}";
@@ -198,6 +259,7 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
         catch (Exception ex)
         {
             IsRecording = false;
+            IsTranscribing = false;
             VoiceError = ex.Message;
         }
     }
@@ -236,11 +298,18 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
 
     public void SetWorkspace(string folder)
     {
+        // 只有对话页是绑定的；首页跟着全局设置走，不能因为选过一次目录就锁死。
+        if (_workspaceBound)
+        {
+            _boundWorkspace = folder;
+        }
+
         var settings = _settings.Current;
         settings.WorkspacePath = folder;
         settings.RecentWorkspaces.RemoveAll(path => string.Equals(path, folder, StringComparison.OrdinalIgnoreCase));
         settings.RecentWorkspaces.Insert(0, folder);
         Refresh();
+        WorkspaceChanged?.Invoke(this, folder);
     }
 
     public void RequestFocus() => FocusRequested?.Invoke(this, EventArgs.Empty);

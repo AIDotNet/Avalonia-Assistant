@@ -45,8 +45,6 @@ public sealed partial class HomeViewModel : ObservableObject
             new("总结一篇文档", "帮我总结工作区里最重要的一份文档。"),
             new("下载目录大文件", "列出下载目录里超过 100MB 的文件。"),
         ];
-
-        Mode = host.Settings.Mode;
     }
 
     public ComposerViewModel Composer { get; }
@@ -81,29 +79,19 @@ public sealed partial class HomeViewModel : ObservableObject
 
     public bool ShowSetupBanner => !IsConfigured;
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsOffice))]
-    [NotifyPropertyChangedFor(nameof(IsDevelopment))]
-    [NotifyPropertyChangedFor(nameof(IsDesign))]
-    private string mode;
-
-    public bool IsOffice => Mode == "office";
-
-    public bool IsDevelopment => Mode == "development";
-
-    public bool IsDesign => Mode == "design";
-
-    [RelayCommand]
-    private async Task SetModeAsync(string mode)
-    {
-        Mode = mode;
-        _host.Settings.Mode = mode;
-        await _host.SettingsProvider.SaveAsync(_host.Settings);
-    }
-
     [RelayCommand]
     private async Task UseCardAsync(SuggestionCardViewModel card)
-        => await _host.StartNewChatAsync(card.Prompt);
+    {
+        // 还没配模型服务时点卡片，会在新对话里直接弹一条「还没有配置」的红色错误。
+        // 和输入框的表现对齐：先把人送到设置页。
+        if (!_host.IsConfigured)
+        {
+            await _host.OpenSettingsAsync();
+            return;
+        }
+
+        await _host.StartNewChatAsync(card.Prompt);
+    }
 
     [RelayCommand]
     private void UseQuickPrompt(QuickPromptViewModel prompt)

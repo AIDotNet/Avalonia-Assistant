@@ -62,11 +62,6 @@
                            FontSize="10.5"
                            VerticalAlignment="Center"
                            Foreground="{StaticResource TextSecondaryBrush}" />
-                <Border Classes="tag">
-                  <TextBlock Text="{Binding ModeText}"
-                             FontSize="10"
-                             Foreground="{StaticResource TextSecondaryBrush}" />
-                </Border>
               </StackPanel>
               <StackPanel Orientation="Horizontal" Spacing="6">
                 <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Folder}"
@@ -119,26 +114,40 @@
         </Button>
       </Grid>
 
-      <Button Grid.Row="1"
-              Margin="0,14,0,0"
-              Height="38"
-              CornerRadius="10"
-              Background="{StaticResource SurfaceBrush}"
-              BorderBrush="{StaticResource BorderBrush}"
-              BorderThickness="1"
-              HorizontalContentAlignment="Left"
-              Command="{Binding NewTaskCommand}">
-        <StackPanel Orientation="Horizontal" Spacing="8" Margin="4,0,0,0">
-          <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Plus}" Size="15" />
-          <TextBlock Text="新建任务" FontSize="13" FontWeight="Medium" VerticalAlignment="Center" />
-        </StackPanel>
-      </Button>
+      <StackPanel Grid.Row="1" Margin="0,14,0,0" Spacing="8">
+        <Button Height="38"
+                CornerRadius="10"
+                Background="{StaticResource SurfaceBrush}"
+                BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="1"
+                HorizontalContentAlignment="Left"
+                Command="{Binding NewTaskCommand}">
+          <StackPanel Orientation="Horizontal" Spacing="8" Margin="4,0,0,0">
+            <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Plus}" Size="15" />
+            <TextBlock Text="新建任务" FontSize="13" FontWeight="Medium" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+
+        <!-- 任务一多，按日期分组翻起来很慢；标题和正文都搜，Ctrl+K 直接聚焦到这里 -->
+        <arc:SearchField x:Name="TaskSearch"
+                         Size="Small"
+                         Placeholder="搜索任务（Ctrl+K）"
+                         IsVisible="{Binding HasAnySessions}"
+                         Text="{Binding SessionSearch, Mode=TwoWay}" />
+      </StackPanel>
 
       <ScrollViewer Grid.Row="2"
                     Margin="0,12,0,0"
                     VerticalScrollBarVisibility="Auto"
                     HorizontalScrollBarVisibility="Disabled">
         <StackPanel Spacing="2">
+          <TextBlock Text="没有匹配的任务，换个词试试。"
+                     Classes="caption"
+                     FontSize="11"
+                     Margin="8,6,8,4"
+                     TextWrapping="Wrap"
+                     IsVisible="{Binding ShowNoSearchResult}" />
+
           <Button Classes="nav" Classes.active="{Binding IsHomeSelected}" Command="{Binding OpenHomeCommand}">
             <Grid ColumnDefinitions="Auto,*,Auto">
               <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Sparkles}"
@@ -204,7 +213,7 @@
                        FontSize="10.5"
                        Margin="8,2,0,4"
                        TextWrapping="Wrap"
-                       IsVisible="{Binding HasNoSessions}" />
+                       IsVisible="{Binding ShowEmptyTasksHint}" />
 
             <ItemsControl ItemsSource="{Binding SessionGroups}">
               <ItemsControl.ItemTemplate>
@@ -303,7 +312,7 @@
                      FontSize="10.5"
                      Margin="8,2,0,2"
                      TextWrapping="Wrap"
-                     IsVisible="{Binding !HasWorkspaces}" />
+                     IsVisible="{Binding ShowEmptyWorkspacesHint}" />
 
           <Button Classes="nav" Command="{Binding AddWorkspaceCommand}">
             <StackPanel Orientation="Horizontal" Spacing="9">

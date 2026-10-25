@@ -13,12 +13,14 @@ Windows 桌面 AI 助理。Agent 循环用 [pi.net](https://github.com/AIDotNet/
 - **技能与 MCP**：工作区 `.pi/skills` 的 `SKILL.md` 按需加载，技能页可从文件夹或 zip 导入；
   `.pi/mcp.json` 的 MCP 服务端启动时连接。
 - **长会话能自己压缩**：CodingAgent 的上下文压缩与自动重试，不必手动清空。
-- **三档权限**：只读 / 工作区 / 完全访问；执行命令会在对话里弹授权卡。
+- **三档权限**：只读 / 工作区 / 完全访问；执行命令会在对话里弹授权卡，可以对单个工具选「本会话都允许」。
 - **工具过程可见**：每次调用都有卡片，参数、结果、耗时、成功/失败可展开。
-- **会话留在本机**：一个会话一个 JSON 文件，侧边栏按今天 / 昨天 / 最近 7 天分组。
+- **会话留在本机**：一个会话一个 JSON 文件，侧边栏按今天 / 昨天 / 最近 7 天分组；
+  Ctrl+K 按标题和正文搜索，跨天时分组和时间会自己更新。
+- **快捷键**：Ctrl+N 新建任务、Ctrl+K 搜索任务、Ctrl+, 打开设置、Esc 停止生成。
 - **Markdown**：标题、列表、表格、行内代码、代码块高亮。
-- **语音输入**：NAudio 录音 + `/audio/transcriptions` 转写（端点需支持）。
-- **技能页**：卡片式浏览，按分类筛选、关键词搜索，开关与导入都持久化。
+- **语音输入**：NAudio 录音 + `/audio/transcriptions` 转写（端点需支持），转写期间发送键与麦克风会锁住。
+- **技能页**：卡片式浏览，搜索词同时筛技能与工具；工具开关、技能导入都持久化。
 - **MCP 页**：列出 `mcp.json` 里的服务端，整段粘贴标准 JSON（`mcpServers` / VS Code 的 `servers` 写法）
   就能一次导入多个，也能从现成的 `mcp.json` 文件读进来；只加一个 stdio 服务端时用表单。
 
@@ -266,9 +268,11 @@ dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --pag
 dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --page chat
 dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --page settings
 dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --page tools
+dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --page chat --search 下载
 ```
 
-`--page chat` 会加载一份内存里的示例会话（不写入 `sessions/`），用来检查消息、工具卡、表格渲染。
+`--page chat` 会加载一份内存里的示例会话（不写入 `sessions/`），用来检查消息、工具卡、表格渲染；
+加 `--search` 可以预填侧栏搜索词，检查过滤与空结果提示。
 
 还提供一个开发用的自动发送参数，用来跑真实的端到端链路：
 
@@ -297,6 +301,8 @@ dotnet run --project src/AvaloniaAssistant.Desktop -- --run "用三句话介绍�
 - **会话存档仍是本项目自己的 JSON**：CodingAgent 的会话跑在内存里，压缩结果不跨进程保存；
   重启后由 `sessions/*.json` 的历史重建上下文，压缩收益会重新累计。
 - **上下文窗口按 128k 估算**：模型真实窗口不在本地目录里，压缩触发点据此计算，特殊模型需要手动调。
+- **设置页的「测试连接」探的是 `GET /models`**：只验证地址、密钥和模型名，不发对话请求；
+  少数自建端点不实现这个接口，会返回 404，此时以实际发一条消息为准。
 - **没有定时任务 / 专家市场**：导航里暂未提供入口，避免假按钮；扩展点见架构文档。
 - **Windows 优先**：代码里对 macOS/Linux 的路径和 shell 做了分支，但只在 Windows 上验证过。
 

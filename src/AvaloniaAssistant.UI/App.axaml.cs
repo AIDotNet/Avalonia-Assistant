@@ -49,6 +49,11 @@ public partial class AssistantApp : Application
         {
             await viewModel.InitializeAsync();
 
+            if (!string.IsNullOrWhiteSpace(AppLaunchOptions.SessionSearch))
+            {
+                viewModel.SessionSearch = AppLaunchOptions.SessionSearch;
+            }
+
             switch (AppLaunchOptions.Page)
             {
                 case "chat":

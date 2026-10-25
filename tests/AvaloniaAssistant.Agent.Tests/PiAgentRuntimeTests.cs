@@ -81,6 +81,182 @@ public sealed class PiAgentRuntimeTests
         Assert.Contains(events, e => e is AgentStreamEvent.ToolFinished { IsError: false });
     }
 
+    /// <summary>
+    /// 同一会话连续追问时不应重建 Agent 会话：重建会重扫技能、重启 MCP 子进程，
+    /// 并把上一轮的工具结果丢在旧会话里。
+    /// </summary>
+    [Fact]
+    public async Task ReusesSessionAcrossFollowUpTurns()
+    {
+        var stream = new ScriptedStreamFactory(
+        [
+            Faux.Response.Text("第一轮回答。"),
+            Faux.Response.Text("第二轮回答。"),
+        ]);
+
+        var runtime = new PiAgentRuntime(new FakeSettings(), stream);
+        var sessionId = Guid.NewGuid().ToString("n");
+
+        await CollectAsync(runtime, sessionId, "第一句", PermissionMode.Workspace, history: []);
+        await CollectAsync(
+            runtime,
+            sessionId,
+            "第二句",
+            PermissionMode.Workspace,
+            history: [HistoryTurn.User("第一句"), HistoryTurn.Assistant("第一轮回答。")]);
+
+        Assert.Equal(1, stream.CreatedCount);
+    }
+
+    /// <summary>
+    /// 换了工作区必须重建：会话的工具沙箱和 cwd 都是装配时定下的，
+    /// 复用会让「界面显示新目录、文件写到旧目录」。
+    /// </summary>
+    [Fact]
+    public async Task SwitchingWorkspaceRebuildsSession()
+    {
+        var stream = new ScriptedStreamFactory(
+        [
+            Faux.Response.Text("第一轮回答。"),
+            Faux.Response.Text("第二轮回答。"),
+        ]);
+
+        var runtime = new PiAgentRuntime(new FakeSettings(), stream);
+        var sessionId = Guid.NewGuid().ToString("n");
+        var first = Directory.CreateTempSubdirectory("aa-ws-a-").FullName;
+        var second = Directory.CreateTempSubdirectory("aa-ws-b-").FullName;
+
+        await CollectAsync(runtime, sessionId, "第一句", PermissionMode.Workspace, history: [], workspace: first);
+        await CollectAsync(
+            runtime,
+            sessionId,
+            "第二句",
+            PermissionMode.Workspace,
+            history: [HistoryTurn.User("第一句"), HistoryTurn.Assistant("第一轮回答。")],
+            workspace: second);
+
+        Assert.Equal(2, stream.CreatedCount);
+    }
+
+    /// <summary>
+    /// 只调工具、没有正文的那一轮不会进历史（BuildHistory 会跳过空文本），
+    /// 这属于「接着长」，不能因此判定需要重建。
+    /// </summary>
+    [Fact]
+    public async Task ReusesSessionWhenToolOnlyTurnAddsNoHistoryText()
+    {
+        var stream = new ScriptedStreamFactory(
+        [
+            Faux.Response.Text("第一轮回答。"),
+            Faux.Response.Text("第二轮回答。"),
+            Faux.Response.Text("第三轮回答。"),
+        ]);
+
+        var runtime = new PiAgentRuntime(new FakeSettings(), stream);
+        var sessionId = Guid.NewGuid().ToString("n");
+
+        await CollectAsync(runtime, sessionId, "第一句", PermissionMode.Workspace, history: []);
+        await CollectAsync(
+            runtime,
+            sessionId,
+            "第二句",
+            PermissionMode.Workspace,
+            history: [HistoryTurn.User("第一句"), HistoryTurn.Assistant("第一轮回答。")]);
+        await CollectAsync(
+            runtime,
+            sessionId,
+            "第三句",
+            PermissionMode.Workspace,
+            history:
+            [
+                HistoryTurn.User("第一句"),
+                HistoryTurn.Assistant("第一轮回答。"),
+                HistoryTurn.User("第二句"),
+            ]);
+
+        Assert.Equal(1, stream.CreatedCount);
+    }
+
+    /// <summary>历史比上一轮短，说明后面的轮次被截掉了（重试），必须重建。</summary>
+    [Fact]
+    public async Task ShorterHistoryRebuildsSession()
+    {
+        var stream = new ScriptedStreamFactory(
+        [
+            Faux.Response.Text("第一轮回答。"),
+            Faux.Response.Text("第二轮回答。"),
+            Faux.Response.Text("重试回答。"),
+        ]);
+
+        var runtime = new PiAgentRuntime(new FakeSettings(), stream);
+        var sessionId = Guid.NewGuid().ToString("n");
+
+        await CollectAsync(runtime, sessionId, "第一句", PermissionMode.Workspace, history: []);
+        await CollectAsync(
+            runtime,
+            sessionId,
+            "第二句",
+            PermissionMode.Workspace,
+            history: [HistoryTurn.User("第一句"), HistoryTurn.Assistant("第一轮回答。")]);
+        await CollectAsync(runtime, sessionId, "重试第一句", PermissionMode.Workspace, history: []);
+
+        Assert.Equal(2, stream.CreatedCount);
+    }
+
+    /// <summary>
+    /// 采样参数是在装配时被 StreamSimple 的闭包捕获的。会话开始复用之后，
+    /// 如果复用条件里不比这两项，改了 Temperature / MaxTokens 下一轮还是旧值。
+    /// </summary>
+    [Fact]
+    public async Task ChangingSamplingSettingsRebuildsSession()
+    {
+        var stream = new ScriptedStreamFactory(
+        [
+            Faux.Response.Text("第一轮回答。"),
+            Faux.Response.Text("第二轮回答。"),
+        ]);
+
+        var settings = new FakeSettings();
+        var runtime = new PiAgentRuntime(settings, stream);
+        var sessionId = Guid.NewGuid().ToString("n");
+
+        await CollectAsync(runtime, sessionId, "第一句", PermissionMode.Workspace, history: []);
+        settings.Current.Temperature = 1.4;
+        await CollectAsync(
+            runtime,
+            sessionId,
+            "第二句",
+            PermissionMode.Workspace,
+            history: [HistoryTurn.User("第一句"), HistoryTurn.Assistant("第一轮回答。")]);
+
+        Assert.Equal(2, stream.CreatedCount);
+    }
+
+    /// <summary>重试前会显式丢弃会话缓存，下一轮必须重新装配。</summary>
+    [Fact]
+    public async Task InvalidatedSessionIsRebuiltOnNextTurn()
+    {
+        var stream = new ScriptedStreamFactory(
+        [
+            Faux.Response.Text("第一轮回答。"),
+            Faux.Response.Text("第二轮回答。"),
+        ]);
+
+        var runtime = new PiAgentRuntime(new FakeSettings(), stream);
+        var sessionId = Guid.NewGuid().ToString("n");
+
+        await CollectAsync(runtime, sessionId, "第一句", PermissionMode.Workspace, history: []);
+        runtime.InvalidateSession(sessionId);
+        await CollectAsync(
+            runtime,
+            sessionId,
+            "第二句",
+            PermissionMode.Workspace,
+            history: [HistoryTurn.User("第一句"), HistoryTurn.Assistant("第一轮回答。")]);
+
+        Assert.Equal(2, stream.CreatedCount);
+    }
+
     [Fact]
     public async Task MissingApiKeyFailsWithoutCallingModel()
     {
@@ -134,15 +310,15 @@ public sealed class PiAgentRuntimeTests
         string prompt,
         PermissionMode permission,
         IToolApprovalGate? gate = null,
-        IReadOnlyList<HistoryTurn>? history = null)
+        IReadOnlyList<HistoryTurn>? history = null,
+        string? workspace = null)
     {
         var request = new AgentRunRequest(
             sessionId,
             prompt,
             history ?? [],
-            "office",
             permission,
-            Path.GetTempPath(),
+            workspace ?? Path.GetTempPath(),
             gate);
 
         var events = new List<AgentStreamEvent>();
@@ -165,9 +341,13 @@ public sealed class PiAgentRuntimeTests
 
         public bool Created { get; private set; }
 
+        /// <summary>装了几次会话：每装一次就会走到这里一次。</summary>
+        public int CreatedCount { get; private set; }
+
         public StreamFn Create(AssistantSettings settings)
         {
             Created = true;
+            CreatedCount++;
             return Faux.CreateStreamFn(_responses);
         }
     }

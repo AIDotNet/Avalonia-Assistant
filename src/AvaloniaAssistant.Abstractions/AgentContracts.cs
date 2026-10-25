@@ -73,12 +73,19 @@ public sealed record HistoryTurn(string Role, string Text)
     public static HistoryTurn Assistant(string text) => new("assistant", text);
 }
 
+/// <summary>
+/// 连通性检查结果。只问「能不能连上、模型名对不对」，不发对话请求，不消耗生成额度。
+/// </summary>
+public sealed record ConnectionProbe(
+    bool Ok,
+    string Message,
+    IReadOnlyList<string> Models);
+
 /// <summary>一次 agent 运行的输入。运行时无状态：历史由调用方携带。</summary>
 public sealed record AgentRunRequest(
     string SessionId,
     string Prompt,
     IReadOnlyList<HistoryTurn> History,
-    string Mode,
     PermissionMode Permission,
     string? WorkspacePath,
     IToolApprovalGate? ApprovalGate);

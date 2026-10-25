@@ -42,30 +42,6 @@
                    HorizontalAlignment="Center"
                    Margin="0,7,0,0" />
 
-        <StackPanel Orientation="Horizontal"
-                    HorizontalAlignment="Center"
-                    Spacing="8"
-                    Margin="0,12,0,0">
-          <Button Classes="chip mode-chip"
-                  Classes.active="{Binding IsOffice}"
-                  Command="{Binding SetModeCommand}"
-                  CommandParameter="office">
-            <TextBlock Text="办公" HorizontalAlignment="Center" VerticalAlignment="Center" />
-          </Button>
-          <Button Classes="chip mode-chip"
-                  Classes.active="{Binding IsDevelopment}"
-                  Command="{Binding SetModeCommand}"
-                  CommandParameter="development">
-            <TextBlock Text="开发" HorizontalAlignment="Center" VerticalAlignment="Center" />
-          </Button>
-          <Button Classes="chip mode-chip"
-                  Classes.active="{Binding IsDesign}"
-                  Command="{Binding SetModeCommand}"
-                  CommandParameter="design">
-            <TextBlock Text="设计" HorizontalAlignment="Center" VerticalAlignment="Center" />
-          </Button>
-        </StackPanel>
-
         <Border IsVisible="{Binding ShowSetupBanner}"
                 Background="{StaticResource WarningSubtleBrush}"
                 BorderBrush="#EFD9B8"
@@ -90,7 +66,7 @@
           </Grid>
         </Border>
 
-        <views:ComposerView DataContext="{Binding Composer}" Margin="0,12,0,0" />
+        <views:ComposerView DataContext="{Binding Composer}" Margin="0,18,0,0" />
 
         <ItemsControl ItemsSource="{Binding QuickPrompts}" Margin="0,10,0,0">
           <ItemsControl.ItemsPanel>

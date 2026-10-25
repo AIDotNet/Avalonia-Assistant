@@ -70,6 +70,25 @@
                      Placeholder="deepseek-flash"
                      Text="{Binding Model, Mode=TwoWay}" />
 
+          <Grid ColumnDefinitions="Auto,*">
+            <Button Classes="chip"
+                    Command="{Binding ProbeCommand}"
+                    VerticalAlignment="Top">
+              <TextBlock Text="{Binding ProbeButtonText}"
+                         FontSize="12.5"
+                         Foreground="{StaticResource TextPrimaryBrush}" />
+            </Button>
+            <TextBlock Grid.Column="1"
+                       Text="{Binding ProbeText}"
+                       IsVisible="{Binding HasProbeResult}"
+                       Foreground="{Binding ProbeBrush}"
+                       FontSize="11"
+                       LineHeight="17"
+                       TextWrapping="Wrap"
+                       Margin="10,2,0,0"
+                       VerticalAlignment="Top" />
+          </Grid>
+
           <Grid ColumnDefinitions="*,*">
             <arc:Input Label="Temperature"
                        Text="{Binding Temperature, Mode=TwoWay}"
@@ -145,11 +164,18 @@
 
     <Border Grid.Row="2" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0" Padding="28,12">
       <Grid ColumnDefinitions="*,Auto">
-        <TextBlock Text="{Binding SavedText}"
-                   Classes="caption"
-                   Foreground="{Binding SaveToastBrush}"
-                   VerticalAlignment="Center"
-                   TextTrimming="CharacterEllipsis" />
+        <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+          <TextBlock Text="{Binding SavedText}"
+                     Classes="caption"
+                     Foreground="{Binding SaveToastBrush}"
+                     VerticalAlignment="Center"
+                     TextTrimming="CharacterEllipsis" />
+          <TextBlock Text="有未保存的修改"
+                     IsVisible="{Binding IsDirty}"
+                     FontSize="11"
+                     Foreground="{StaticResource WarningBrush}"
+                     VerticalAlignment="Center" />
+        </StackPanel>
         <Button Grid.Column="1"
                 Classes="approve"
                 Height="34"

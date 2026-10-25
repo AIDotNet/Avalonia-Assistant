@@ -73,11 +73,29 @@ public partial class ComposerView : UserControl
             return;
         }
 
-        e.Handled = true;
-        if (viewModel.SendCommand.CanExecute(null))
+        // 中文输入法组词时按 Enter 是在确认候选，不是发送；这里让输入法自己处理。
+        if (Services.InputState.IsComposing(this))
         {
-            viewModel.SendCommand.Execute(null);
+            return;
         }
+
+        // 录音中按 Enter 等于点麦克风：停止并转写，不让人以为键坏了。
+        if (viewModel.IsRecording)
+        {
+            e.Handled = true;
+            viewModel.ToggleVoiceCommand.Execute(null);
+            return;
+        }
+
+        // 只有真的要发送时才吞掉 Enter。运行中 / 转写中把它吞了，
+        // 输入框里既没有换行也没有发送，表现出来就是「键盘没反应」。
+        if (!viewModel.SendCommand.CanExecute(null))
+        {
+            return;
+        }
+
+        e.Handled = true;
+        viewModel.SendCommand.Execute(null);
     }
 
     private void OnModelClick(object? sender, RoutedEventArgs e)

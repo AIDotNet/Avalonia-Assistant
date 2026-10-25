@@ -134,8 +134,6 @@ public sealed class AssistantSettings
 
     public List<string> DisabledTools { get; set; } = [];
 
-    public string Mode { get; set; } = "office";
-
     [JsonIgnore]
     public AgentProtocol Protocol => ProviderPreset.For(Provider).Protocol;
 
@@ -155,6 +153,5 @@ public sealed class AssistantSettings
         RecentWorkspaces = [.. RecentWorkspaces],
         CollapsedWorkspaces = [.. CollapsedWorkspaces],
         DisabledTools = [.. DisabledTools],
-        Mode = Mode,
     };
 }

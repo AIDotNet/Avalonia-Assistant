@@ -67,7 +67,6 @@ public sealed class ToolExecutionTests
             Guid.NewGuid().ToString("n"),
             "测试工具",
             [],
-            "office",
             PermissionMode.Workspace,
             workspace,
             null);

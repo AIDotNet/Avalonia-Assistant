@@ -23,6 +23,7 @@ public sealed partial class SessionItemViewModel : ObservableObject
     private readonly Action<string> _open;
     private readonly Action<string> _delete;
     private readonly Func<string, string, Task<string?>> _rename;
+    private readonly DateTimeOffset _updatedAt;
 
     public SessionItemViewModel(
         ChatSession session,
@@ -33,14 +34,9 @@ public sealed partial class SessionItemViewModel : ObservableObject
     {
         Id = session.Id;
         Title = session.Title;
+        _updatedAt = session.UpdatedAt;
         TimeText = SessionText.RelativeTime(session.UpdatedAt);
         WorkspaceName = string.IsNullOrWhiteSpace(workspaceName) ? "普通对话" : workspaceName;
-        ModeText = session.Mode switch
-        {
-            "code" or "coding" => "代码开发",
-            "design" => "设计",
-            _ => "办公",
-        };
         UpdatedText = "更新于 " + session.UpdatedAt.LocalDateTime.ToString("yyyy/MM/dd HH:mm");
         _open = open;
         _delete = delete;
@@ -51,12 +47,14 @@ public sealed partial class SessionItemViewModel : ObservableObject
 
     public string Title { get; }
 
-    /// <summary>默认显示在行尾，鼠标移到这一行时让位给「⋯」。</summary>
-    public string TimeText { get; }
+    /// <summary>默认显示在行尾，鼠标移到这一行时让位给「⋯」。「5 分钟前」会过期，由侧栏定时器刷新。</summary>
+    [ObservableProperty]
+    private string timeText;
+
+    /// <summary>重算相对时间。侧栏每分钟调一次，跨天时也会重排分组。</summary>
+    public void RefreshTime() => TimeText = SessionText.RelativeTime(_updatedAt);
 
     public string WorkspaceName { get; }
-
-    public string ModeText { get; }
 
     public string UpdatedText { get; }
 

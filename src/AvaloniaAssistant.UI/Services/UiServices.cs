@@ -105,18 +105,28 @@ public static class Ui
         }
     }
 
-    public static void OpenExternal(string target)
+    /// <summary>
+    /// 用系统默认程序打开文件 / 目录 / 链接。打不开返回 false——
+    /// 静默吞掉失败的话，用户点了「打开目录」只会觉得按钮坏了。
+    /// </summary>
+    public static bool OpenExternal(string target)
     {
+        if (string.IsNullOrWhiteSpace(target))
+        {
+            return false;
+        }
+
         try
         {
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(target)
             {
                 UseShellExecute = true,
             });
+            return true;
         }
         catch
         {
-            // 打不开链接不应影响应用。
+            return false;
         }
     }
 }
@@ -133,6 +143,9 @@ public static class AppLaunchOptions
 
     /// <summary>开发用：预填并聚焦输入框，检查焦点态和 Enter 发送。</summary>
     public static string? ComposerText { get; set; }
+
+    /// <summary>开发用：预填侧栏搜索词，检查任务过滤与空结果提示。</summary>
+    public static string? SessionSearch { get; set; }
 
     /// <summary>开发用：预填后模拟一次 Enter，验证发送链路。</summary>
     public static bool PressEnter { get; set; }

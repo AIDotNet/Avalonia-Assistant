@@ -119,6 +119,8 @@
 
             <Button Classes="pill permission-pill"
                     Classes.full="{Binding IsFullAccess}"
+                    IsEnabled="{Binding CanChangePermission}"
+                    ToolTip.ShowOnDisabled="True"
                     Click="OnPermissionClick"
                     ToolTip.Tip="{Binding PermissionTooltip}">
               <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
@@ -137,8 +139,23 @@
 
             <Button Classes="icon"
                     Command="{Binding ToggleVoiceCommand}"
+                    IsEnabled="{Binding IsMicEnabled}"
+                    ToolTip.ShowOnDisabled="True"
                     ToolTip.Tip="{Binding MicTooltip}">
-              <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Mic}" Size="16" Foreground="{Binding MicBrush}" />
+              <Panel>
+                <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Mic}"
+                              Size="16"
+                              Foreground="{Binding MicBrush}"
+                              IsVisible="{Binding !IsTranscribing}"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Center" />
+                <arc:ArcSpinner Width="14"
+                                Height="14"
+                                IsVisible="{Binding IsTranscribing}"
+                                Foreground="{StaticResource TextMutedBrush}"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center" />
+              </Panel>
             </Button>
 
             <Button Classes="send"

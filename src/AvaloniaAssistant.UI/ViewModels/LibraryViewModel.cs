@@ -9,12 +9,15 @@ namespace AvaloniaAssistant.UI.ViewModels;
 
 public sealed partial class FileItemViewModel
 {
-    public FileItemViewModel(string name, string fullPath, bool isDirectory, string detail)
+    private readonly Action<string>? _openFailed;
+
+    public FileItemViewModel(string name, string fullPath, bool isDirectory, string detail, Action<string>? openFailed = null)
     {
         Name = name;
         FullPath = fullPath;
         IsDirectory = isDirectory;
         Detail = detail;
+        _openFailed = openFailed;
     }
 
     public string Name { get; }
@@ -28,7 +31,13 @@ public sealed partial class FileItemViewModel
     public Geometry Icon => IsDirectory ? ArcIcons.FolderOpen : ArcIcons.FileText;
 
     [RelayCommand]
-    private void Open() => Ui.OpenExternal(FullPath);
+    private void Open()
+    {
+        if (!Ui.OpenExternal(FullPath))
+        {
+            _openFailed?.Invoke($"打不开「{Name}」：可能没有关联程序，或者文件已经不在了。");
+        }
+    }
 }
 
 public sealed partial class LibraryViewModel : ObservableObject
@@ -115,7 +124,8 @@ public sealed partial class LibraryViewModel : ObservableObject
                         directory.Name,
                         directory.FullName,
                         true,
-                        $"文件夹 · 修改于 {directory.LastWriteTime:MM-dd HH:mm}"));
+                        $"文件夹 · 修改于 {directory.LastWriteTime:MM-dd HH:mm}",
+                        ReportOpenFailure));
                 }
                 else if (entry is FileInfo file)
                 {
@@ -123,7 +133,8 @@ public sealed partial class LibraryViewModel : ObservableObject
                         file.Name,
                         file.FullName,
                         false,
-                        $"{FormatSize(file.Length)} · {file.LastWriteTime:MM-dd HH:mm}"));
+                        $"{FormatSize(file.Length)} · {file.LastWriteTime:MM-dd HH:mm}",
+                        ReportOpenFailure));
                 }
             }
 
@@ -140,7 +151,15 @@ public sealed partial class LibraryViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void OpenWorkspace() => Ui.OpenExternal(WorkspacePath);
+    private void OpenWorkspace()
+    {
+        if (!Ui.OpenExternal(WorkspacePath))
+        {
+            StatusText = "打不开这个目录，可能它已经被移动或删除。";
+        }
+    }
+
+    private void ReportOpenFailure(string message) => StatusText = message;
 
     [RelayCommand]
     private async Task PickWorkspaceAsync()

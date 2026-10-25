@@ -185,6 +185,112 @@ public sealed class PiAgentRuntime : IAssistantRuntime
         }
     }
 
+    /// <summary>
+    /// 探一次 /models。只读接口，不产生生成费用；失败时把请求的 URL 和状态码一起带回去，
+    /// 因为「401」和「404」对应的修法完全不同（Key 错 vs Base URL 多/少了 /v1）。
+    /// Anthropic 的模型列表在 /v1/models，且要带 anthropic-version。
+    /// </summary>
+    public async Task<ConnectionProbe> ProbeAsync(
+        AssistantSettings settings,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(settings.ApiKey))
+        {
+            return new ConnectionProbe(false, "还没有填 API Key。", []);
+        }
+
+        if (string.IsNullOrWhiteSpace(settings.BaseUrl))
+        {
+            return new ConnectionProbe(false, "Base URL 是空的。", []);
+        }
+
+        var anthropic = settings.Protocol == AgentProtocol.AnthropicMessages;
+        var baseUrl = settings.BaseUrl.TrimEnd('/');
+        var url = anthropic ? baseUrl + "/v1/models" : baseUrl + "/models";
+
+        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        if (anthropic)
+        {
+            request.Headers.TryAddWithoutValidation("x-api-key", settings.ApiKey);
+            request.Headers.TryAddWithoutValidation("anthropic-version", "2023-06-01");
+        }
+        else
+        {
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", settings.ApiKey);
+        }
+
+        try
+        {
+            using var response = await http.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return new ConnectionProbe(
+                    false,
+                    $"GET {url} 返回 {(int)response.StatusCode}：{Snippet(body)}",
+                    []);
+            }
+
+            var models = ParseModelIds(body);
+            return models.Count > 0
+                ? new ConnectionProbe(true, $"连接正常，{models.Count} 个模型可用。", models)
+                : new ConnectionProbe(true, $"连接正常（GET {url} 返回 200）。", []);
+        }
+        catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return new ConnectionProbe(false, $"请求超时（15 秒）：GET {url}", []);
+        }
+        catch (Exception ex)
+        {
+            return new ConnectionProbe(false, $"{ex.Message}（GET {url}）", []);
+        }
+    }
+
+    private static IReadOnlyList<string> ParseModelIds(string body)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(body);
+            if (!document.RootElement.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Array)
+            {
+                return [];
+            }
+
+            var ids = new List<string>();
+            foreach (var item in data.EnumerateArray())
+            {
+                if (item.TryGetProperty("id", out var id)
+                    && id.ValueKind == JsonValueKind.String
+                    && id.GetString() is { Length: > 0 } value)
+                {
+                    ids.Add(value);
+                }
+            }
+
+            return ids;
+        }
+        catch (JsonException)
+        {
+            return [];
+        }
+    }
+
+    private static string Snippet(string body)
+    {
+        var text = body.ReplaceLineEndings(" ").Trim();
+        return text.Length <= 200 ? text : text[..200] + "…";
+    }
+
+    public void InvalidateSession(string sessionId)
+    {
+        lock (_sessions)
+        {
+            _sessions.Remove(sessionId);
+        }
+    }
+
     public void InvalidateSessions()
     {
         lock (_sessions)
@@ -202,7 +308,8 @@ public sealed class PiAgentRuntime : IAssistantRuntime
         var history = request.History;
         lock (_sessions)
         {
-            if (_sessions.TryGetValue(request.SessionId, out var cached) && cached.Matches(history, settings))
+            if (_sessions.TryGetValue(request.SessionId, out var cached)
+                && cached.Matches(history, settings, cwd, request.Permission))
             {
                 return cached;
             }
@@ -214,7 +321,8 @@ public sealed class PiAgentRuntime : IAssistantRuntime
             lock (_sessions)
             {
                 // 双检：并发两轮同时进来时只建一次会话。
-                if (_sessions.TryGetValue(request.SessionId, out var cached) && cached.Matches(history, settings))
+                if (_sessions.TryGetValue(request.SessionId, out var cached)
+                    && cached.Matches(history, settings, cwd, request.Permission))
                 {
                     return cached;
                 }
@@ -233,10 +341,15 @@ public sealed class PiAgentRuntime : IAssistantRuntime
                 Session = session,
                 Catalog = catalog,
                 LastHistory = history,
+                Cwd = cwd,
                 Permission = request.Permission,
                 Model = settings.Model,
                 ApiKey = settings.ApiKey,
                 BaseUrl = settings.BaseUrl,
+                Protocol = settings.Protocol,
+                Temperature = settings.Temperature,
+                MaxTokens = settings.MaxTokens,
+                TrustWorkspace = settings.TrustWorkspace,
                 DisabledTools = [.. settings.DisabledTools],
             };
 
@@ -342,16 +455,26 @@ public sealed class PiAgentRuntime : IAssistantRuntime
         session.Agent.Messages = messages;
     }
 
-    private static bool SameHistory(IReadOnlyList<HistoryTurn> left, IReadOnlyList<HistoryTurn> right)
+    /// <summary>
+    /// 判断这次带来的历史，是不是在上一轮记录的历史后面继续长的。
+    /// </summary>
+    /// <remarks>
+    /// 这里不能要求全等：正常追问时，界面送来的历史一定比上一轮多出「上一轮的问 + 答」。
+    /// 早先按全等比较，缓存永远不命中，每发一条消息都要重建会话（重跑 ModelRuntime、
+    /// 重扫技能、重启 MCP 子进程），而且重建时只灌得进问答文本，上一轮的工具结果全丢。
+    /// 反过来，历史比记录的短，说明用户重试、截掉了后面的轮次，必须重建——
+    /// 否则旧回复还留在会话里，模型会看到两遍。
+    /// </remarks>
+    private static bool ContinuesHistory(IReadOnlyList<HistoryTurn> previous, IReadOnlyList<HistoryTurn> current)
     {
-        if (left.Count != right.Count)
+        if (current.Count < previous.Count)
         {
             return false;
         }
 
-        for (var index = 0; index < left.Count; index++)
+        for (var index = 0; index < previous.Count; index++)
         {
-            if (left[index].Role != right[index].Role || left[index].Text != right[index].Text)
+            if (previous[index].Role != current[index].Role || previous[index].Text != current[index].Text)
             {
                 return false;
             }
@@ -438,7 +561,11 @@ public sealed class PiAgentRuntime : IAssistantRuntime
 
         public required IReadOnlyDictionary<string, AgentToolInfo> Catalog { get; init; }
 
+        /// <summary>上一轮提问之前的界面历史。判断能否复用时要看这次是否在它后面接着长。</summary>
         public IReadOnlyList<HistoryTurn> LastHistory { get; set; } = [];
+
+        /// <summary>会话装配时的工作目录。换了工作区必须重建，否则工具还在旧目录里干活。</summary>
+        public required string Cwd { get; init; }
 
         public required PermissionMode Permission { get; init; }
 
@@ -448,18 +575,40 @@ public sealed class PiAgentRuntime : IAssistantRuntime
 
         public required string BaseUrl { get; init; }
 
+        /// <summary>协议由服务商推出，但 BaseUrl / Model 可能刚好不变，单独比一次。</summary>
+        public required AgentProtocol Protocol { get; init; }
+
+        /// <summary>采样参数在装配时被 StreamSimple 的闭包捕获，改了必须重建才生效。</summary>
+        public required double Temperature { get; init; }
+
+        public required int MaxTokens { get; init; }
+
+        /// <summary>决定项目级 .pi 配置读不读，同样在建会话时定下。</summary>
+        public required bool TrustWorkspace { get; init; }
+
         public required IReadOnlyList<string> DisabledTools { get; init; }
 
         /// <summary>
-        /// 会话复用条件：历史一致，且权限 / 模型 / 端点 / 工具开关都没变。
+        /// 会话复用条件：工作目录一致，模型 / 端点 / 工具开关都没变，这次请求的权限档位和
+        /// 建会话时一样，且历史是在上一轮后面接着长的。
         /// 权限变了必须重建——BeforeToolCall 闭包和内置工具集都是建会话时定下的。
+        /// 这里比的是 request 里的档位，不是设置里的：钩子当初就是按 request 装的。
         /// </summary>
-        public bool Matches(IReadOnlyList<HistoryTurn> history, AssistantSettings settings)
-            => Permission == settings.Permission
+        public bool Matches(
+            IReadOnlyList<HistoryTurn> history,
+            AssistantSettings settings,
+            string cwd,
+            PermissionMode permission)
+            => string.Equals(Cwd, cwd, StringComparison.OrdinalIgnoreCase)
+               && Permission == permission
                && Model == settings.Model
                && ApiKey == settings.ApiKey
                && BaseUrl == settings.BaseUrl
+               && Protocol == settings.Protocol
+               && Temperature.Equals(settings.Temperature)
+               && MaxTokens == settings.MaxTokens
+               && TrustWorkspace == settings.TrustWorkspace
                && DisabledTools.SequenceEqual(settings.DisabledTools)
-               && SameHistory(LastHistory, history);
+               && ContinuesHistory(LastHistory, history);
     }
 }

@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using Avalonia.Threading;
 using AvaloniaAssistant.Abstractions;
 using AvaloniaAssistant.UI.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -12,6 +13,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     private readonly ISessionStore _sessions;
     private readonly Dictionary<string, ChatSession> _sessionCache = new(StringComparer.Ordinal);
+    private DispatcherTimer? _searchDebounce;
+    private DispatcherTimer? _clock;
+    private DateOnly _lastGroupDate;
 
     public MainWindowViewModel(
         IAssistantRuntime runtime,
@@ -66,13 +70,35 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     public bool HasNoSessions => SessionGroups.Count == 0;
 
+    /// <summary>有没有任务可搜。空列表时不显示搜索框，免得占地方。</summary>
+    public bool HasAnySessions => _sessionCache.Count > 0;
+
+    public bool IsSearching => !string.IsNullOrWhiteSpace(SessionSearch);
+
+    /// <summary>「还没有任务」只在真的没有任务时说；搜索无结果时另有一句提示。</summary>
+    public bool ShowEmptyTasksHint => !IsSearching && HasNoSessions;
+
+    /// <summary>「没有工作区」同理，别把「搜索没命中」说成「没有工作区」。</summary>
+    public bool ShowEmptyWorkspacesHint => !IsSearching && !HasWorkspaces;
+
+    /// <summary>搜了但一条都没匹配上。</summary>
+    [ObservableProperty]
+    private bool showNoSearchResult;
+
     /// <summary>「任务」这一块只放没归到空间里的对话；空间下的对话挂在空间自己身上。</summary>
-    public bool ShowTaskSection => SessionGroups.Count > 0 || !HasWorkspaces;
+    public bool ShowTaskSection => !IsSearching && (SessionGroups.Count > 0 || !HasWorkspaces);
 
     /// <summary>「空间」里有没有东西可点；没有就说明当前是普通任务。</summary>
     public bool HasWorkspaces => Workspaces.Count > 0;
 
     public bool IsConfigured => !string.IsNullOrWhiteSpace(Settings.ApiKey);
+
+    /// <summary>窗口已经显示、但首页还没装配好。用来撑一块骨架，别让人对着一片空白。</summary>
+    public bool IsPageLoading => CurrentPage is null;
+
+    /// <summary>侧栏搜索词。按标题和正文匹配，输入时防抖重建列表。</summary>
+    [ObservableProperty]
+    private string sessionSearch = string.Empty;
 
     public bool IsHomeSelected => CurrentPage is HomeViewModel;
 
@@ -97,6 +123,47 @@ public sealed partial class MainWindowViewModel : ObservableObject
         await ReloadWorkspacesAsync();
         Home.Refresh();
         CurrentPage = Home;
+        StartClock();
+    }
+
+    /// <summary>
+    /// 侧栏的「5 分钟前」是算出来的快照，不刷新就永远停在打开那一刻；
+    /// 顺便跨天时重排「今天 / 昨天」分组。
+    /// </summary>
+    private void StartClock()
+    {
+        _lastGroupDate = DateOnly.FromDateTime(DateTime.Now);
+        _clock = new DispatcherTimer { Interval = TimeSpan.FromMinutes(1) };
+        _clock.Tick += (_, _) =>
+        {
+            foreach (var item in SessionGroups.SelectMany(group => group.Items)
+                         .Concat(Workspaces.SelectMany(workspace => workspace.Sessions)))
+            {
+                item.RefreshTime();
+            }
+
+            var today = DateOnly.FromDateTime(DateTime.Now);
+            if (today != _lastGroupDate)
+            {
+                _lastGroupDate = today;
+                RebuildSidebar();
+            }
+        };
+        _clock.Start();
+    }
+
+    partial void OnSessionSearchChanged(string value)
+    {
+        // 每敲一个字都扫一遍历史文本太重，停手 180ms 再重建。
+        _searchDebounce?.Stop();
+        _searchDebounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(180) };
+        _searchDebounce.Tick += (_, _) =>
+        {
+            _searchDebounce?.Stop();
+            _searchDebounce = null;
+            RebuildSidebar();
+        };
+        _searchDebounce.Start();
     }
 
     [RelayCommand]
@@ -171,9 +238,17 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
 
         await _sessions.SaveAsync(session);
-        await ReloadSessionsAsync();
-        await SetActiveSessionAsync(session.Id);
+        await RefreshSidebarAsync();
+
+        // 选中态由侧栏按「当前页是哪个会话」自己算（见 RebuildSidebar 里的 activeId）。
+        // 这里不再主动点亮：后台跑完的任务会把用户正在看的那个会话的选中态抢走。
     }
+
+    /// <summary>
+    /// 只按内存里的缓存重画侧栏。每发完一轮都会走到这里，
+    /// 之前顺手调 LoadAllAsync 会把所有会话文件重新反序列化一遍，白读磁盘。
+    /// </summary>
+    private Task RefreshSidebarAsync() => Ui.OnUiAsync(RebuildSidebar);
 
     public async Task DeleteSessionAsync(string sessionId)
     {
@@ -185,7 +260,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             CurrentPage = Home;
         }
 
-        await ReloadSessionsAsync();
+        await RefreshSidebarAsync();
     }
 
     /// <summary>侧边栏「添加工作区」和资料库入口共用：选一个目录，设为当前工作区并记住它。</summary>
@@ -403,7 +478,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
     {
         var settings = Settings;
         var activeId = (CurrentPage as ChatViewModel)?.Session.Id;
+        var keyword = SessionSearch.Trim();
+
         var sessions = _sessionCache.Values
+            .Where(session => keyword.Length == 0 || MatchesKeyword(session, keyword))
             .OrderByDescending(session => session.UpdatedAt)
             .ToList();
 
@@ -431,7 +509,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
             }
 
             item.RefreshSessions();
-            items.Add(item);
+
+            // 搜索时把没有命中的空间一并收起来，不然满屏都是空标题
+            if (keyword.Length == 0 || item.Sessions.Count > 0)
+            {
+                items.Add(item);
+            }
         }
 
         Workspaces.Clear();
@@ -451,10 +534,62 @@ public sealed partial class MainWindowViewModel : ObservableObject
                 group.Select(session => CreateSessionItem(session, activeId, LooseWorkspaceName(session)))));
         }
 
+        ShowNoSearchResult = keyword.Length > 0
+                             && SessionGroups.Count == 0
+                             && Workspaces.Count == 0;
+
         OnPropertyChanged(nameof(SessionCountText));
         OnPropertyChanged(nameof(HasNoSessions));
+        OnPropertyChanged(nameof(HasAnySessions));
         OnPropertyChanged(nameof(ShowTaskSection));
         OnPropertyChanged(nameof(HasWorkspaces));
+        OnPropertyChanged(nameof(IsSearching));
+        OnPropertyChanged(nameof(ShowEmptyTasksHint));
+        OnPropertyChanged(nameof(ShowEmptyWorkspacesHint));
+    }
+
+    /// <summary>
+    /// 搜标题、问答正文和工具结果。工具卡片的结果单独存在 ToolCalls 里，
+    /// 不带上它的话，「上次那个报错」这种按结果记忆的搜索就搜不到。
+    /// </summary>
+    private static bool MatchesKeyword(ChatSession session, string keyword)
+    {
+        if (session.Title.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        foreach (var entry in session.Entries)
+        {
+            if (Contains(entry.Text, keyword, 8_000))
+            {
+                return true;
+            }
+
+            foreach (var tool in entry.ToolCalls)
+            {
+                if (Contains(tool.Label, keyword, 200) || Contains(tool.Result, keyword, 2_000))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// 只扫开头一段。工具结果动辄几千字，每次按键全量比一遍再乘上会话数，输入会明显发涩。
+    /// </summary>
+    private static bool Contains(string? text, string keyword, int limit)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return false;
+        }
+
+        var span = text.AsSpan(0, Math.Min(text.Length, limit));
+        return span.Contains(keyword, StringComparison.OrdinalIgnoreCase);
     }
 
     private SessionItemViewModel CreateSessionItem(ChatSession session, string? activeId, string workspaceName)
@@ -490,7 +625,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         // 改名不动 UpdatedAt：侧栏按最近使用排序，改个名字不该把任务顶到最前面
         session.Title = title;
         await _sessions.SaveAsync(session);
-        await ReloadSessionsAsync();
+        await RefreshSidebarAsync();
         return null;
     }
 
@@ -610,6 +745,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     partial void OnCurrentPageChanged(object? value)
     {
+        OnPropertyChanged(nameof(IsPageLoading));
         OnPropertyChanged(nameof(IsHomeSelected));
         OnPropertyChanged(nameof(IsToolsSelected));
         OnPropertyChanged(nameof(IsMcpSelected));

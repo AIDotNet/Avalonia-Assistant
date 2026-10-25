@@ -83,7 +83,7 @@
           </StackPanel>
         </Grid>
 
-        <ItemsControl ItemsSource="{Binding Skills}" Margin="0,0,-12,0">
+        <ItemsControl ItemsSource="{Binding VisibleSkills}" Margin="0,0,-12,0">
           <ItemsControl.ItemsPanel>
             <ItemsPanelTemplate>
               <UniformGrid Columns="3" />
@@ -266,7 +266,7 @@
 
         <arc:EmptyState IsVisible="{Binding HasNothing}"
                         Icon="{x:Static arc:ArcIcons.Search}"
-                        Title="没有匹配的工具"
+                        Title="没有匹配的技能或工具"
                         Description="换个关键词，或者切回「全部」。">
           <arc:EmptyState.Action>
             <Button Classes="chip"

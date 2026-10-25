@@ -287,7 +287,11 @@ public sealed partial class McpViewModel : ObservableObject
     {
         if (!string.IsNullOrWhiteSpace(_configPathRaw) && File.Exists(_configPathRaw))
         {
-            Ui.OpenExternal(_configPathRaw);
+            if (!Ui.OpenExternal(_configPathRaw))
+            {
+                ShowNotice("打不开 mcp.json，可能没有关联的编辑器。", isError: true);
+            }
+
             return;
         }
 

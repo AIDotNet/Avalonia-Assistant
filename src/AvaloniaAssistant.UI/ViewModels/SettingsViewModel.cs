@@ -1,7 +1,9 @@
 using System.Collections.ObjectModel;
+using System.Text.Json;
 using Avalonia.Media;
 using Avalonia.Threading;
 using AvaloniaAssistant.Abstractions;
+using AvaloniaAssistant.Storage;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TKCode.Arc;
@@ -34,11 +36,13 @@ public sealed partial class ProviderOptionViewModel : ObservableObject
 public sealed partial class SettingsViewModel : ObservableObject
 {
     private readonly MainWindowViewModel _host;
+    private string _savedSnapshot;
 
     public SettingsViewModel(MainWindowViewModel host)
     {
         _host = host;
         Settings = host.Settings.Clone();
+        _savedSnapshot = Snapshot(Settings);
 
         Providers = new ObservableCollection<ProviderOptionViewModel>(
             ProviderPreset.All.Select(preset => new ProviderOptionViewModel(preset, SelectProvider)
@@ -53,6 +57,11 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     public ObservableCollection<ProviderOptionViewModel> Providers { get; }
 
+    /// <summary>表单里有没有还没保存的改动。设置页改的是副本，直接走人不会提示，等于白填。</summary>
+    public bool IsDirty => !string.Equals(Snapshot(Settings), _savedSnapshot, StringComparison.Ordinal);
+
+    private static string Snapshot(AssistantSettings settings) => JsonSerializer.Serialize(settings, AssistantJson.Options);
+
     public string ApiKey
     {
         get => Settings.ApiKey;
@@ -60,6 +69,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         {
             Settings.ApiKey = value;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(IsDirty));
+            ResetProbe();
         }
     }
 
@@ -70,6 +81,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         {
             Settings.BaseUrl = value;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(IsDirty));
+            ResetProbe();
         }
     }
 
@@ -80,6 +93,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         {
             Settings.Model = value;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(IsDirty));
+            ResetProbe();
         }
     }
 
@@ -90,6 +105,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         {
             Settings.Temperature = value;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(IsDirty));
         }
     }
 
@@ -100,6 +116,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         {
             Settings.MaxTokens = value;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(IsDirty));
         }
     }
 
@@ -141,7 +158,84 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     public Geometry SaveToastIcon => IsSaveError ? ArcIcons.CircleAlert : ArcIcons.CircleCheck;
 
+    /// <summary>测试连接的结论。失败时直接把请求的 URL 和状态码写出来，方便判断是 Key 错还是地址错。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasProbeResult))]
+    [NotifyPropertyChangedFor(nameof(ProbeBrush))]
+    private string? probeText;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ProbeBrush))]
+    private bool probeFailed;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ProbeButtonText))]
+    [NotifyCanExecuteChangedFor(nameof(ProbeCommand))]
+    [NotifyPropertyChangedFor(nameof(ProbeBrush))]
+    private bool isProbing;
+
+    public bool HasProbeResult => !string.IsNullOrWhiteSpace(ProbeText);
+
+    public string ProbeButtonText => IsProbing ? "正在测试…" : "测试连接";
+
+    public IBrush ProbeBrush => IsProbing
+        ? new SolidColorBrush(Color.Parse("#6F6F69"))
+        : ProbeFailed
+            ? new SolidColorBrush(Color.Parse("#B3261E"))
+            : new SolidColorBrush(Color.Parse("#2E7D32"));
+
     private DispatcherTimer? _toastTimer;
+
+    /// <summary>改了地址/密钥/模型，上一次的测试结论就过期了，留着会误导。</summary>
+    private void ResetProbe()
+    {
+        if (!IsProbing && HasProbeResult)
+        {
+            ProbeText = null;
+            ProbeFailed = false;
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(CanProbe))]
+    private async Task ProbeAsync()
+    {
+        IsProbing = true;
+        ProbeFailed = false;
+        ProbeText = "正在连接…";
+
+        try
+        {
+            var result = await _host.Runtime.ProbeAsync(Settings);
+            if (!result.Ok)
+            {
+                ProbeFailed = true;
+                ProbeText = result.Message;
+                return;
+            }
+
+            if (result.Models.Count > 0 && !result.Models.Contains(Settings.Model, StringComparer.Ordinal))
+            {
+                ProbeFailed = true;
+                ProbeText = $"能连上，但服务端没有「{Settings.Model}」这个模型。可用："
+                            + string.Join("、", result.Models.Take(5))
+                            + (result.Models.Count > 5 ? " …" : string.Empty);
+                return;
+            }
+
+            ProbeText = result.Message;
+        }
+        catch (Exception ex)
+        {
+            ProbeFailed = true;
+            ProbeText = "测试失败：" + ex.Message;
+        }
+        finally
+        {
+            IsProbing = false;
+        }
+    }
+
+    private bool CanProbe() => !IsProbing;
 
     [RelayCommand]
     private void SelectProvider(ProviderOptionViewModel option)
@@ -157,6 +251,8 @@ public sealed partial class SettingsViewModel : ObservableObject
 
         OnPropertyChanged(nameof(BaseUrl));
         OnPropertyChanged(nameof(Model));
+        OnPropertyChanged(nameof(IsDirty));
+        ResetProbe();
     }
 
     [RelayCommand]
@@ -172,6 +268,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         OnPropertyChanged(nameof(IsReadOnlySelected));
         OnPropertyChanged(nameof(IsWorkspaceSelected));
         OnPropertyChanged(nameof(IsFullAccessSelected));
+        OnPropertyChanged(nameof(IsDirty));
     }
 
     [RelayCommand]
@@ -187,6 +284,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         Settings.RecentWorkspaces.RemoveAll(path => string.Equals(path, folder, StringComparison.OrdinalIgnoreCase));
         Settings.RecentWorkspaces.Insert(0, folder);
         OnPropertyChanged(nameof(WorkspacePath));
+        OnPropertyChanged(nameof(IsDirty));
     }
 
     [RelayCommand]
@@ -212,6 +310,8 @@ public sealed partial class SettingsViewModel : ObservableObject
             }
 
             await _host.SettingsProvider.SaveAsync(Settings);
+            _savedSnapshot = Snapshot(Settings);
+            OnPropertyChanged(nameof(IsDirty));
             SavedText = $"已保存 · {DateTime.Now:HH:mm:ss}";
             ShowToast("设置已保存", error: false);
         }
@@ -249,7 +349,11 @@ public sealed partial class SettingsViewModel : ObservableObject
     private void OpenDataFolder()
     {
         Directory.CreateDirectory(DataFolder);
-        Services.Ui.OpenExternal(DataFolder);
+        if (!Services.Ui.OpenExternal(DataFolder))
+        {
+            SavedText = "打不开数据目录，可能被系统策略拦住了。";
+            ShowToast("打不开数据目录", error: true);
+        }
     }
 
     [RelayCommand]

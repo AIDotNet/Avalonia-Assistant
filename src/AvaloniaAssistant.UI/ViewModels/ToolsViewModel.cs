@@ -97,7 +97,6 @@ public sealed partial class ToolsViewModel : ObservableObject
         }
 
         SelectedCategory = AllCategory;
-        Refresh();
         RefreshCapabilities();
     }
 
@@ -108,6 +107,9 @@ public sealed partial class ToolsViewModel : ObservableObject
 
     public ObservableCollection<AgentSkillInfo> Skills { get; } = [];
 
+    /// <summary>按搜索词过滤后的技能。搜索框叫「搜索技能」，技能卡片必须跟着一起筛。</summary>
+    public ObservableCollection<AgentSkillInfo> VisibleSkills { get; } = [];
+
     public bool HasSkills => Skills.Count > 0;
 
     public string SkillsEmptyHint => string.IsNullOrEmpty(_skillsRoot)
@@ -117,7 +119,10 @@ public sealed partial class ToolsViewModel : ObservableObject
     /// <summary>技能目录，用户目录已缩成 ~。</summary>
     public string SkillsRootText => _skillsRoot;
 
-    public string CapabilityText => $"{Skills.Count} 个技能";
+    /// <summary>技能数量。搜索时有筛选就显示「命中 / 总数」，免得以为技能被删了。</summary>
+    public string CapabilityText => string.IsNullOrWhiteSpace(SearchText)
+        ? $"{Skills.Count} 个技能"
+        : $"{VisibleSkills.Count} / {Skills.Count} 个技能";
 
     public string SubtitleText => $"{_all.Count} 个内置工具 · {_all.Count(tool => tool.IsEnabled)} 个已启用";
 
@@ -206,7 +211,10 @@ public sealed partial class ToolsViewModel : ObservableObject
         }
 
         Directory.CreateDirectory(_skillsRootRaw);
-        Ui.OpenExternal(_skillsRootRaw);
+        if (!Ui.OpenExternal(_skillsRootRaw))
+        {
+            ShowNotice("打不开技能目录，可能被系统策略拦住了。", isError: true);
+        }
     }
 
     private void ShowNotice(string message, bool isError)
@@ -235,11 +243,15 @@ public sealed partial class ToolsViewModel : ObservableObject
         OnPropertyChanged(nameof(SkillsEmptyHint));
         OnPropertyChanged(nameof(SkillsRootText));
         OnPropertyChanged(nameof(CapabilityText));
+
+        // 技能列表换了，过滤结果要跟着重算（构造函数里也是先扫目录再 Refresh）。
+        Refresh();
     }
 
     private void Refresh()
     {
         VisibleTools.Clear();
+        VisibleSkills.Clear();
 
         var keyword = SearchText.Trim();
         foreach (var tool in _all)
@@ -259,9 +271,23 @@ public sealed partial class ToolsViewModel : ObservableObject
             VisibleTools.Add(tool);
         }
 
-        HasNothing = VisibleTools.Count == 0;
+        foreach (var skill in Skills)
+        {
+            if (keyword.Length == 0 || Matches(skill, keyword))
+            {
+                VisibleSkills.Add(skill);
+            }
+        }
+
+        HasNothing = VisibleTools.Count == 0 && VisibleSkills.Count == 0;
         OnPropertyChanged(nameof(SubtitleText));
+        OnPropertyChanged(nameof(CapabilityText));
     }
+
+    private static bool Matches(AgentSkillInfo skill, string keyword)
+        => skill.Name.Contains(keyword, StringComparison.OrdinalIgnoreCase)
+           || skill.Description.Contains(keyword, StringComparison.OrdinalIgnoreCase)
+           || skill.Directory.Contains(keyword, StringComparison.OrdinalIgnoreCase);
 
     private void Toggle(string name, bool enabled)
     {

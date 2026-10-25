@@ -89,7 +89,23 @@ ChatViewModel 更新 MessageViewModel
 
 `IAssistantRuntime.Abort(sessionId)` 是带外的中止通道：UI 调 `Stop` 时同时取消
 `CancellationToken` 并调用它。工具执行前的授权也走带外回调 `IToolApprovalGate`，
-它由 `ChatViewModel` 实现，把授权卡片插进当前对话并等待用户点“允许/拒绝”。
+它由 `ChatViewModel` 实现，把授权卡片插进当前对话并等待用户选择：
+允许一次 / 本会话都允许（按工具名记住，只在这一个对话实例里生效）/ 拒绝。
+
+设置的「测试连接」走 `IAssistantRuntime.ProbeAsync`，只请求 `GET /models`：
+验证地址、密钥和模型名，不产生生成费用；失败时把 URL 与状态码原样带回，
+因为 401 和 404 对应的修法不同。
+
+会话缓存按「这次带来的历史是不是在上一轮历史后面接着长的」判断复用（`SessionHolder.Matches`）：
+工作区、模型、端点、协议、采样参数（Temperature / MaxTokens）、工具开关、权限档位、
+工作区信任开关任一变化都会重建。不能要求历史全等——正常追问时历史必然比上一轮多出
+「上一轮的问 + 答」，按全等比较会导致每条消息都重建会话。
+用户重试时界面历史会被截短，这时反而必须重建，否则旧回复还留在会话里。
+
+采样参数也要比：它们在建会话时被 `StreamSimple` 的闭包捕获，漏比的话改了设置下一轮仍是旧值。
+
+换页或换任务时 `ChatViewModel.Dispose` 会取消本轮并 `Abort`：授权卡片随页面一起消失后
+没人能再点，不取消的话这一轮会永久挂在等待授权上。
 
 ## 5. 权限模型
 

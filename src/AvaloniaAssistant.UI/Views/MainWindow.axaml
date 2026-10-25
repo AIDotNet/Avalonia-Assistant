@@ -14,7 +14,10 @@
         FontFamily="{StaticResource AppFontFamily}"
         RequestedThemeVariant="Light">
   <Grid ColumnDefinitions="Auto,*">
-    <views:SidebarView Width="268" DataContext="{Binding}" IsVisible="{Binding IsSidebarVisible}" />
+    <views:SidebarView x:Name="Sidebar"
+                       Width="268"
+                       DataContext="{Binding}"
+                       IsVisible="{Binding IsSidebarVisible}" />
 
     <Border Grid.Column="1"
             Margin="0,8,8,8"
@@ -25,6 +28,15 @@
             ClipToBounds="True">
       <Grid>
         <ContentControl Content="{Binding CurrentPage}" />
+
+        <!-- 窗口先显示再装配首页，避免中间那一下是一片空白 -->
+        <StackPanel HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Spacing="10"
+                    IsVisible="{Binding IsPageLoading}">
+          <arc:ArcSpinner Width="20" Height="20" Foreground="{StaticResource TextMutedBrush}" />
+          <TextBlock Text="正在载入…" Classes="caption" HorizontalAlignment="Center" />
+        </StackPanel>
 
         <Button Classes="icon"
                 IsVisible="{Binding !IsSidebarVisible}"

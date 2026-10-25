@@ -18,10 +18,73 @@ namespace AvaloniaAssistant.UI.Views;
 public partial class SidebarView : UserControl
 {
     private Flyout? _menuFlyout;
+    private DispatcherTimer? _cardTimer;
 
     public SidebarView()
     {
         AvaloniaXamlLoader.Load(this);
+    }
+
+    /// <summary>Ctrl+K 用：把焦点放进任务搜索框。</summary>
+    public void FocusSearch()
+    {
+        var field = this.FindControl<Control>("TaskSearch");
+        if (field is null)
+        {
+            return;
+        }
+
+        // Arc 的 SearchField 自己处理键盘输入（内部的 TextPresenter 不接收焦点），
+        // 所以聚焦控件本身即可；Focus() 失败再往下找可聚焦的输入控件兜底。
+        if (field.Focus())
+        {
+            return;
+        }
+
+        field.GetVisualDescendants()
+            .OfType<InputElement>()
+            .FirstOrDefault(element => element.Focusable)
+            ?.Focus();
+    }
+
+    /// <summary>
+    /// 鼠标在这一行停一会儿再弹信息卡。直接跟着 PointerEntered 弹，
+    /// 扫过列表时会一路连开好几张，看着像界面在抖。
+    /// </summary>
+    private void OnSessionRowPointerEntered(object? sender, PointerEventArgs e)
+    {
+        if (sender is not Control row || row.DataContext is not SessionItemViewModel item)
+        {
+            return;
+        }
+
+        _cardTimer?.Stop();
+
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(420) };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            if (ReferenceEquals(_cardTimer, timer))
+            {
+                _cardTimer = null;
+            }
+
+            item.IsCardOpen = true;
+        };
+
+        _cardTimer = timer;
+        timer.Start();
+    }
+
+    private void OnSessionRowPointerExited(object? sender, PointerEventArgs e)
+    {
+        _cardTimer?.Stop();
+        _cardTimer = null;
+
+        if (sender is Control row && row.DataContext is SessionItemViewModel item)
+        {
+            item.IsCardOpen = false;
+        }
     }
 
     /// <summary>
@@ -65,10 +128,9 @@ public partial class SidebarView : UserControl
         }
 
         // 悬停信息卡可能还开着，点「⋯」时一起收掉，免得卡片和菜单叠在一起
-        if (target.Parent is Grid row)
-        {
-            ToolTip.SetIsOpen(row, false);
-        }
+        item.IsCardOpen = false;
+        _cardTimer?.Stop();
+        _cardTimer = null;
 
         CloseFlyouts();
 

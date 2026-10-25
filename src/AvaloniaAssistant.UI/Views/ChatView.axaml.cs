@@ -53,6 +53,24 @@ public partial class ChatView : UserControl
     {
         AvaloniaXamlLoader.Load(this);
         AttachedToVisualTree += OnAttachedToVisualTree;
+        AddHandler(KeyDownEvent, OnChatKeyDown, RoutingStrategies.Tunnel);
+    }
+
+    /// <summary>Esc 停止生成。输入法正在组词时先让输入法吃掉，免得打断打字。</summary>
+    private void OnChatKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Escape || _viewModel is not { IsBusy: true })
+        {
+            return;
+        }
+
+        if (Services.InputState.IsComposing(this))
+        {
+            return;
+        }
+
+        e.Handled = true;
+        _viewModel.StopCommand.Execute(null);
     }
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
@@ -76,6 +94,7 @@ public partial class ChatView : UserControl
         if (_viewModel is not null)
         {
             _viewModel.ScrollToEndRequested += OnScrollToEndRequested;
+            _viewModel.ShowJumpToBottom = false;
         }
 
         ScheduleInitialScroll();
@@ -159,7 +178,25 @@ public partial class ChatView : UserControl
         {
             Trace($"scrollchanged offset={_scroll.Offset.Y:0} delta={e.OffsetDelta.Y:0} -> follow=false (drag={_draggingScrollBar})");
             _followOutput = false;
+            SyncFollowIndicator();
         }
+    }
+
+    /// <summary>把「是否跟随输出」同步给界面，决定要不要显示「回到底部」。</summary>
+    private void SyncFollowIndicator()
+    {
+        if (_viewModel is not null)
+        {
+            _viewModel.ShowJumpToBottom = !_followOutput;
+        }
+    }
+
+    private void OnJumpToBottomClick(object? sender, RoutedEventArgs e)
+    {
+        _followOutput = true;
+        _draggingScrollBar = false;
+        ScrollToBottom();
+        SyncFollowIndicator();
     }
 
     private void OnScrollPointerPressed(object? sender, PointerPressedEventArgs e)
@@ -172,6 +209,7 @@ public partial class ChatView : UserControl
         // 手一碰滚动条就交出控制权：拖动期间绝不能再写 Offset
         _draggingScrollBar = true;
         _followOutput = false;
+        SyncFollowIndicator();
     }
 
     private void OnScrollPointerReleased(object? sender, PointerReleasedEventArgs e)
@@ -194,6 +232,7 @@ public partial class ChatView : UserControl
         _draggingScrollBar = false;
         // 拖回底部就继续跟随，拖到中间就停在那儿
         _followOutput = IsNearBottom();
+        SyncFollowIndicator();
         Trace($"drag end offset={_scroll?.Offset.Y:0} follow={_followOutput}");
     }
 
@@ -212,6 +251,8 @@ public partial class ChatView : UserControl
         {
             _followOutput = true;
         }
+
+        SyncFollowIndicator();
     }
 
     /// <summary>
@@ -245,6 +286,7 @@ public partial class ChatView : UserControl
         _draggingScrollBar = false;
         _lastExtent = 0;
         _expectedOffsetY = double.NaN;
+        SyncFollowIndicator();
         DispatcherTimer.RunOnce(ScrollToBottom, TimeSpan.FromMilliseconds(140));
     }
 
@@ -253,6 +295,7 @@ public partial class ChatView : UserControl
         if (force && !_draggingScrollBar)
         {
             _followOutput = true;
+            SyncFollowIndicator();
         }
 
         Trace($"scrollrequest force={force} follow={_followOutput} drag={_draggingScrollBar}");

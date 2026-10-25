@@ -130,6 +130,19 @@
                                                TextWrapping="Wrap"
                                                Foreground="{StaticResource TextSecondaryBrush}" />
                         </ScrollViewer>
+
+                        <!-- 产出文件时给一条直达路径：这是助理干活最实在的结果 -->
+                        <StackPanel Orientation="Horizontal"
+                                    Spacing="2"
+                                    IsVisible="{Binding HasOutputPath}"
+                                    Margin="0,4,0,0">
+                          <Button Classes="ghost-action"
+                                  Command="{Binding OpenOutputCommand}"
+                                  Content="打开文件" />
+                          <Button Classes="ghost-action"
+                                  Command="{Binding CopyPathCommand}"
+                                  Content="复制路径" />
+                        </StackPanel>
                       </StackPanel>
                     </Border>
                   </StackPanel>
@@ -223,6 +236,10 @@
           </Border>
           <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding ShowActions}" Margin="0,2,0,0">
             <Button Classes="approve" Command="{Binding AllowCommand}" Content="允许一次" />
+            <Button Classes="deny"
+                    Command="{Binding AllowAlwaysCommand}"
+                    ToolTip.Tip="这个工具在本对话里不再逐次确认"
+                    Content="本会话都允许" />
             <Button Classes="deny" Command="{Binding DenyCommand}" Content="拒绝" />
           </StackPanel>
           <TextBlock Text="{Binding ResolutionText}"
@@ -281,6 +298,22 @@
                     Margin="26,22,26,10"
                     />
     </ScrollViewer>
+
+    <!-- 上滚看历史时输出还在继续，给一条明确的回流入口，否则只能自己一路拖回底部 -->
+    <Button Grid.Row="1"
+            Classes="pill"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Bottom"
+            Margin="0,0,0,14"
+            Padding="12,6"
+            IsVisible="{Binding ShowJumpToBottom}"
+            Click="OnJumpToBottomClick"
+            ToolTip.Tip="回到最新消息">
+      <StackPanel Orientation="Horizontal" Spacing="5">
+        <arc:ArcGlyph Data="{x:Static arc:ArcIcons.ChevronDown}" Size="12" />
+        <TextBlock Text="回到底部" FontSize="11.5" VerticalAlignment="Center" />
+      </StackPanel>
+    </Button>
 
     <Border Grid.Row="2" Padding="26,8,26,14" Background="{StaticResource SurfaceBrush}">
       <views:ComposerView DataContext="{Binding Composer}" MaxWidth="840" />

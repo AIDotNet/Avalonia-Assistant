@@ -16,8 +16,20 @@ public interface IAssistantRuntime
         AgentRunRequest request,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// 用给定的设置探一次模型服务。设置页的「测试连接」用：
+    /// 让「Key 填错 / Base URL 写错 / 模型名不存在」在保存后就暴露，而不是等发第一条消息。
+    /// </summary>
+    Task<ConnectionProbe> ProbeAsync(AssistantSettings settings, CancellationToken cancellationToken = default);
+
     /// <summary>中止指定会话正在进行的运行。没有运行时为空操作。</summary>
     void Abort(string sessionId);
+
+    /// <summary>
+    /// 丢弃这一个会话的缓存，下次运行重新装配。重试要重跑某一轮时用：
+    /// 复用缓存会让模型在旧会话里看到一遍失败的回答，等于问了两次。
+    /// </summary>
+    void InvalidateSession(string sessionId);
 
     /// <summary>
     /// 丢弃缓存中的会话，下次运行重新装配。装了新技能 / 改了 MCP 配置后调用，

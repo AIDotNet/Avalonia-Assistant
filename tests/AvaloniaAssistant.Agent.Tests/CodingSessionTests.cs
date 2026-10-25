@@ -32,7 +32,6 @@ public sealed class CodingSessionTests
             "session-1",
             "hi",
             [],
-            "office",
             PermissionMode.Workspace,
             workspace.Path,
             null);

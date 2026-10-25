@@ -19,8 +19,6 @@ public sealed class ChatSession
 
     public string? WorkspacePath { get; set; }
 
-    public string Mode { get; set; } = "office";
-
     public List<ChatEntry> Entries { get; set; } = [];
 }
 

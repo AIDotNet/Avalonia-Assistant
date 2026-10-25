@@ -12,7 +12,12 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
     private readonly MainWindowViewModel _host;
     private readonly IAssistantRuntime _runtime;
     private readonly ISettingsProvider _settings;
+
+    /// <summary>本对话里选了「都允许」的工具名。只活在这次对话里，重新打开任务会重新问。</summary>
+    private readonly HashSet<string> _approvedToolNames = new(StringComparer.Ordinal);
+
     private CancellationTokenSource? _cts;
+    private bool _disposed;
 
     public ChatViewModel(MainWindowViewModel host, ChatSession? session)
     {
@@ -23,13 +28,14 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
         Session = session ?? new ChatSession
         {
             WorkspacePath = host.Settings.WorkspacePath,
-            Mode = host.Settings.Mode,
         };
 
         Composer = new ComposerViewModel(_runtime, _settings, host.Picker, host.Voice, host.OpenSettingsAsync);
+        Composer.BindWorkspace(Session.WorkspacePath);
         Composer.SendRequested += async (_, text) => await SendPromptAsync(text);
         Composer.StopRequested += (_, _) => Stop();
         Composer.PermissionChanged += OnPermissionChanged;
+        Composer.WorkspaceChanged += OnWorkspaceChanged;
 
         Messages.CollectionChanged += OnMessagesChanged;
         _settings.Changed += OnSettingsChanged;
@@ -41,9 +47,50 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
 
     public void Dispose()
     {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+
+        // 切页/换任务时这一轮可能还在跑：不取消的话，一旦正卡在授权卡片上，
+        // 卡片随着页面一起消失，没人再能点「允许/拒绝」，这一轮会永久挂着。
+        // 取消之后运行循环会走到 finally，把已经生成的部分照常落盘。
+        if (IsBusy)
+        {
+            _cts?.Cancel();
+            _runtime.Abort(Session.Id);
+        }
+
         _settings.Changed -= OnSettingsChanged;
         Composer.PermissionChanged -= OnPermissionChanged;
+        Composer.WorkspaceChanged -= OnWorkspaceChanged;
         Composer.Dispose();
+    }
+
+    /// <summary>
+    /// 对话里换了工作区：下一条指令要落在新目录。
+    /// 之前只写了全局设置，会话仍然拿着旧路径，界面上却已经显示新目录。
+    /// </summary>
+    private void OnWorkspaceChanged(object? sender, string path)
+    {
+        if (string.Equals(Session.WorkspacePath, path, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        Session.WorkspacePath = path;
+        OnPropertyChanged(nameof(HeaderSubtitle));
+
+        // 正在输出时插一条提示会把消息流截成两半，这轮跑完再说；路径本身已经切过去了。
+        if (Messages.Count > 0 && !IsBusy)
+        {
+            var name = Path.GetFileName(path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            Messages.Add(new NoticeMessageViewModel(
+                $"工作区已切换为「{(string.IsNullOrWhiteSpace(name) ? path : name)}」，下一条指令生效。"));
+            RequestScroll(true);
+        }
     }
 
     private void OnSettingsChanged(object? sender, EventArgs e)
@@ -94,6 +141,10 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     private bool isBusy;
+
+    /// <summary>用户上滚看历史时为真，对话页据此显示「回到底部」。流式输出时尤其需要。</summary>
+    [ObservableProperty]
+    private bool showJumpToBottom;
 
     [ObservableProperty]
     private string statusText = "就绪";
@@ -186,6 +237,10 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
             Messages.RemoveAt(Messages.Count - 1);
         }
 
+        // 重试要把这一轮干干净净地重跑：缓存里还留着上一遍（含失败的那条回复），
+        // 继续复用等于让模型把同一个问题看两遍。
+        _runtime.InvalidateSession(Session.Id);
+
         await RunPromptAsync(prompt, addUserMessage: false);
     }
 
@@ -241,7 +296,6 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
                 Session.Id,
                 prompt,
                 BuildHistory(historyEntries),
-                Session.Mode,
                 _settings.Current.Permission,
                 Session.WorkspacePath,
                 new ChatApprovalGate(this));
@@ -274,7 +328,8 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
                             toolStarted.CallId,
                             toolStarted.Name,
                             toolStarted.Label,
-                            toolStarted.Arguments);
+                            toolStarted.Arguments,
+                            Session.WorkspacePath);
                         assistant.Tools.Add(tool);
                         assistantEntry.ToolCalls.Add(new ToolCallRecord
                         {
@@ -425,7 +480,12 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
 
                     foreach (var record in entry.ToolCalls)
                     {
-                        var tool = new ToolCallViewModel(record.Id, record.Name, record.Label, record.Arguments);
+                        var tool = new ToolCallViewModel(
+                            record.Id,
+                            record.Name,
+                            record.Label,
+                            record.Arguments,
+                            Session.WorkspacePath);
                         tool.Finish(record.Result, record.IsError, record.DurationMs);
                         assistant.Tools.Add(tool);
                     }
@@ -484,6 +544,12 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
                 return true;
             }
 
+            // 这个工具在本对话里已经被「都允许」过了，别再打断同一条链路上的每一步。
+            if (owner._approvedToolNames.Contains(request.ToolName))
+            {
+                return true;
+            }
+
             var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             ApprovalMessageViewModel? card = null;
 
@@ -494,12 +560,26 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
                     request.Label,
                     request.Arguments,
                     request.Reason,
-                    allowed => completion.TrySetResult(allowed));
+                    choice =>
+                    {
+                        if (choice == ApprovalChoice.AllowAlways)
+                        {
+                            owner._approvedToolNames.Add(request.ToolName);
+                        }
+
+                        completion.TrySetResult(choice != ApprovalChoice.Deny);
+                    });
                 owner.Messages.Add(card);
                 owner.RequestScroll(true);
             });
 
             using var registration = cancellationToken.Register(() => completion.TrySetResult(false));
+
+            // 页面被换走时 Cancel 的是会话自己的 _cts，和工具那一层的 token 不一定同步；
+            // 两个都听，保证卡片随着页面消失后不会把这一轮永久挂住。
+            var runToken = owner._cts?.Token ?? CancellationToken.None;
+            using var runRegistration = runToken.Register(() => completion.TrySetResult(false));
+
             var allowed = await completion.Task;
 
             if (card is not null)

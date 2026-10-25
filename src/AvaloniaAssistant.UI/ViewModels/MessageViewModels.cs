@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Text;
+using System.Text.Json;
 using Avalonia.Media;
 using Avalonia.Threading;
 using AvaloniaAssistant.Abstractions;
@@ -28,12 +29,13 @@ public sealed partial class UserMessageViewModel : MessageViewModel
 
 public sealed partial class ToolCallViewModel : ObservableObject
 {
-    public ToolCallViewModel(string id, string name, string label, string arguments)
+    public ToolCallViewModel(string id, string name, string label, string arguments, string? workspacePath = null)
     {
         Id = id;
         Name = name;
         Label = label;
         Arguments = arguments;
+        OutputPath = ReadOutputPath(name, arguments, workspacePath);
     }
 
     public string Id { get; }
@@ -41,6 +43,14 @@ public sealed partial class ToolCallViewModel : ObservableObject
     public string Name { get; }
 
     public string Label { get; }
+
+    /// <summary>
+    /// write_file 写到哪儿。卡片上给一个「打开文件」，省得照着参数里的路径去资源管理器里翻。
+    /// 只认自己实现的那个工具，别的工具的参数名没有保证。
+    /// </summary>
+    public string? OutputPath { get; }
+
+    public bool HasOutputPath => !string.IsNullOrEmpty(OutputPath);
 
     [ObservableProperty]
     private string arguments;
@@ -82,6 +92,61 @@ public sealed partial class ToolCallViewModel : ObservableObject
 
     [RelayCommand]
     private void Toggle() => IsExpanded = !IsExpanded;
+
+    [RelayCommand]
+    private void OpenOutput()
+    {
+        if (!string.IsNullOrEmpty(OutputPath))
+        {
+            Services.Ui.OpenExternal(OutputPath);
+        }
+    }
+
+    [RelayCommand]
+    private async Task CopyOutputPathAsync()
+    {
+        if (!string.IsNullOrEmpty(OutputPath))
+        {
+            await Services.Ui.CopyTextAsync(OutputPath);
+        }
+    }
+
+    private static string? ReadOutputPath(string toolName, string arguments, string? workspacePath)
+    {
+        if (toolName != "write_file")
+        {
+            return null;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(arguments);
+            if (!document.RootElement.TryGetProperty("path", out var path)
+                || path.ValueKind != JsonValueKind.String)
+            {
+                return null;
+            }
+
+            var value = path.GetString();
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return null;
+            }
+
+            // write_file 的相对路径是按工作区解析的（见 ToolPaths.Resolve），
+            // 直接拿原值去打开会落到应用自己的当前目录，文件根本不在那儿。
+            if (Path.IsPathRooted(value) || string.IsNullOrWhiteSpace(workspacePath))
+            {
+                return value;
+            }
+
+            return Path.GetFullPath(Path.Combine(workspacePath, value));
+        }
+        catch (Exception ex) when (ex is JsonException or ArgumentException or NotSupportedException)
+        {
+            return null;
+        }
+    }
 
     public void Finish(string? result, bool isError, long? durationMs)
     {
@@ -253,11 +318,24 @@ public sealed partial class AssistantMessageViewModel : MessageViewModel
     };
 }
 
+/// <summary>授权卡的三种结果。「本会话都允许」只对当前对话、当前工具生效。</summary>
+public enum ApprovalChoice
+{
+    AllowOnce,
+    AllowAlways,
+    Deny,
+}
+
 public sealed partial class ApprovalMessageViewModel : MessageViewModel
 {
-    private readonly Action<bool> _resolve;
+    private readonly Action<ApprovalChoice> _resolve;
 
-    public ApprovalMessageViewModel(string toolName, string label, string arguments, string reason, Action<bool> resolve)
+    public ApprovalMessageViewModel(
+        string toolName,
+        string label,
+        string arguments,
+        string reason,
+        Action<ApprovalChoice> resolve)
     {
         ToolName = toolName;
         Label = label;
@@ -284,12 +362,16 @@ public sealed partial class ApprovalMessageViewModel : MessageViewModel
     public bool ShowActions => !IsResolved;
 
     [RelayCommand]
-    private void Allow() => Resolve(true);
+    private void Allow() => Resolve(ApprovalChoice.AllowOnce);
+
+    /// <summary>本对话里同一个工具不再逐次询问。仅内存生效，重新打开任务会重新问。</summary>
+    [RelayCommand]
+    private void AllowAlways() => Resolve(ApprovalChoice.AllowAlways);
 
     [RelayCommand]
-    private void Deny() => Resolve(false);
+    private void Deny() => Resolve(ApprovalChoice.Deny);
 
-    public void Resolve(bool allowed)
+    public void Resolve(ApprovalChoice choice)
     {
         if (IsResolved)
         {
@@ -297,8 +379,13 @@ public sealed partial class ApprovalMessageViewModel : MessageViewModel
         }
 
         IsResolved = true;
-        ResolutionText = allowed ? "已允许" : "已拒绝";
-        _resolve(allowed);
+        ResolutionText = choice switch
+        {
+            ApprovalChoice.AllowAlways => "已允许：本对话不再询问这个工具。",
+            ApprovalChoice.AllowOnce => "已允许",
+            _ => "已拒绝",
+        };
+        _resolve(choice);
     }
 
     public void Cancel()
@@ -310,7 +397,7 @@ public sealed partial class ApprovalMessageViewModel : MessageViewModel
 
         IsResolved = true;
         ResolutionText = "已取消";
-        _resolve(false);
+        _resolve(ApprovalChoice.Deny);
     }
 }
 

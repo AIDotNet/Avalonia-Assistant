@@ -68,6 +68,9 @@ internal static class Program
                 case "--composer-text" when index + 1 < args.Length:
                     AppLaunchOptions.ComposerText = args[++index];
                     break;
+                case "--search" when index + 1 < args.Length:
+                    AppLaunchOptions.SessionSearch = args[++index];
+                    break;
                 case "--confirm-full-access":
                     AppLaunchOptions.ConfirmFullAccessDialog = true;
                     break;
