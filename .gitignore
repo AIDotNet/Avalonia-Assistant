@@ -367,6 +367,7 @@ FodyWeavers.xsd
 /scr/Desktop.Assistant/tinyllama-1.1b-chat.gguf
 /.artifacts
 /.library
+/.tmp
 /.tmp-arc
 /.tmp-hang
 /.tmp-verify
