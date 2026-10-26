@@ -69,6 +69,7 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
         Composer.QueueCancelled += OnQueueCancelled;
         Composer.StopRequested += (_, _) => Stop();
         Composer.PermissionChanged += OnPermissionChanged;
+        Composer.SettingsWriteFailed += OnComposerSettingsWriteFailed;
         Composer.ResetSessionAllowedRequested += OnResetSessionAllowed;
 
         Messages.CollectionChanged += OnMessagesChanged;
@@ -133,6 +134,7 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
 
         _settings.Changed -= OnSettingsChanged;
         Composer.PermissionChanged -= OnPermissionChanged;
+        Composer.SettingsWriteFailed -= OnComposerSettingsWriteFailed;
         Composer.ResetSessionAllowedRequested -= OnResetSessionAllowed;
         _toastTimer?.Stop();
         _toastTimer = null;
@@ -186,6 +188,9 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
     /// 权限档位变了就在对话里留一条提示：用户得清楚接下来的命令还会不会问自己。
     /// 只进消息流，不写进会话存档，重新打开不会重复出现。
     /// </summary>
+    private void OnComposerSettingsWriteFailed(object? sender, string message)
+        => ShowToast(message, null);
+
     private void OnPermissionChanged(object? sender, PermissionMode permission)
     {
         if (IsBusy)

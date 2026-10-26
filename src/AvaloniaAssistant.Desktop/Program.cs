@@ -27,6 +27,7 @@ internal static class Program
         ParseArguments(args);
         AppPaths.EnsureCreated();
 
+
         var services = new ServiceCollection();
         services.AddSingleton<ISettingsProvider>(_ => new JsonSettingsProvider());
         services.AddSingleton<ISessionStore>(_ => new JsonSessionStore());
@@ -43,8 +44,29 @@ internal static class Program
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
     }
 
-    public static AppBuilder BuildAvaloniaApp() =>
-        AppBuilder.Configure<AssistantApp>()
+    /// <summary>
+    /// 开发用：设置 AA_LOG_BINDINGS=1 后，把 Warning 以上的 Avalonia 日志（含绑定错误）打到控制台。
+    /// 绑定写错不会让编译失败，只能靠运行期发现。
+    /// </summary>
+    private sealed class ConsoleLogSink : Avalonia.Logging.ILogSink
+    {
+        public bool IsEnabled(Avalonia.Logging.LogEventLevel level, string area) => level >= Avalonia.Logging.LogEventLevel.Warning;
+
+        public void Log(Avalonia.Logging.LogEventLevel level, string area, object? source, string messageTemplate)
+            => Console.WriteLine($"[{level}/{area}] {messageTemplate}");
+
+        public void Log(
+            Avalonia.Logging.LogEventLevel level,
+            string area,
+            object? source,
+            string messageTemplate,
+            params object?[] propertyValues)
+            => Console.WriteLine($"[{level}/{area}] {messageTemplate} | {string.Join(", ", propertyValues)}");
+    }
+
+    public static AppBuilder BuildAvaloniaApp()
+    {
+        var builder = AppBuilder.Configure<AssistantApp>()
                   .UsePlatformDetect()
                   .WithInterFont()
                   .WithArcFonts()
@@ -54,6 +76,15 @@ internal static class Program
                       builder.UseArc();
                   })
                   .LogToTrace();
+
+        // LogToTrace 会装自己的 sink，要在它之后再覆盖，否则看不到绑定告警。
+        if (Environment.GetEnvironmentVariable("AA_LOG_BINDINGS") is not null)
+        {
+            Avalonia.Logging.Logger.Sink = new ConsoleLogSink();
+        }
+
+        return builder;
+    }
 
     private static void ParseArguments(string[] args)
     {

@@ -73,6 +73,9 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
     /// <summary>权限档位变化。对话页据此插一条提示，让用户知道确认行为变了。</summary>
     public event EventHandler<PermissionMode>? PermissionChanged;
 
+    /// <summary>设置写盘失败。界面要能说出来，否则档位会莫名其妙退回去。</summary>
+    public event EventHandler<string>? SettingsWriteFailed;
+
     public ObservableCollection<ModelOption> Models { get; } = [];
 
     /// <summary>这一轮 @ 进来的文件，发送时变成 <see cref="PromptRequest.Attachments"/>。</summary>
@@ -1133,11 +1136,28 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
             return;
         }
 
+        var previous = _settings.Current.Permission;
         _settings.Current.Permission = permission;
         Refresh();
         PermissionChanged?.Invoke(this, permission);
-        await _settings.SaveAsync(_settings.Current);
-        RequestFocus();
+
+        try
+        {
+            await _settings.SaveAsync(_settings.Current);
+        }
+        catch (Exception ex)
+        {
+            // 写盘失败要把档位退回去：界面停在「已切换」而磁盘还是旧值，下次启动就变了卦。
+            // 这里也吞不得异常——命令是从 async void 事件里调进来的，抛出去会直接崩进程。
+            _settings.Current.Permission = previous;
+            Refresh();
+            PermissionChanged?.Invoke(this, previous);
+            SettingsWriteFailed?.Invoke(this, "权限没保存成功：" + ex.Message);
+        }
+        finally
+        {
+            RequestFocus();
+        }
     }
 
     /// <summary>浮层里的「只用只读」快捷入口。</summary>

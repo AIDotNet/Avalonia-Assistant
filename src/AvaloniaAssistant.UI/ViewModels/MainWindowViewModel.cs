@@ -42,7 +42,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     public bool HasSidebarNotice => !string.IsNullOrWhiteSpace(SidebarNotice);
 
-    private DispatcherTimer? _sidebarNoticeTimer;
+    private readonly DispatcherTimer _sidebarNoticeTimer;
 
     /// <summary>每分钟把侧栏的相对时间重算一遍；跨天时还要重排「今天 / 昨天」。</summary>
     private readonly DispatcherTimer _relativeTimeTimer;
@@ -68,6 +68,13 @@ public sealed partial class MainWindowViewModel : ObservableObject
         _relativeTimeTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(1) };
         _relativeTimeTimer.Tick += (_, _) => RefreshRelativeTimes();
         _relativeTimeTimer.Start();
+
+        _sidebarNoticeTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(6) };
+        _sidebarNoticeTimer.Tick += (_, _) =>
+        {
+            _sidebarNoticeTimer.Stop();
+            SidebarNotice = null;
+        };
 
         // SaveAsync 是在线程池上抛事件的，界面更新必须回 UI 线程，否则属性变更会跨线程打到绑定上。
         SettingsProvider.Changed += (_, _) => Ui.Post(() =>
@@ -1035,14 +1042,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private void ShowSidebarNotice(string message)
     {
         SidebarNotice = message;
-        _sidebarNoticeTimer?.Stop();
-        _sidebarNoticeTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(6) };
-        _sidebarNoticeTimer.Tick += (_, _) =>
-        {
-            _sidebarNoticeTimer?.Stop();
-            _sidebarNoticeTimer = null;
-            SidebarNotice = null;
-        };
+
+        // 复用同一个定时器：连点几次只重置倒计时，不会堆一串一次性定时器。
+        _sidebarNoticeTimer.Stop();
         _sidebarNoticeTimer.Start();
     }
 

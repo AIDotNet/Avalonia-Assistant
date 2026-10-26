@@ -295,6 +295,13 @@ dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --pag
 
 `--page chat` 会加载一份内存里的示例会话（不写入 `sessions/`），用来检查消息、工具卡、表格渲染。
 
+界面绑定错误不会让编译失败，只会在运行期静默失效。排查时加上环境变量，把 Warning 以上的
+Avalonia 日志（含 `[Warning/Binding]`）打到控制台：
+
+```bash
+AA_LOG_BINDINGS=1 dotnet run --project src/AvaloniaAssistant.Desktop -- --page chat
+```
+
 弹层（Popup / Flyout）挂在另一个 TopLevel 上，截主窗口是看不到的，单独有两个入口：
 
 ```bash
