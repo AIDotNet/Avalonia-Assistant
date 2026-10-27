@@ -10,6 +10,6 @@
     <PiVersion>1.4.4</PiVersion>
 
     <!-- 应用版本的唯一来源：界面从程序集读，发版只改这一处 -->
-    <Version>1.0.1</Version>
+    <Version>1.0.2</Version>
   </PropertyGroup>
 </Project>

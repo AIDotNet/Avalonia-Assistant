@@ -11,8 +11,13 @@ namespace AvaloniaAssistant.UI.Services;
 /// </summary>
 internal static class AppVersion
 {
-    /// <summary>侧栏那种带前缀的写法：<c>v1.0.1</c></summary>
-    public static string Display { get; } = "v" + Number;
+    /// <summary>
+    /// 侧栏那种带前缀的写法：<c>v1.0.1</c>。
+    /// 必须是表达式体而不是字段初始化：静态字段按声明顺序求值，写成
+    /// <c>{ get; } = "v" + Number</c> 且排在 Number 之前时，求值那一刻 Number 还是 null，
+    /// 界面上就只剩一个 "v"。这种错编译不报，只能盯着看。
+    /// </summary>
+    public static string Display => "v" + Number;
 
     /// <summary>纯版本号：<c>1.0.1</c></summary>
     public static string Number { get; } = Read();
