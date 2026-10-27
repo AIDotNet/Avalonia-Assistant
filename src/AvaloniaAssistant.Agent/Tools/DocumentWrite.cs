@@ -163,8 +163,8 @@ internal static class DocumentWrite
     {
         var paragraph = new W.Paragraph(
             new W.ParagraphProperties(
-                new W.Indentation { Left = ((block.Level + 1) * 360).ToString() },
-                new W.SpacingBetweenLines { After = "60" }));
+                new W.SpacingBetweenLines { After = "60" },
+                new W.Indentation { Left = ((block.Level + 1) * 360).ToString() }));
 
         // 手写项目符号而不是挂 numbering：没有 numbering.xml 时挂上去反而不显示
         var marker = ordered ? $"{block.Index}. " : "· ";
@@ -182,7 +182,6 @@ internal static class DocumentWrite
     {
         var paragraph = new W.Paragraph(
             new W.ParagraphProperties(
-                new W.Indentation { Left = "360" },
                 new W.ParagraphBorders(
                     new W.LeftBorder
                     {
@@ -190,7 +189,8 @@ internal static class DocumentWrite
                         Size = 12,
                         Color = "D9D9D3",
                     }),
-                new W.SpacingBetweenLines { After = "100" }));
+                new W.SpacingBetweenLines { After = "100" },
+                new W.Indentation { Left = "360" }));
 
         foreach (var run in BuildRuns(block.Text))
         {
@@ -205,8 +205,8 @@ internal static class DocumentWrite
         var run = new W.Run(
             new W.RunProperties(
                 new W.RunFonts { Ascii = "Consolas", HighAnsi = "Consolas" },
-                new W.FontSize { Val = HalfPoints(9.5).ToString() },
-                new W.Color { Val = "3C3C38" }),
+                new W.Color { Val = "3C3C38" },
+                new W.FontSize { Val = HalfPoints(9.5).ToString() }),
             new W.Text(block.Text) { Space = SpaceProcessingModeValues.Preserve });
 
         return new W.Paragraph(
@@ -220,14 +220,26 @@ internal static class DocumentWrite
     {
         var table = new W.Table();
 
+        // 子元素顺序是 schema 定死的：tblPr → tblGrid → tr。
+        // 少了 tblGrid、或者 tcPr 排在段落后面，Word 都会弹「内容有问题」——
+        // OpenXml 自己读回来不会报，所以只能靠 schema 校验发现。
         table.AppendChild(new W.TableProperties(
             new W.TableBorders(
                 new W.TopBorder { Val = W.BorderValues.Single, Size = 4, Color = "D9D9D3" },
-                new W.BottomBorder { Val = W.BorderValues.Single, Size = 4, Color = "D9D9D3" },
                 new W.LeftBorder { Val = W.BorderValues.Single, Size = 4, Color = "D9D9D3" },
+                new W.BottomBorder { Val = W.BorderValues.Single, Size = 4, Color = "D9D9D3" },
                 new W.RightBorder { Val = W.BorderValues.Single, Size = 4, Color = "D9D9D3" },
                 new W.InsideHorizontalBorder { Val = W.BorderValues.Single, Size = 4, Color = "E8E8E4" },
                 new W.InsideVerticalBorder { Val = W.BorderValues.Single, Size = 4, Color = "E8E8E4" })));
+
+        var columnCount = rows.Count == 0 ? 0 : rows.Max(row => row.Length);
+        var grid = new W.TableGrid();
+        for (var c = 0; c < columnCount; c++)
+        {
+            grid.AppendChild(new W.GridColumn());
+        }
+
+        table.AppendChild(grid);
 
         for (var i = 0; i < rows.Count; i++)
         {
@@ -251,20 +263,23 @@ internal static class DocumentWrite
                         new W.Text(value) { Space = SpaceProcessingModeValues.Preserve }));
                 }
 
-                var cell = new W.TableCell(cellParagraph);
+                var properties = new W.TableCellProperties();
                 if (i == 0)
                 {
-                    cell.AppendChild(new W.TableCellProperties(
-                        new W.Shading { Val = W.ShadingPatternValues.Clear, Fill = "F8F8F6" }));
+                    properties.AppendChild(new W.Shading
+                    {
+                        Val = W.ShadingPatternValues.Clear,
+                        Fill = "F8F8F6",
+                    });
                 }
 
-                row.AppendChild(cell);
+                // 单元格属性必须排在段落前面，构造函数按传入顺序落子元素
+                row.AppendChild(new W.TableCell(properties, cellParagraph));
             }
 
             table.AppendChild(row);
         }
 
-        // 表格后面补一个空段落，否则两张表会粘成一张
         return table;
     }
 

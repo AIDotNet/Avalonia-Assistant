@@ -1,6 +1,9 @@
 using System.IO.Compression;
 using AvaloniaAssistant.Abstractions;
 using AvaloniaAssistant.Agent.Tools;
+using DocumentFormat.OpenXml;
+using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml.Validation;
 using Xunit;
 
 namespace AvaloniaAssistant.Agent.Tests;
@@ -71,9 +74,65 @@ public sealed class DocumentToolsTests : IDisposable
         Assert.Contains("dotnet test", text);
     }
 
+    /// <summary>
+    /// 生成的文件必须过 Office 2019 的 schema 校验。
+    /// 这比「自己写、自己读回来」严格得多：OpenXml 读自己产出的东西很宽松，
+    /// 但 Word / Excel 遇到元素顺序不对、必需节点缺失，会直接弹「内容有问题」。
+    /// </summary>
     [Fact]
-    public async Task WritesEachTableAsExcelSheet()
+    public async Task GeneratedWordPassesOfficeSchema()
     {
+        var path = Path.Combine(_root, "校验.docx");
+        await DocumentWrite.WriteAsync(path, """
+                                            # 标题
+
+                                            正文一段，带 **粗体** 和 `代码`。
+
+                                            - 列表一
+                                            - 列表二
+
+                                            | 列 | 值 |
+                                            | --- | --- |
+                                            | 甲 | 1 |
+
+                                            ```
+                                            var x = 1;
+                                            ```
+                                            """, CancellationToken.None);
+
+        using var document = WordprocessingDocument.Open(path, false);
+        var errors = new OpenXmlValidator(FileFormatVersions.Office2019)
+            .Validate(document)
+            .Select(error => $"{error.Path?.XPath} · {error.Description}")
+            .ToList();
+
+        Assert.True(
+            errors.Count == 0,
+            "docx 未通过 schema 校验：" + Environment.NewLine + string.Join(Environment.NewLine, errors));
+    }
+
+    [Fact]
+    public async Task GeneratedExcelPassesOfficeSchema()
+    {
+        var path = Path.Combine(_root, "校验.xlsx");
+        await DocumentWrite.WriteAsync(
+            path,
+            "## 表一\n\n| 名称 | 数量 |\n| --- | --- |\n| 内存 | 32 |",
+            CancellationToken.None);
+
+        using var document = SpreadsheetDocument.Open(path, false);
+        var errors = new OpenXmlValidator(FileFormatVersions.Office2019)
+            .Validate(document)
+            .Select(error => $"{error.Path?.XPath} · {error.Description}")
+            .ToList();
+
+        Assert.True(
+            errors.Count == 0,
+            "xlsx 未通过 schema 校验：" + Environment.NewLine + string.Join(Environment.NewLine, errors));
+    }
+
+    [Fact]
+    public async Task WritesEachTableAsExcelSheet()    {
         var path = Path.Combine(_root, "清单.xlsx");
         const string markdown = """
                                 ## 硬件
