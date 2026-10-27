@@ -680,6 +680,26 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         await _host.SaveSettingsQuietlyAsync();
     }
 
+    public bool IsSoundOn => Settings.PlayFinishSound;
+
+    public bool IsSoundOff => !Settings.PlayFinishSound;
+
+    /// <summary>
+    /// 跑完的提示音。有人开着会议软件、有人在图书馆，这声音不是所有人都想要，
+    /// 所以给个开关；任务栏闪烁不受影响，那是视觉提示。
+    /// </summary>
+    [RelayCommand]
+    private async Task SetSoundAsync(string value)
+    {
+        var on = !string.Equals(value, "off", StringComparison.OrdinalIgnoreCase);
+        Settings.PlayFinishSound = on;
+        _baseline.PlayFinishSound = on;
+        _host.Settings.PlayFinishSound = on;
+        OnPropertyChanged(nameof(IsSoundOn));
+        OnPropertyChanged(nameof(IsSoundOff));
+        await _host.SaveSettingsQuietlyAsync();
+    }
+
     private void NotifyScaleChanged()
     {
         OnPropertyChanged(nameof(IsScale90));

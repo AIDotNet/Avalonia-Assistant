@@ -5,6 +5,8 @@
   <ItemGroup>
     <PackageReference Include="Pi.Agent" />
     <PackageReference Include="Pi.CodingAgent" />
+    <PackageReference Include="DocumentFormat.OpenXml" />
+    <PackageReference Include="PdfPig" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\AvaloniaAssistant.Abstractions\AvaloniaAssistant.Abstractions.csproj" />

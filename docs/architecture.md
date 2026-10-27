@@ -84,8 +84,24 @@ ChatViewModel 更新 MessageViewModel
 | `ThinkingDelta` | 思考增量 | 折叠区“思考过程” |
 | `ToolStarted` | callId / name / label / args | 插入工具卡片，状态“运行中” |
 | `ToolFinished` | callId / result / isError / duration | 更新状态、耗时、可展开结果 |
+| `FileChanged` | 一条 `FileChangeRecord` | 右侧产物面板加/换一行，带 diff |
 | `RunCompleted` | stopReason / error / token 用量 | 结束流式，写 token 脚注 |
 | `RunFailed` | message | 红色错误块 |
+
+### 文件改动为什么在 Agent 侧采集
+
+`FileChanged` 不是界面算出来的。`ArtifactTracker` 挂在 `PiAgentRuntime` 订阅
+`ToolExecutionStart` / `ToolExecutionEnd` 的**同步回调**里：前者拍「改之前」的快照，
+后者对比磁盘算 diff。
+
+放在界面侧会坏在时序上：事件走无界 `Channel`，`TryWrite` 立即返回，界面那边
+`await foreach` 是异步消费的。一个写 10 KB 文件的工具几毫秒就结束，界面收到
+「工具开始」时文件早就写完了，快照拍到的是改之后的内容，diff 算出来是空的——
+表现就是产物面板时灵时不灵，而且越快的工具越容易漏。
+
+采集器只认工具名白名单（`write_file` / `write_document` / `edit` / `write` …），
+参数里按 `path` / `file_path` / `filePath` 候选名找目标。`run_command` 里跑脚本改的
+文件抓不到——那时候连改了哪些文件都不知道。
 
 `IAssistantRuntime.Abort(sessionId)` 是带外的中止通道：UI 调 `Stop` 时同时取消
 `CancellationToken` 并调用它。工具执行前的授权也走带外回调 `IToolApprovalGate`，

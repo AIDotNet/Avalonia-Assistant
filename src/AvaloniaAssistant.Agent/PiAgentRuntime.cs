@@ -123,6 +123,12 @@ public sealed class PiAgentRuntime : IAssistantRuntime
 
         var session = holder.Session;
         var catalog = holder.Catalog;
+
+        // 采集必须挂在这里，不能挂到界面侧：事件走无界通道，界面收到「工具开始」时
+        // 一个几毫秒就能写完的工具早就结束了，那时候再拍快照拍到的是改之后的内容。
+        // 这个回调是工具执行前/后同步触发的，拍到的才是真的「改之前」。
+        var artifacts = new ArtifactTracker(request.WorkspacePath);
+
         using var subscription = session.Agent.Subscribe((@event, _) =>
         {
             switch (@event)
@@ -136,14 +142,19 @@ public sealed class PiAgentRuntime : IAssistantRuntime
                     break;
 
                 case AgentEvent.ToolExecutionStart start:
+                {
+                    var arguments = FormatArguments(start.Args);
+                    artifacts.ObserveStarted(start.ToolCallId, start.ToolName, arguments);
+
                     writer.TryWrite(new AgentStreamEvent.ToolStarted(
                         start.ToolCallId,
                         start.ToolName,
                         catalog.TryGetValue(start.ToolName, out var tool)
                             ? tool.Label
                             : CodingSessionFactory.BuiltinLabel(start.ToolName),
-                        FormatArguments(start.Args)));
+                        arguments));
                     break;
+                }
 
                 case AgentEvent.ToolExecutionEnd end:
                     writer.TryWrite(new AgentStreamEvent.ToolFinished(
@@ -152,6 +163,13 @@ public sealed class PiAgentRuntime : IAssistantRuntime
                         ExtractResult(end.Result),
                         end.IsError,
                         end.DurationMs));
+
+                    // 工具报错时文件可能只写了一半，采集器会自己跳过
+                    if (artifacts.ObserveFinished(end.ToolCallId, end.ToolName, end.IsError) is { } change)
+                    {
+                        writer.TryWrite(new AgentStreamEvent.FileChanged(change));
+                    }
+
                     break;
             }
 

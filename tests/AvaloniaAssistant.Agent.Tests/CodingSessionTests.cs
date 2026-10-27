@@ -82,7 +82,10 @@ public sealed class CodingSessionTests
 
         Assert.Empty(names.Intersect(builtins, StringComparer.Ordinal));
         Assert.Equal(
-            ["current_time", "fetch_url", "open_path", "run_command", "write_file"],
+            [
+                "current_time", "fetch_url", "open_path", "read_document",
+                "run_command", "update_plan", "write_document", "write_file",
+            ],
             names.Order(StringComparer.Ordinal));
     }
 

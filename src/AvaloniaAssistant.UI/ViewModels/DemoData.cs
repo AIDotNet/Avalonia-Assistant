@@ -123,6 +123,30 @@ internal static class DemoData
                             DurationMs = 32,
                         },
                     ],
+                    Artifacts =
+                    [
+                        new FileChangeRecord
+                        {
+                            Id = "demo-artifact-1",
+                            Path = "电脑配置.md",
+                            FullPath = Path.Combine(workspace, "电脑配置.md"),
+                            Kind = FileChangeKind.Created,
+                            Tool = "write_file",
+                            Size = 486,
+                            AddedLines = 8,
+                            Diff = """
+                                   @@ -0,0 +1,8 @@
+                                   +# 电脑配置清单
+                                   +
+                                   +- 系统：Windows 11 专业版 24H2
+                                   +- CPU：16 个逻辑核心
+                                   +- 内存：32 GB（可用 4.1 GB）
+                                   +- 磁盘：C: 剩余 128 GB / 512 GB
+                                   +
+                                   +> 由 Avalonia Assistant 于 10-27 生成
+                                   """,
+                        },
+                    ],
                     Text = "已经整理好了，文件写到了 `电脑配置.md`。\n\n**这台机器**\n\n- 系统：Windows 11 专业版 24H2\n- CPU：16 个逻辑核心\n- 内存：32 GB，当前可用 4.1 GB\n- 磁盘：C: 剩余 128 GB / 512 GB\n\n内存占用偏高，如果接下来要跑构建或视频渲染，建议先关掉不用的编辑器窗口。",
                 },
                 new ChatEntry
@@ -138,6 +162,12 @@ internal static class DemoData
                     Model = "deepseek-flash",
                     InputTokens = 1650,
                     OutputTokens = 168,
+                    Plan =
+                    [
+                        new PlanStep { Text = "扫描下载目录，列出超过 100MB 的文件", Status = PlanStepStatus.Done },
+                        new PlanStep { Text = "按镜像 / 模型 / 录屏分类", Status = PlanStepStatus.InProgress },
+                        new PlanStep { Text = "生成清单并归档", Status = PlanStepStatus.Pending },
+                    ],
                     ToolCalls =
                     [
                         new ToolCallRecord

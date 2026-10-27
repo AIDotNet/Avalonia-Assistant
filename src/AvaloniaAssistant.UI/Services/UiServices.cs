@@ -309,6 +309,12 @@ public static class AppLaunchOptions
     public static bool ComposerDrop { get; set; }
 
     /// <summary>
+    /// 开发用：把文件真灌进拖放管线，验证「拖上去有没有反应、落下有没有加进来」。
+    /// 只跳过 OLE 投递，命中、AllowDrop、事件路由和后续处理都是真的。
+    /// </summary>
+    public static List<string> DropProbePaths { get; } = [];
+
+    /// <summary>
     /// 开发用：把「换工作区 → 不使用工作空间 → 新建任务」这条链路真跑一遍。
     /// 走的是界面上那两个命令（ClearWorkspaceCommand / NewTaskCommand），不是直接改设置。
     /// </summary>
@@ -325,6 +331,15 @@ public static class AppLaunchOptions
 
     /// <summary>开发用：对话页换成跨天示例，检查日期分隔和完整时间。</summary>
     public static bool ChatDates { get; set; }
+
+    /// <summary>摆出产物面板和一条逐行差异，检查文件卡与 diff 版式。</summary>
+    public static bool ChatArtifacts { get; set; }
+
+    /// <summary>把最后一条提问摆进编辑态，检查编辑框和按钮版式。</summary>
+    public static bool ChatEdit { get; set; }
+
+    /// <summary>设置页直接停在「系统设置」那一栏，省得每次手动切。</summary>
+    public static bool SettingsSystem { get; set; }
 
     /// <summary>开发用：截图前把主内容滚到底，检查长页面下半截。</summary>
     public static bool ScrollToEnd { get; set; }

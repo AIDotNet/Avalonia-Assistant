@@ -81,6 +81,56 @@ public sealed class SessionExportTests
     }
 
     [Fact]
+    public void IncludesPlanAndArtifacts()
+    {
+        var session = new ChatSession
+        {
+            Title = "整理下载目录",
+            Entries =
+            [
+                new ChatEntry { Kind = ChatEntryKind.User, Text = "整理一下" },
+                new ChatEntry
+                {
+                    Kind = ChatEntryKind.Assistant,
+                    Text = "整理好了。",
+                    Plan =
+                    [
+                        new PlanStep { Text = "扫描目录", Status = PlanStepStatus.Done },
+                        new PlanStep { Text = "按类型归档", Status = PlanStepStatus.InProgress },
+                    ],
+                    Artifacts =
+                    [
+                        new FileChangeRecord
+                        {
+                            Path = "清单.md",
+                            FullPath = "D:/w/清单.md",
+                            Kind = FileChangeKind.Created,
+                            AddedLines = 12,
+                        },
+                        new FileChangeRecord
+                        {
+                            Path = "旧.md",
+                            FullPath = "D:/w/旧.md",
+                            Kind = FileChangeKind.Deleted,
+                        },
+                    ],
+                },
+            ],
+        };
+
+        var markdown = SessionExport.ToMarkdown(session);
+
+        Assert.Contains("计划：", markdown);
+        Assert.Contains("- [x] 扫描目录", markdown);
+        Assert.Contains("- [~] 按类型归档", markdown);
+
+        // 导出是为了留档，产物和它加了多少行都得在里面
+        Assert.Contains("产物：", markdown);
+        Assert.Contains("`清单.md`（新建，+12）", markdown);
+        Assert.Contains("`旧.md`（删除）", markdown);
+    }
+
+    [Fact]
     public void FileNameStripsInvalidCharacters()
     {
         var name = SessionExport.SuggestFileName("a/b:c*?\"<>|d");

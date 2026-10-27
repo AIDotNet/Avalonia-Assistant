@@ -390,6 +390,12 @@ public sealed class AssistantSettings
     public bool WindowMaximized { get; set; }
 
     /// <summary>
+    /// 一轮跑完、窗口又在后台时，响一声提示音。
+    /// 任务栏闪烁不受这个开关影响：那是视觉提示，不会打扰旁边的人。
+    /// </summary>
+    public bool PlayFinishSound { get; set; } = true;
+
+    /// <summary>
     /// 把当前生效的模型切到 <paramref name="profileId"/>。找不到就什么也不做，
     /// 返回 false 让调用方知道没切成功（比如那条配置刚在设置页被删掉）。
     /// </summary>
@@ -486,6 +492,7 @@ public sealed class AssistantSettings
         WindowLeft = WindowLeft,
         WindowTop = WindowTop,
         WindowMaximized = WindowMaximized,
+        PlayFinishSound = PlayFinishSound,
     };
 
     private ModelProfile EnsureActive()

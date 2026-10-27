@@ -91,6 +91,61 @@ public sealed partial class UserMessageViewModel : MessageViewModel
     public string AttachmentLabel => Attachments.Count == 1
         ? $"引用了 {AttachmentText}"
         : $"引用了 {Attachments.Count} 份：{AttachmentText}";
+
+    /// <summary>改完交给对话页：它会截掉这条之后的所有轮次，再用新内容重发。</summary>
+    public Func<string, Task>? EditRequested { get; set; }
+
+    /// <summary>能不能改。运行中不给改——那会和正在跑的这轮抢同一个会话。</summary>
+    [ObservableProperty]
+    private bool canEdit;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowText))]
+    private bool isEditing;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanSaveEdit))]
+    private string editText = string.Empty;
+
+    public bool ShowText => !IsEditing;
+
+    /// <summary>空内容不让保存：发一条空提问，模型只会反问你想做什么。</summary>
+    public bool CanSaveEdit => !string.IsNullOrWhiteSpace(EditText);
+
+    [RelayCommand]
+    private void StartEdit()
+    {
+        if (!CanEdit)
+        {
+            return;
+        }
+
+        EditText = Text;
+        IsEditing = true;
+    }
+
+    [RelayCommand]
+    private void CancelEdit() => IsEditing = false;
+
+    [RelayCommand]
+    private async Task SaveEditAsync()
+    {
+        var text = (EditText ?? string.Empty).Trim();
+        if (text.Length == 0 || EditRequested is null)
+        {
+            return;
+        }
+
+        if (string.Equals(text, Text, StringComparison.Ordinal))
+        {
+            // 一个字没改，就别白白把后面几轮冲掉
+            IsEditing = false;
+            return;
+        }
+
+        IsEditing = false;
+        await EditRequested(text);
+    }
 }
 
 public sealed partial class ToolCallViewModel : ObservableObject
@@ -384,6 +439,41 @@ public sealed partial class AssistantMessageViewModel : MessageViewModel
     private bool isLatest;
 
     public bool ShowContinue => IsStopped && IsLatest;
+
+    /// <summary>
+    /// 这一轮的执行计划。模型每调一次 update_plan 就换一份新的，
+    /// 直接替换整张清单而不是增量改——计划本来就可能调整，改了一半的清单更难读。
+    /// </summary>
+    public ObservableCollection<PlanStepViewModel> Plan { get; } = [];
+
+    public bool HasPlan => Plan.Count > 0;
+
+    public string PlanSummary
+    {
+        get
+        {
+            if (Plan.Count == 0)
+            {
+                return string.Empty;
+            }
+
+            var done = Plan.Count(step => step.IsDone);
+            return done == Plan.Count ? $"全部完成 · {Plan.Count} 步" : $"{done}/{Plan.Count} 步";
+        }
+    }
+
+    public void SetPlan(IReadOnlyList<PlanStep> steps)
+    {
+        Plan.Clear();
+
+        for (var i = 0; i < steps.Count; i++)
+        {
+            Plan.Add(new PlanStepViewModel(steps[i], i));
+        }
+
+        OnPropertyChanged(nameof(HasPlan));
+        OnPropertyChanged(nameof(PlanSummary));
+    }
 
     /// <summary>点「继续」时由对话上下文接过去，接着同一条气泡往下写。</summary>
     public Func<Task>? ContinueRequested { get; set; }

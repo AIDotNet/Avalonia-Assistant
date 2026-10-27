@@ -20,6 +20,17 @@ Windows 桌面 AI 助理。Agent 循环用 [pi.net](https://github.com/AIDotNet/
 - **三档权限**：只读 / 工作区 / 完全访问；执行命令会在对话里弹授权卡。
 - **工具过程可见**：每次调用压成一行（「执行命令：dotnet build」+ 耗时），点开才看参数和结果；
   连续十几次调用也只是一列短行，不会把对话淹掉。
+- **改了什么看得见**：写过的文件右侧列成一张产物清单，显示新建 / 修改 / 删除、增删行数，
+  点开是逐行差异（`+` 绿 `−` 红），能直接打开文件或在资源管理器里定位。导出会话时会一起带上。
+  工具卡说的是过程，这里说的是结果——两者不混在一起。
+- **真的产出办公文件**：`read_document` 读 docx / xlsx / pptx / pdf，表格和标题层级都还原成 Markdown；
+  `write_document` 把 Markdown 写成 .docx / .xlsx，标题、项目符号、表格、代码块都落成真正的样式。
+- **多步任务先给计划**：模型调 `update_plan` 列出步骤，对话里显示成清单，做到哪一步标到哪一步
+  （打勾 / 时钟 / 空心方块）。方向不对，在第一步之前就能叫停。
+- **提问发错了能改**：用户消息点「编辑」就地改，保存后截断其后几轮并重新回答——
+  比重新开一条任务把上下文全丢掉划算。
+- **跑完会叫你**：窗口不在前台时，一轮结束会闪任务栏并响一声，失败用警示音、成功用提示音；
+  嫌吵可以在设置里静音，任务栏闪烁不受影响。
 - **会话留在本机**：一个会话一个 JSON 文件，第一句话一发出就落盘（不用等回复跑完）。
   侧栏「任务」列全部任务、按今天 / 昨天 / 最近 7 天分组，「空间」只是按目录再归一次类——
   归了空间的任务在「任务」里照样看得见。
@@ -157,11 +168,11 @@ Avalonia-Assistant/
 │   ├── AvaloniaAssistant.Storage/        # settings.json / sessions/*.json / 技能导入
 │   ├── AvaloniaAssistant.Speech/         # NAudio 录音 + 转写
 │   ├── AvaloniaAssistant.UI/             # 窗口、页面、VM、样式
-│   │   ├── Views/                        # MainWindow / Sidebar / Home / Chat / Tools / Mcp / Library / Settings
+│   │   ├── Views/                        # MainWindow / Sidebar / Home / Chat / Tools / Mcp / Settings
 │   │   ├── ViewModels/                   # 命令、会话状态、消息 VM
 │   │   └── Styles/                       # Tokens.axaml / AppStyles.axaml
 │   └── AvaloniaAssistant.Desktop/        # 入口、DI、Arc 初始化
-├── tests/AvaloniaAssistant.Agent.Tests/  # 31 个测试
+├── tests/AvaloniaAssistant.Agent.Tests/  # 171 个测试
 └── docs/
     ├── research.md               # 两个参考项目的结构与集成方式
     ├── migration.md              # 旧功能逐项盘点与取舍
@@ -234,13 +245,16 @@ macOS / Linux 直接写 `npx`。
 ## 内置工具
 
 工具分两拨，但同一件事只留一个实现：读文件、列目录、搜内容交给 CodingAgent 的内置工具，
-自建工具（`AvaloniaAssistant.Agent/Tools`）只补它没有的能力，一共 5 个。
+自建工具（`AvaloniaAssistant.Agent/Tools`）只补它没有的能力，一共 8 个。
 系统信息、进程管理、在浏览器打开这类低频动作用 `run_command` 或系统自带工具做，
 少一个工具就少一次选错。
 
 | 工具 | 说明 | 权限 |
 | --- | --- | --- |
 | `write_file` | 写工作区文件（含追加、自动建父目录） | 工作区可写 / 只读拦截 |
+| `read_document` | 读 docx / xlsx / pptx / pdf，输出接近 Markdown 的结构 | 只读 |
+| `write_document` | 把 Markdown 写成 .docx / .xlsx（标题、列表、表格、代码块） | 工作区可写 / 只读拦截 |
+| `update_plan` | 多步任务列计划并更新进度，对话里显示成清单 | 只读 |
 | `open_path` | 用系统程序打开文件/文件夹 | 只读 |
 | `run_command` | 执行 shell 命令（60s 超时） | 需确认 |
 | `fetch_url` | 抓网页正文 | 只读 |
@@ -280,7 +294,9 @@ dotnet test tests/AvaloniaAssistant.Agent.Tests
 - 本机 TCP 模拟 OpenAI SSE 端点，验证真实 HTTP 流式与工具声明；
 - 文件工具的目录 / 读取 / 越界写入；
 - 技能导入：文件夹与 zip（外层目录、根级 `SKILL.md`、缺清单、多技能、重名）各走一遍；
-- settings / session 的 JSON 往返。
+- settings / session 的 JSON 往返；
+- 文档往返：Markdown 写成 docx / xlsx 再读回来，标题层级、表格、项目符号、代码块都得对得上；
+- 行级 diff 与计划文本解析：新增 / 删除行数、上下文折叠、大文件降级、三种步骤状态。
 
 ## 截图模式
 
@@ -329,6 +345,15 @@ dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --pag
 # 授权卡版式；--press-escape 会真的发一次 Esc，验证「Esc 拒绝」
 dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --page chat --approval-demo --press-escape --scroll-bottom
 
+# 产物面板：文件卡 + 一段展开的逐行差异
+dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --page chat --artifacts
+
+# 消息编辑态：最后一条提问变成输入框 + 保存并重发
+dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --page chat --chat-edit
+
+# 设置页直接停在「系统设置」：检查权限、缩放、跑完提示三张卡片
+dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --page settings --settings-system
+
 # 悬停提示的皮：短提示 / 中等长度 / 长路径折行三种样例
 dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --tooltips
 
@@ -366,6 +391,13 @@ dotnet run --project src/AvaloniaAssistant.Desktop -- --run "用三句话介绍�
   水位条和自动压缩用同一个值；目录里没有这个模型时退回 128k，界面上会标 `*` 并说明是估算。
 - **图片要模型支持视觉**：不支持的模型由 pi.net 降级成占位符，不会报错，但也看不到图。
 - **@ 只按文件名和路径匹配**：不是全文检索，搜文件里的内容要等后面的索引；二进制文件可以引用但没有正文。
+- **产物面板抓不到 `run_command` 改的文件**：采集靠「工具调用前后对比文件」，走 shell 脚本改的东西
+  连改了哪些文件都不知道，只能看命令输出。二进制文件（docx / 图片）只记一条「改过」，
+  不给逐行差异——读出来全是乱码。
+- **只生成 docx / xlsx**：pptx 需要母版和版式，随手拼出来的文件 PowerPoint 打不开，
+  所以宁可报错让人先出 docx 大纲。旧版 .doc / .xls / .ppt 是二进制格式，读不了。
+- **提示只有任务栏闪烁和提示音**：没做托盘图标和系统通知，那需要注册 AUMID，
+  为一个提醒引入这套东西不划算；应用完全退出后也不会有任何提醒。
 - **没有定时任务 / 专家市场**：导航里暂未提供入口，避免假按钮；扩展点见架构文档。
 - **Windows 优先**：代码里对 macOS/Linux 的路径和 shell 做了分支，但只在 Windows 上验证过。
 

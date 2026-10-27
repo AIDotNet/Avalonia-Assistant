@@ -327,8 +327,15 @@ public sealed partial class MainWindowViewModel : ObservableObject
     {
         var chat = new ChatViewModel(this, session, consumePendingDraft);
         chat.PropertyChanged += OnChatPropertyChanged;
+
+        // 窗口在后台时要不要闪任务栏，是窗口的事；这里只把「跑完了」送上去
+        chat.RunFinished += (_, args) => RunFinished?.Invoke(this, args);
+
         return chat;
     }
+
+    /// <summary>任意一条任务跑完都会触发。窗口订阅它来决定提不提醒。</summary>
+    public event EventHandler<ChatRunFinishedEventArgs>? RunFinished;
 
     private void OnChatPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {

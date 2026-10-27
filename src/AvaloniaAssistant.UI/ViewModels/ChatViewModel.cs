@@ -1,9 +1,11 @@
 ﻿using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Text;
+using System.Text.Json;
 using Avalonia.Media;
 using Avalonia.Threading;
 using AvaloniaAssistant.Abstractions;
+using AvaloniaAssistant.Storage;
 using AvaloniaAssistant.UI.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -97,6 +99,12 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
     }
 
     public ChatSession Session { get; }
+
+    /// <summary>
+    /// 一轮跑完（正常 / 失败 / 被停都算）时触发。
+    /// 窗口在后台时用它闪任务栏并响一声——用户切去写文档了，不该让他自己回来发现活干完了。
+    /// </summary>
+    public event EventHandler<ChatRunFinishedEventArgs>? RunFinished;
 
     /// <summary>
     /// 这条任务钉住的工作区：开口之后就不跟着设置走了。还没发过话时为空。
@@ -221,6 +229,173 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
     };
 
     public ObservableCollection<MessageViewModel> Messages { get; } = [];
+
+    /// <summary>
+    /// 这条任务改过的文件。同一路径重复写入时替换而不是追加：
+    /// 面板要回答「它现在是什么样」，不是「模型一共写了几次」。
+    /// </summary>
+    public ObservableCollection<ArtifactViewModel> Artifacts { get; } = [];
+
+    public bool HasArtifacts => Artifacts.Count > 0;
+
+    public int ArtifactCount => Artifacts.Count;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowArtifactPanel))]
+    [NotifyPropertyChangedFor(nameof(ArtifactToggleHint))]
+    private bool isArtifactPanelOpen;
+
+    /// <summary>用户自己收起过面板。之后再出产物只更新计数，不抢他的视线。</summary>
+    private bool _artifactPanelDismissed;
+
+    public bool ShowArtifactPanel => HasArtifacts && IsArtifactPanelOpen;
+
+    public string ArtifactToggleHint => IsArtifactPanelOpen ? "收起产物" : "查看产物";
+
+    /// <summary>面板标题右边那行统计：几个文件、加了多少行、删了多少行。</summary>
+    public string ArtifactSummary
+    {
+        get
+        {
+            if (Artifacts.Count == 0)
+            {
+                return string.Empty;
+            }
+
+            var added = Artifacts.Sum(item => item.Record.AddedLines);
+            var removed = Artifacts.Sum(item => item.Record.RemovedLines);
+
+            var parts = new List<string>(3) { $"{Artifacts.Count} 个文件" };
+            if (added > 0)
+            {
+                parts.Add($"+{added}");
+            }
+
+            if (removed > 0)
+            {
+                parts.Add($"-{removed}");
+            }
+
+            return string.Join(" · ", parts);
+        }
+    }
+
+    [RelayCommand]
+    private void ToggleArtifactPanel()
+    {
+        if (!HasArtifacts)
+        {
+            return;
+        }
+
+        IsArtifactPanelOpen = !IsArtifactPanelOpen;
+
+        // 手动收起算一次明确表态，后面就别再自动弹了
+        _artifactPanelDismissed = !IsArtifactPanelOpen;
+    }
+
+    /// <summary>模型用来报进度的工具名。它不在对话里显示成工具行，直接换成清单。</summary>
+    private const string PlanToolName = "update_plan";
+
+    /// <summary>
+    /// 把 update_plan 的参数换成清单。每次给的是全量计划，
+    /// 所以直接整张替换——改了一半的清单比旧清单更难读。
+    /// </summary>
+    private void ApplyPlan(AssistantMessageViewModel assistant, ChatEntry entry, string arguments)
+    {
+        var text = ReadArgument(arguments, "steps");
+        if (text is null)
+        {
+            return;
+        }
+
+        var steps = PlanText.Parse(text);
+        if (steps.Count == 0)
+        {
+            return;
+        }
+
+        assistant.SetPlan(steps);
+        entry.Plan = steps;
+        RequestScroll(false);
+    }
+
+    /// <summary>从格式化过的参数 JSON 里取一个字符串。取不到就返回 null，调用方按「没有」处理。</summary>
+    private static string? ReadArgument(string arguments, string name)
+    {
+        if (string.IsNullOrWhiteSpace(arguments))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(arguments);
+
+            if (document.RootElement.ValueKind == JsonValueKind.Object
+                && document.RootElement.TryGetProperty(name, out var value)
+                && value.ValueKind == JsonValueKind.String)
+            {
+                return value.GetString();
+            }
+        }
+        catch (JsonException)
+        {
+            // 参数被截断或压根不是 JSON，当作这次没给计划
+        }
+
+        return null;
+    }
+
+    /// <summary>把一次文件改动同时写进存档和面板。</summary>
+    private void AddArtifact(FileChangeRecord record, ChatEntry entry)
+    {
+        entry.Artifacts.Add(record);
+
+        var view = new ArtifactViewModel(record, message => ShowToast(message, null));
+        var existing = Artifacts.FirstOrDefault(item =>
+            string.Equals(item.FullPath, record.FullPath, StringComparison.OrdinalIgnoreCase));
+
+        if (existing is null)
+        {
+            // 最近改的排最前：用户刚回头找的是「刚才那个文件」
+            Artifacts.Insert(0, view);
+        }
+        else
+        {
+            Artifacts[Artifacts.IndexOf(existing)] = view;
+        }
+
+        RaiseArtifactsChanged();
+
+        if (!_artifactPanelDismissed)
+        {
+            IsArtifactPanelOpen = true;
+        }
+    }
+
+    private void RaiseArtifactsChanged()
+    {
+        OnPropertyChanged(nameof(HasArtifacts));
+        OnPropertyChanged(nameof(ArtifactCount));
+        OnPropertyChanged(nameof(ArtifactSummary));
+        OnPropertyChanged(nameof(ShowArtifactPanel));
+    }
+
+    /// <summary>打开旧会话时把产物接回来，别让面板看起来像是这条任务什么都没改过。</summary>
+    private void RebuildArtifacts()
+    {
+        Artifacts.Clear();
+
+        foreach (var record in Session.Artifacts.Reverse())
+        {
+            Artifacts.Add(new ArtifactViewModel(record, message => ShowToast(message, null)));
+        }
+
+        // 重开旧任务时面板默认收起：用户先看对话，需要了再点开
+        _artifactPanelDismissed = true;
+        RaiseArtifactsChanged();
+    }
 
     public ComposerViewModel Composer { get; }
 
@@ -695,6 +870,22 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private bool isBusy;
 
+    /// <summary>
+    /// 运行中不让改提问：改了要截断后面几轮，会和正在跑的这一轮抢同一个会话。
+    /// 跑完立刻恢复，用户回头发现上一句打错了还能救。
+    /// </summary>
+    partial void OnIsBusyChanged(bool value) => RefreshMessageEditability();
+
+    private void RefreshMessageEditability()
+    {
+        var canEdit = !IsBusy && !IsDiscarded;
+
+        foreach (var message in Messages.OfType<UserMessageViewModel>())
+        {
+            message.CanEdit = canEdit;
+        }
+    }
+
     [ObservableProperty]
     private string statusText = "就绪";
 
@@ -1064,21 +1255,7 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
         // 用户消息和 Session.Entries 里的 User 条目严格一一对应（提示条只进消息流不进存档），
         // 所以按「第几轮提问」定位要截断的存档位置，比按消息下标找更稳。
         var turn = Messages.Take(userIndex + 1).Count(item => item is UserMessageViewModel) - 1;
-        var entryIndex = -1;
-        for (var i = 0; i < Session.Entries.Count; i++)
-        {
-            if (Session.Entries[i].Kind != ChatEntryKind.User)
-            {
-                continue;
-            }
-
-            if (turn-- == 0)
-            {
-                entryIndex = i;
-                break;
-            }
-        }
-
+        var entryIndex = FindUserEntryIndex(turn);
         if (entryIndex < 0)
         {
             return;
@@ -1104,6 +1281,99 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
         }
 
         await RunPromptAsync(prompt, addUserMessage: false);
+    }
+
+    /// <summary>第 <paramref name="turn"/> 次提问（从 0 数）在存档里的位置。找不到返回 -1。</summary>
+    private int FindUserEntryIndex(int turn)
+    {
+        for (var i = 0; i < Session.Entries.Count; i++)
+        {
+            if (Session.Entries[i].Kind != ChatEntryKind.User)
+            {
+                continue;
+            }
+
+            if (turn-- == 0)
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    /// <summary>
+    /// 改一条已经发出去的提问，从这句重来。
+    /// 后面几轮都是基于旧问题答的，留着只会让人对不上号，所以一并截掉——
+    /// 和重试共用同一套截断，两种操作在存档里的结果才一致。
+    /// </summary>
+    private async Task EditAndResendAsync(UserMessageViewModel message, string newText)
+    {
+        if (IsBusy)
+        {
+            // 编辑框已经收起来了，不说一句的话用户会以为改动丢了
+            ShowToast("这一轮还在跑，等它结束再改。", null);
+            return;
+        }
+
+        var messageIndex = Messages.IndexOf(message);
+        if (messageIndex < 0)
+        {
+            return;
+        }
+
+        var turn = Messages.Take(messageIndex + 1).Count(item => item is UserMessageViewModel) - 1;
+        var entryIndex = FindUserEntryIndex(turn);
+        if (entryIndex < 0)
+        {
+            return;
+        }
+
+        // 这一轮之后还有提问才会真丢东西，和重试一样先问一句
+        var laterTurns = Messages.Skip(messageIndex + 1).Count(item => item is UserMessageViewModel);
+        if (laterTurns > 0)
+        {
+            if (ConfirmAsync is null)
+            {
+                return;
+            }
+
+            var confirmed = await ConfirmAsync(
+                "改完要重发，后面的会删掉",
+                $"这条提问之后还有 {laterTurns} 轮对话，重发会先把它们删掉。删掉的内容不能恢复。",
+                "改了重发",
+                true);
+
+            if (!confirmed)
+            {
+                // 用户取消了，把气泡恢复成原文，别停在编辑态
+                message.CancelEditCommand.Execute(null);
+                return;
+            }
+        }
+
+        var prompt = new PromptRequest(newText, message.Attachments, message.SourceImages);
+
+        // 这条提问本身也要重写，所以从它开始删（不是从下一条）
+        if (Session.Entries.Count > entryIndex)
+        {
+            Session.Entries.RemoveRange(entryIndex, Session.Entries.Count - entryIndex);
+        }
+
+        while (Messages.Count > messageIndex)
+        {
+            Messages.RemoveAt(Messages.Count - 1);
+        }
+
+        SyncComposerWorkspacePin();
+
+        // 命中的消息已经被删掉了，查找条上的「共 N 条」要重算
+        if (IsSearchOpen && !string.IsNullOrWhiteSpace(SearchQuery))
+        {
+            RebuildSearchHits(SearchQuery);
+        }
+
+        await RunPromptAsync(prompt, addUserMessage: true);
     }
 
     /// <summary>
@@ -1168,7 +1438,10 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
                         Images = [.. input.Images ?? []],
                     });
 
-                    Messages.Add(new UserMessageViewModel(input.Text, input.Attachments, input.Images));
+                    var userBubble = new UserMessageViewModel(input.Text, input.Attachments, input.Images);
+                    userBubble.EditRequested = text => EditAndResendAsync(userBubble, text);
+                    userBubble.CanEdit = !IsBusy;
+                    Messages.Add(userBubble);
 
                     if (Session.Entries.Count(entry => entry.Kind == ChatEntryKind.User) == 1)
                     {
@@ -1261,13 +1534,6 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
 
                     case AgentStreamEvent.ToolStarted toolStarted:
                     {
-                        var tool = new ToolCallViewModel(
-                            toolStarted.CallId,
-                            toolStarted.Name,
-                            toolStarted.Label,
-                            toolStarted.Arguments,
-                            message => ShowToast(message, null));
-                        assistant.Tools.Add(tool);
                         assistantEntry.ToolCalls.Add(new ToolCallRecord
                         {
                             Id = toolStarted.CallId,
@@ -1275,6 +1541,23 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
                             Label = toolStarted.Label,
                             Arguments = toolStarted.Arguments,
                         });
+
+                        // 计划不是一次工具调用，是给用户看的进度：不占一行工具卡，直接换成清单
+                        if (string.Equals(toolStarted.Name, PlanToolName, StringComparison.Ordinal))
+                        {
+                            ApplyPlan(assistant, assistantEntry, toolStarted.Arguments);
+                            StatusText = "正在更新计划…";
+                            break;
+                        }
+
+                        var tool = new ToolCallViewModel(
+                            toolStarted.CallId,
+                            toolStarted.Name,
+                            toolStarted.Label,
+                            toolStarted.Arguments,
+                            message => ShowToast(message, null));
+                        assistant.Tools.Add(tool);
+
                         StatusText = $"正在执行「{toolStarted.Label}」…";
                         RequestScroll(false);
                         break;
@@ -1297,6 +1580,15 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
                         RequestScroll(false);
                         break;
                     }
+
+                    // 文件改动由运行时采集好送上来，界面只负责记下来给面板显示
+                    case AgentStreamEvent.FileChanged fileChanged:
+                        if (assistantEntry is not null)
+                        {
+                            AddArtifact(fileChanged.Change, assistantEntry);
+                        }
+
+                        break;
 
                     case AgentStreamEvent.RunCompleted completed:
                     {
@@ -1428,6 +1720,12 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
                 FloatingHint = null;
             }
 
+            // 跑了十分钟的任务不该让用户自己回来发现跑完了。窗口不在前台时靠这个闪任务栏。
+            if (!IsDiscarded)
+            {
+                RunFinished?.Invoke(this, new ChatRunFinishedEventArgs(Session.Id, Title, failed));
+            }
+
             RequestScroll(false);
 
             // 任务已经被删了就别再写回去，否则删掉的任务会自己回来
@@ -1478,6 +1776,41 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
+    /// 仅用于 --screenshot：把最后一条提问摆进编辑态，检查输入框和两个按钮的版式。
+    /// 真实交互要点「编辑」才会出现。
+    /// </summary>
+    public void ShowDemoMessageEdit()
+    {
+        if (Messages.OfType<UserMessageViewModel>().LastOrDefault() is not { } message)
+        {
+            return;
+        }
+
+        message.CanEdit = true;
+        message.StartEditCommand.Execute(null);
+    }
+
+    /// <summary>
+    /// 仅用于 --screenshot：把产物面板摆出来，并展开第一条的逐行差异。
+    /// 真实运行时要等工具真的改过文件才会有内容，截图里没有工具可跑。
+    /// </summary>
+    public void ShowDemoArtifacts()
+    {
+        if (!HasArtifacts)
+        {
+            return;
+        }
+
+        _artifactPanelDismissed = false;
+        IsArtifactPanelOpen = true;
+
+        if (Artifacts.FirstOrDefault() is { } first)
+        {
+            first.IsExpanded = true;
+        }
+    }
+
+    /// <summary>
     /// 仅用于 --screenshot：摆一张待确认的授权卡，检查快捷键提示和按钮版式。
     /// <paramref name="edited"/> 为 true 时顺便把参数改成「用户改过」的样子，
     /// 用来检查主按钮切换（允许一次 → 按修改重试）和「还原」入口。
@@ -1508,7 +1841,14 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
             {
                 case ChatEntryKind.User:
                     ResolveAttachmentPaths(entry);
-                    Messages.Add(new UserMessageViewModel(entry.Text, entry.Attachments, entry.Images) { CreatedAt = entry.CreatedAt });
+
+                    var restoredBubble = new UserMessageViewModel(entry.Text, entry.Attachments, entry.Images)
+                    {
+                        CreatedAt = entry.CreatedAt,
+                    };
+                    restoredBubble.EditRequested = text => EditAndResendAsync(restoredBubble, text);
+                    restoredBubble.CanEdit = !IsBusy;
+                    Messages.Add(restoredBubble);
                     break;
 
                 case ChatEntryKind.Assistant:
@@ -1526,6 +1866,13 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
                     assistant.ContinueRequested = () => ContinueFromAsync(assistant);
                     assistant.SetPersisted(entry.Text, entry.Reasoning);
                     assistant.IsStopped = entry.Stopped;
+
+                    // 重开旧任务时把上次的计划接回来，用户能看到它做到哪一步了。
+                    // 旧存档没有这个字段，反序列化出来是 null。
+                    if (entry.Plan is { Count: > 0 })
+                    {
+                        assistant.SetPlan(entry.Plan);
+                    }
 
                     // 存档里只有原始报错，分类和按钮要在这里补回来
                     if (!string.IsNullOrWhiteSpace(entry.Error))
@@ -1566,6 +1913,8 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
         ContextTokens = Session.Entries.LastOrDefault(entry => entry.Kind == ChatEntryKind.Assistant) is { } latest
             ? latest.InputTokens + latest.OutputTokens
             : 0;
+
+        RebuildArtifacts();
     }
 
     /// <summary>
@@ -1897,3 +2246,13 @@ public sealed record SearchHighlightRequest(
     string Query,
     MessageViewModel? Target,
     IReadOnlyList<MessageViewModel>? Hits = null);
+
+/// <summary>一轮运行的结束通知。带上标题和成败，窗口才能决定提不提醒、提醒什么。</summary>
+public sealed class ChatRunFinishedEventArgs(string sessionId, string title, bool failed) : EventArgs
+{
+    public string SessionId { get; } = sessionId;
+
+    public string Title { get; } = title;
+
+    public bool Failed { get; } = failed;
+}

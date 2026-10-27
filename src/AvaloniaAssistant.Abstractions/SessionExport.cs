@@ -49,6 +49,13 @@ public static class SessionExport
                     builder.AppendLine(string.IsNullOrWhiteSpace(entry.Text) ? "（没有正文）" : entry.Text);
                     builder.AppendLine();
 
+                    if (entry.Plan is { Count: > 0 })
+                    {
+                        builder.AppendLine("计划：");
+                        builder.AppendLine(PlanText.Format(entry.Plan));
+                        builder.AppendLine();
+                    }
+
                     if (entry.ToolCalls.Count > 0)
                     {
                         builder.AppendLine("工具调用：");
@@ -57,6 +64,30 @@ public static class SessionExport
                             var status = tool.IsError ? "失败" : tool.Aborted ? "已中断" : "完成";
                             var duration = tool.DurationMs is { } ms ? $" · {ms} ms" : string.Empty;
                             builder.AppendLine($"- {tool.Label}：{ToolTarget(tool.Arguments)}（{status}{duration}）");
+                        }
+
+                        builder.AppendLine();
+                    }
+
+                    // 产物是这次任务的交付物。导出就是为了留档，漏了它等于导出个过程记录。
+                    if (entry.Artifacts is { Count: > 0 })
+                    {
+                        builder.AppendLine("产物：");
+                        foreach (var artifact in entry.Artifacts)
+                        {
+                            var stat = new List<string>(2);
+                            if (artifact.AddedLines > 0)
+                            {
+                                stat.Add($"+{artifact.AddedLines}");
+                            }
+
+                            if (artifact.RemovedLines > 0)
+                            {
+                                stat.Add($"-{artifact.RemovedLines}");
+                            }
+
+                            var lines = stat.Count > 0 ? "，" + string.Join(" ", stat) : string.Empty;
+                            builder.AppendLine($"- `{artifact.Path}`（{artifact.KindText}{lines}）");
                         }
 
                         builder.AppendLine();

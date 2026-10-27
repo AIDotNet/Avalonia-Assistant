@@ -417,6 +417,7 @@ internal static class ToolPalette
         new(["网络"], () => ArcIcons.Globe, "#0E8A96", "#E4F5F7"),
         new(["时间"], () => ArcIcons.Clock, "#B07A12", "#FDF3DE"),
         new(["技能"], () => ArcIcons.Sparkles, "#C2417B", "#FCE9F1"),
+        new(["任务"], () => ArcIcons.Play, "#2F6FED", "#E8F0FE"),
     ];
 
     private static readonly Dictionary<string, (Geometry Icon, IBrush Accent, IBrush Tile)> s_cache =

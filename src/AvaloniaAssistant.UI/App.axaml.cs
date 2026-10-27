@@ -186,6 +186,16 @@ public partial class AssistantApp : Application
                             demoChat.AddDemoApproval(AppLaunchOptions.ApprovalEdited);
                         }
 
+                        if (AppLaunchOptions.ChatArtifacts)
+                        {
+                            demoChat.ShowDemoArtifacts();
+                        }
+
+                        if (AppLaunchOptions.ChatEdit)
+                        {
+                            demoChat.ShowDemoMessageEdit();
+                        }
+
                         if (AppLaunchOptions.ApprovalWait)
                         {
                             // 常驻条只在 gate 真挂起时出现，截图模式没有 gate，这里直接摆出来
@@ -239,6 +249,11 @@ public partial class AssistantApp : Application
                     }
 
                     await viewModel.OpenSettingsAsync();
+                    if (AppLaunchOptions.SettingsSystem && viewModel.CurrentPage is SettingsViewModel systemPage)
+                    {
+                        systemPage.SelectedSection = "system";
+                    }
+
                     if (AppLaunchOptions.TestConnection && viewModel.CurrentPage is SettingsViewModel settingsPage)
                     {
                         await settingsPage.TestConnectionCommand.ExecuteAsync(null);
@@ -637,6 +652,13 @@ public partial class AssistantApp : Application
                     .OfType<ComposerView>()
                     .FirstOrDefault()
                     ?.ShowDropPreview();
+                await Task.Delay(250);
+            }
+
+            // 验收用：把文件真灌进拖放管线，看提示层和「落下后加了什么」
+            if (AppLaunchOptions.DropProbePaths.Count > 0)
+            {
+                await DropProbe.RunAsync(window, AppLaunchOptions.DropProbePaths);
                 await Task.Delay(250);
             }
 

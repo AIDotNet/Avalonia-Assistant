@@ -28,6 +28,106 @@ public sealed class PiAgentRuntimeTests
         Assert.Contains(events, e => e is AgentStreamEvent.RunCompleted { StopReason: AgentStopReason.Completed });
     }
 
+    /// <summary>
+    /// 工具写完文件要推一条 FileChanged，且带真实 diff。
+    /// 采集如果挂在界面侧就会坏在这里：事件走无界通道，界面收到「工具开始」时
+    /// 一个几毫秒就能写完的工具早就结束了，快照拍到的是改之后的内容，diff 直接是空的。
+    /// </summary>
+    [Fact]
+    public async Task ReportsFileChangeWithRealDiff()
+    {
+        var workspace = Path.Combine(Path.GetTempPath(), "ava-run-artifact-" + Guid.NewGuid().ToString("n"));
+        Directory.CreateDirectory(workspace);
+
+        try
+        {
+            var stream = new ScriptedStreamFactory(
+            [
+                Faux.Response.ToolUse(new ToolCallContent(
+                    "call-1",
+                    "write_file",
+                    new { path = "笔记.md", content = "第一行\n第二行" })),
+                Faux.Response.Text("写好了。"),
+            ]);
+
+            var runtime = new PiAgentRuntime(new FakeSettings(), stream);
+            var events = await CollectAsync(
+                runtime,
+                Guid.NewGuid().ToString("n"),
+                "写个文件",
+                PermissionMode.Workspace,
+                workspace: workspace);
+
+            var change = Assert.Single(events.OfType<AgentStreamEvent.FileChanged>());
+
+            Assert.Equal(FileChangeKind.Created, change.Change.Kind);
+            Assert.Equal(2, change.Change.AddedLines);
+            Assert.Equal("笔记.md", change.Change.Path);
+            Assert.Contains("+第一行", change.Change.Diff);
+
+            // 断言文件真的落到工作区里，不然 diff 算得对也没意义
+            Assert.True(File.Exists(Path.Combine(workspace, "笔记.md")));
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(workspace, recursive: true);
+            }
+            catch (IOException)
+            {
+                // 临时目录删不掉不影响断言
+            }
+        }
+    }
+
+    /// <summary>同一个文件被改第二次时，第二条记录要带【修改】而不是又一条【新建】。</summary>
+    [Fact]
+    public async Task SecondWriteIsModification()
+    {
+        var workspace = Path.Combine(Path.GetTempPath(), "ava-run-artifact2-" + Guid.NewGuid().ToString("n"));
+        Directory.CreateDirectory(workspace);
+        await File.WriteAllTextAsync(Path.Combine(workspace, "a.txt"), "旧内容");
+
+        try
+        {
+            var stream = new ScriptedStreamFactory(
+            [
+                Faux.Response.ToolUse(new ToolCallContent(
+                    "call-1",
+                    "write_file",
+                    new { path = "a.txt", content = "新内容" })),
+                Faux.Response.Text("改好了。"),
+            ]);
+
+            var runtime = new PiAgentRuntime(new FakeSettings(), stream);
+            var events = await CollectAsync(
+                runtime,
+                Guid.NewGuid().ToString("n"),
+                "改一下",
+                PermissionMode.Workspace,
+                workspace: workspace);
+
+            var change = Assert.Single(events.OfType<AgentStreamEvent.FileChanged>());
+
+            Assert.Equal(FileChangeKind.Modified, change.Change.Kind);
+            Assert.Equal(1, change.Change.AddedLines);
+            Assert.Equal(1, change.Change.RemovedLines);
+            Assert.Contains("-旧内容", change.Change.Diff);
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(workspace, recursive: true);
+            }
+            catch (IOException)
+            {
+                // 同上
+            }
+        }
+    }
+
     [Fact]
     public async Task ReadOnlyBlocksMutatingToolBeforeExecution()
     {

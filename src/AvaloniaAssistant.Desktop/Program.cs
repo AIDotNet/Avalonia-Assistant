@@ -140,6 +140,15 @@ internal static class Program
                 case "--chat-dates":
                     AppLaunchOptions.ChatDates = true;
                     break;
+                case "--artifacts":
+                    AppLaunchOptions.ChatArtifacts = true;
+                    break;
+                case "--chat-edit":
+                    AppLaunchOptions.ChatEdit = true;
+                    break;
+                case "--settings-system":
+                    AppLaunchOptions.SettingsSystem = true;
+                    break;
                 case "--chat-empty":
                     AppLaunchOptions.ChatEmpty = true;
                     break;
@@ -261,6 +270,9 @@ internal static class Program
                     break;
                 case "--composer-drop":
                     AppLaunchOptions.ComposerDrop = true;
+                    break;
+                case "--drop-probe" when index + 1 < args.Length:
+                    AppLaunchOptions.DropProbePaths.Add(args[++index]);
                     break;
                 case "--workspace-flow":
                     AppLaunchOptions.VerifyWorkspaceFlow = true;

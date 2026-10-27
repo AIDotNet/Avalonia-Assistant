@@ -37,6 +37,38 @@ public sealed class ChatSession
     public double ReadingRatio { get; set; } = -1;
 
     public List<ChatEntry> Entries { get; set; } = [];
+
+    /// <summary>
+    /// 这条任务累计改动过的文件，按首次出现顺序。界面右侧的产物面板直接读它。
+    /// 从 <see cref="Entries"/> 里各轮的产物合并去重：同一个文件改两次只留一条，取最后的 diff。
+    /// </summary>
+    [JsonIgnore]
+    public IReadOnlyList<FileChangeRecord> Artifacts
+    {
+        get
+        {
+            var merged = new List<FileChangeRecord>();
+            var index = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var entry in Entries)
+            {
+                foreach (var change in entry.Artifacts ?? [])
+                {
+                    if (index.TryGetValue(change.FullPath, out var existing))
+                    {
+                        // 同一文件改了几次，只留最新那条：用户关心的是它现在变成什么样
+                        merged[existing] = change;
+                        continue;
+                    }
+
+                    index[change.FullPath] = merged.Count;
+                    merged.Add(change);
+                }
+            }
+
+            return merged;
+        }
+    }
 }
 
 public sealed class ChatEntry
@@ -69,6 +101,119 @@ public sealed class ChatEntry
     public long InputTokens { get; set; }
 
     public long OutputTokens { get; set; }
+
+    /// <summary>
+    /// 这一轮改动了哪些文件。工具调用是过程，这个才是结果——
+    /// 用户要确认的是「改了哪几个文件、变成什么样」，不是模型调了几次工具。
+    /// </summary>
+    public List<FileChangeRecord> Artifacts { get; set; } = [];
+
+    /// <summary>
+    /// 这一轮的执行计划。模型用 <c>update_plan</c> 工具维护，可能更新多次：
+    /// 先列出来，做到哪步就标到哪步。多步任务里，用户最想先知道「它打算怎么干」。
+    /// </summary>
+    public List<PlanStep> Plan { get; set; } = [];
+}
+
+public enum PlanStepStatus
+{
+    Pending,
+    InProgress,
+    Done,
+}
+
+/// <summary>计划里的一步。只存文本和状态，不存耗时——用户要的是进度，不是甘特图。</summary>
+public sealed class PlanStep
+{
+    public string Text { get; set; } = string.Empty;
+
+    public PlanStepStatus Status { get; set; }
+}
+
+public enum FileChangeKind
+{
+    Created,
+    Modified,
+    Deleted,
+}
+
+/// <summary>
+/// 一次任务里被改动的文件。diff 是行级的统一格式，只留够看清改了什么的那部分。
+/// </summary>
+public sealed class FileChangeRecord
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("n");
+
+    /// <summary>展示用路径。落在工作区内时是相对路径，越界时退回完整路径。</summary>
+    public string Path { get; set; } = string.Empty;
+
+    /// <summary>绝对路径，用来打开文件和在资源管理器中定位。</summary>
+    public string FullPath { get; set; } = string.Empty;
+
+    public FileChangeKind Kind { get; set; }
+
+    /// <summary>行级 diff。文件太大、二进制或读不出来时为空，界面只显示增删行数。</summary>
+    public string? Diff { get; set; }
+
+    public int AddedLines { get; set; }
+
+    public int RemovedLines { get; set; }
+
+    /// <summary>写完之后的大小。删掉的文件记 0。</summary>
+    public long Size { get; set; }
+
+    public DateTimeOffset ChangedAt { get; set; } = DateTimeOffset.Now;
+
+    /// <summary>产生这次改动的工具名，点开能看到是 write_file 还是 edit 干的。</summary>
+    public string Tool { get; set; } = string.Empty;
+
+    [JsonIgnore]
+    public string KindText => Kind switch
+    {
+        FileChangeKind.Created => "新建",
+        FileChangeKind.Deleted => "删除",
+        _ => "修改",
+    };
+
+    /// <summary>行数那块小字：只写确实发生过的，0 不占位。</summary>
+    [JsonIgnore]
+    public string ChangeText
+    {
+        get
+        {
+            var parts = new List<string>(2);
+            if (AddedLines > 0)
+            {
+                parts.Add($"+{AddedLines}");
+            }
+
+            if (RemovedLines > 0)
+            {
+                parts.Add($"-{RemovedLines}");
+            }
+
+            return parts.Count == 0 ? KindText : string.Join(" ", parts);
+        }
+    }
+
+    [JsonIgnore]
+    public bool HasDiff => !string.IsNullOrWhiteSpace(Diff);
+
+    [JsonIgnore]
+    public string FileName => System.IO.Path.GetFileName(Path);
+
+    /// <summary>文件名之外的那一段，悬停时给完整路径。</summary>
+    [JsonIgnore]
+    public string Folder => System.IO.Path.GetDirectoryName(Path) ?? string.Empty;
+
+    [JsonIgnore]
+    public string SizeText => Size switch
+    {
+        >= 1024 * 1024 => $"{Size / 1024.0 / 1024.0:0.#} MB",
+        >= 1024 => $"{Size / 1024.0:0.#} KB",
+        > 0 => $"{Size} B",
+        _ => string.Empty,
+    };
 }
 
 /// <summary>

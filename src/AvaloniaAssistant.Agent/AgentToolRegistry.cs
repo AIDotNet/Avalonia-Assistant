@@ -170,6 +170,9 @@ public sealed class AgentToolRegistry
     private static IEnumerable<IAgentTool> DefaultTools() =>
     [
         new WriteFileTool(),
+        new ReadDocumentTool(),
+        new WriteDocumentTool(),
+        new UpdatePlanTool(),
         new OpenPathTool(),
         new RunCommandTool(),
         new FetchUrlTool(),

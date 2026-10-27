@@ -32,6 +32,12 @@ public abstract record AgentStreamEvent
         bool IsError,
         long? DurationMs) : AgentStreamEvent;
 
+    /// <summary>
+    /// 工具改动了文件。采集必须在 Agent 层做：事件走的是无界通道，
+    /// UI 收到「工具开始」时，一个几毫秒就能写完的工具早就结束了，那时再拍快照拍到的是改后的内容。
+    /// </summary>
+    public sealed record FileChanged(FileChangeRecord Change) : AgentStreamEvent;
+
     public sealed record RunCompleted(
         AgentStopReason StopReason,
         string? Error,

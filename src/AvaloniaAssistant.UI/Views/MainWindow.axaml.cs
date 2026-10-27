@@ -18,6 +18,12 @@ public partial class MainWindow : Window
     /// <summary>用户已经在关窗确认里选了「停止并退出」，第二次 Close 不再拦。</summary>
     private bool _closeConfirmed;
 
+    /// <summary>
+    /// 上一次跑完是成功还是失败，只用来挑提示音。
+    /// 顺序上它总在 <c>AttentionRequested</c> 之前到：ChatViewModel 先报结束，再翻 IsBusy。
+    /// </summary>
+    private bool _lastRunFailed;
+
     /// <summary>确认框开着的时候再点一次关闭，不要叠第二个。</summary>
     private bool _closeDialogOpen;
 
@@ -40,8 +46,12 @@ public partial class MainWindow : Window
         // Ctrl+滚轮缩放：放在隧道阶段，先于聊天区的滚动处理拿事件。
         AddHandler(PointerWheelChangedEvent, OnWindowPointerWheelChanged, RoutingStrategies.Tunnel);
 
+        // 拖文件/图片进来：落点在整窗范围内接，见 MainWindow.Drop.cs
+        InitializeDragDrop();
+
         _viewModel.AttentionRequested += OnAttentionRequested;
         _viewModel.FontScaleChanged += OnFontScaleChanged;
+        _viewModel.RunFinished += OnRunFinished;
 
         PositionChanged += OnWindowPositionChanged;
         SizeChanged += OnWindowSizeChanged;
@@ -50,6 +60,7 @@ public partial class MainWindow : Window
         {
             _viewModel.AttentionRequested -= OnAttentionRequested;
             _viewModel.FontScaleChanged -= OnFontScaleChanged;
+            _viewModel.RunFinished -= OnRunFinished;
             _windowStateTimer?.Stop();
             _scaleSaveTimer?.Stop();
         };
@@ -293,6 +304,9 @@ public partial class MainWindow : Window
         _ = _viewModel.PersistSidebarWidthAsync();
     }
 
+    /// <summary>记下这一轮是成功还是失败，等 AttentionRequested 到了挑声音用。</summary>
+    private void OnRunFinished(object? sender, ChatRunFinishedEventArgs e) => _lastRunFailed = e.Failed;
+
     /// <summary>
     /// 后台跑完一轮：窗口不在前台就闪一下任务栏。这不是系统通知，
     /// 但比"什么都不发生"强——用户切回来能看见任务栏在亮。
@@ -305,6 +319,28 @@ public partial class MainWindow : Window
         }
 
         FlashTaskbar();
+        PlayAttentionSound();
+    }
+
+    /// <summary>
+    /// 配一声提示音。只靠任务栏闪，用户在别的窗口里干活时根本注意不到；
+    /// 失败和正常用两种声音，不用切回来就能判断要不要马上处理。
+    /// </summary>
+    private void PlayAttentionSound()
+    {
+        if (!OperatingSystem.IsWindows() || !_viewModel.Settings.PlayFinishSound)
+        {
+            return;
+        }
+
+        try
+        {
+            _ = MessageBeep(_lastRunFailed ? BeepError : BeepInformation);
+        }
+        catch (Exception)
+        {
+            // 没有声卡、被系统静音都不该影响任务收尾
+        }
     }
 
     private void FlashTaskbar()
@@ -399,10 +435,16 @@ public partial class MainWindow : Window
         }
     }
 
-    // ---- 任务栏闪烁（Windows） ----
+    // ---- 任务栏闪烁与提示音（Windows） ----
 
     private const uint FlashTray = 0x00000002;
     private const uint FlashUntilFocused = 0x0000000C;
+
+    /// <summary>MB_ICONHAND：出错时用系统警示音。</summary>
+    private const uint BeepError = 0x00000010;
+
+    /// <summary>MB_ICONASTERISK：正常跑完用普通提示音。</summary>
+    private const uint BeepInformation = 0x00000040;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct FlashWindowInfo
@@ -417,4 +459,8 @@ public partial class MainWindow : Window
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool FlashWindowEx(ref FlashWindowInfo info);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool MessageBeep(uint type);
 }

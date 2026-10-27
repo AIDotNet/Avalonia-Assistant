@@ -75,6 +75,28 @@
       <Setter Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
       <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
     </Style>
+
+    <!-- 编辑提问的主按钮：比授权卡上的矮一档，跟消息区的小控件同一量级 -->
+    <Style Selector="Button.edit-save">
+      <Setter Property="Height" Value="26" />
+      <Setter Property="Padding" Value="10,0" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Background" Value="{StaticResource AccentBrush}" />
+      <Setter Property="Foreground" Value="{StaticResource AccentForegroundBrush}" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.edit-save:pointerover">
+      <Setter Property="Background" Value="#3A3A36" />
+    </Style>
+    <Style Selector="Button.edit-save:disabled">
+      <Setter Property="Background" Value="{StaticResource BorderBrush}" />
+    </Style>
+    <Style Selector="Button.edit-save:disabled /template/ ContentPresenter">
+      <Setter Property="TextBlock.Foreground" Value="{StaticResource TextMutedBrush}" />
+    </Style>
   </UserControl.Styles>
 
   <UserControl.DataTemplates>
@@ -97,11 +119,43 @@
           <Border Background="{StaticResource UserBubbleBrush}"
                   CornerRadius="16,16,4,16"
                   Padding="14,10"
-                  MaxWidth="620">
+                  MaxWidth="620"
+                  IsVisible="{Binding ShowText}">
             <SelectableTextBlock Text="{Binding Text}"
                                  TextWrapping="Wrap"
                                  FontSize="13.5"
                                  LineHeight="21" />
+          </Border>
+
+          <!-- 就地改提问。改完从这句重来，比重新开一条任务把上下文全丢掉划算得多 -->
+          <Border IsVisible="{Binding IsEditing}"
+                  Background="{StaticResource SurfaceBrush}"
+                  BorderBrush="{StaticResource BorderStrongBrush}"
+                  BorderThickness="1"
+                  CornerRadius="14"
+                  Padding="10"
+                  MaxWidth="620">
+            <StackPanel Spacing="7">
+              <arc:Textarea Text="{Binding EditText, Mode=TwoWay}"
+                            MinWidth="360"
+                            MinHeight="66"
+                            MaxHeight="220"
+                            FontSize="13"
+                            Watermark="改完按「保存并重发」" />
+              <TextBlock Text="保存后，这句之后的对话会被删掉并重新回答。"
+                         Classes="caption"
+                         FontSize="10" />
+              <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="6">
+                <Button Classes="msg-action" Command="{Binding CancelEditCommand}">
+                  <TextBlock Text="取消" FontSize="11" />
+                </Button>
+                <Button Classes="edit-save"
+                        Command="{Binding SaveEditCommand}"
+                        IsEnabled="{Binding CanSaveEdit}">
+                  <TextBlock Text="保存并重发" FontSize="11" />
+                </Button>
+              </StackPanel>
+            </StackPanel>
           </Border>
 
           <!-- 这一轮贴的图，缩略图跟着气泡右对齐 -->
@@ -165,13 +219,24 @@
             </ItemsControl.ItemTemplate>
           </ItemsControl>
 
-          <!-- 时间戳：隔一天回来，得知道这轮是什么时候跑的 -->
-          <TextBlock Text="{Binding TimeText}"
-                     ToolTip.Tip="{Binding FullTimeText}"
-                     Classes="caption"
-                     FontSize="9.5"
-                     HorizontalAlignment="Right"
-                     Margin="0,0,4,0" />
+          <!-- 时间戳：隔一天回来，得知道这轮是什么时候跑的。
+               编辑入口放在同一行，不额外占高度 -->
+          <StackPanel Orientation="Horizontal"
+                      HorizontalAlignment="Right"
+                      Spacing="4"
+                      Margin="0,0,4,0">
+            <Button Classes="msg-action"
+                    IsVisible="{Binding CanEdit}"
+                    Command="{Binding StartEditCommand}"
+                    ToolTip.Tip="改这句，从它重新回答">
+              <TextBlock Text="编辑" FontSize="10" />
+            </Button>
+            <TextBlock Text="{Binding TimeText}"
+                       ToolTip.Tip="{Binding FullTimeText}"
+                       Classes="caption"
+                       FontSize="9.5"
+                       VerticalAlignment="Center" />
+          </StackPanel>
         </StackPanel>
         </Grid>
       </Border>
@@ -200,6 +265,66 @@
         </Border>
 
         <StackPanel Grid.Column="1" Margin="10,0,0,0" Spacing="7">
+          <!-- 执行计划：多步任务先把打算怎么做摆出来，用户能在第一步之前就叫停。
+               没有计划时整块不出现，单步任务不会多一个空框。 -->
+          <Border IsVisible="{Binding HasPlan}"
+                  Background="{StaticResource SurfaceBrush}"
+                  BorderBrush="{StaticResource BorderBrush}"
+                  BorderThickness="1"
+                  CornerRadius="10"
+                  Padding="12,9"
+                  MaxWidth="620"
+                  HorizontalAlignment="Left">
+            <StackPanel Spacing="5">
+              <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <arc:ArcGlyph Data="{x:Static arc:ArcIcons.CircleCheck}"
+                                Size="13"
+                                VerticalAlignment="Center"
+                                Foreground="{StaticResource TextSecondaryBrush}" />
+                  <TextBlock Text="执行计划" FontSize="11.5" FontWeight="Medium" VerticalAlignment="Center" />
+                </StackPanel>
+                <TextBlock Grid.Column="1"
+                           Text="{Binding PlanSummary}"
+                           FontSize="10"
+                           VerticalAlignment="Center"
+                           Foreground="{StaticResource TextMutedBrush}" />
+              </Grid>
+
+              <ItemsControl ItemsSource="{Binding Plan}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Grid ColumnDefinitions="Auto,*" Margin="0,2,0,0">
+                      <!-- 三种状态三个图标叠在同一格，靠可见性切换，行高不会跟着跳 -->
+                      <Panel Width="14" Height="14" VerticalAlignment="Top" Margin="0,1,0,0">
+                        <arc:ArcGlyph Data="{x:Static arc:ArcIcons.CircleCheck}"
+                                      Size="12"
+                                      IsVisible="{Binding IsDone}"
+                                      Foreground="{Binding GlyphBrush}" />
+                        <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Clock}"
+                                      Size="12"
+                                      IsVisible="{Binding IsCurrent}"
+                                      Foreground="{Binding GlyphBrush}" />
+                        <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Square}"
+                                      Size="12"
+                                      IsVisible="{Binding IsPending}"
+                                      Foreground="{Binding GlyphBrush}" />
+                      </Panel>
+                      <TextBlock Grid.Column="1"
+                                 Margin="7,0,0,0"
+                                 Text="{Binding Text}"
+                                 FontSize="11.5"
+                                 LineHeight="17"
+                                 TextWrapping="Wrap"
+                                 Foreground="{Binding Foreground}"
+                                 TextDecorations="{Binding Decorations}" />
+                    </Grid>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </Border>
+
           <Border IsVisible="{Binding HasReasoning}"
                   Background="{StaticResource SurfaceMutedBrush}"
                   BorderBrush="{StaticResource BorderBrush}"
@@ -676,7 +801,7 @@
             BorderBrush="{StaticResource BorderBrush}"
             BorderThickness="0,0,0,1"
             Padding="18,12,16,12">
-      <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto">
+      <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto">
         <Button Classes="icon" Command="{Binding BackCommand}" ToolTip.Tip="返回首页" Margin="0,0,6,0">
           <arc:ArcGlyph Data="{x:Static arc:ArcIcons.ChevronLeft}" Size="16" />
         </Button>
@@ -704,7 +829,19 @@
                 ToolTip.Tip="导出为 Markdown">
           <arc:ArcGlyph Data="{x:Static arc:ArcIcons.FileText}" Size="14" />
         </Button>
-        <Border Grid.Column="4"
+        <!-- 产物入口：没有改动过文件时整颗按钮不出现，不留一个点不动的空位 -->
+        <Button Grid.Column="4"
+                Classes="icon artifact-toggle"
+                Margin="0,0,6,0"
+                IsVisible="{Binding HasArtifacts}"
+                Command="{Binding ToggleArtifactPanelCommand}"
+                ToolTip.Tip="{Binding ArtifactToggleHint}">
+          <StackPanel Orientation="Horizontal" Spacing="1" VerticalAlignment="Center">
+            <arc:ArcGlyph Data="{x:Static arc:ArcIcons.FolderOpen}" Size="14" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding ArtifactCount}" FontSize="10" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+        <Border Grid.Column="5"
                 Background="{StaticResource SurfaceMutedBrush}"
                 CornerRadius="11"
                 Padding="10,4"
@@ -790,8 +927,9 @@
       </StackPanel>
     </Border>
 
-    <!-- 消息区 + 回到底部的浮标：用户滚上去看历史时，新内容不该悄悄长在下面 -->
-    <Panel Grid.Row="2">
+    <!-- 消息区 + 产物面板：只在这条任务真的改过文件时才分出一栏，没改过还是原来那一整片 -->
+    <Grid Grid.Row="2" ColumnDefinitions="*,Auto">
+    <Panel Grid.Column="0">
       <ScrollViewer x:Name="MessagesScroll"
                     Classes="message-list"
                     VerticalScrollBarVisibility="Auto"
@@ -895,6 +1033,133 @@
         </StackPanel>
       </Button>
     </Panel>
+
+    <!-- 产物：这次任务到底动了哪些文件。工具卡说的是过程，这里说的是结果。
+         没有产物时整栏不出现，消息区回到原来那一整片。 -->
+    <Border Grid.Column="1"
+            Width="304"
+            IsVisible="{Binding ShowArtifactPanel}"
+            Background="{StaticResource SurfaceMutedBrush}"
+            BorderBrush="{StaticResource BorderBrush}"
+            BorderThickness="1,0,0,0">
+      <Grid RowDefinitions="Auto,*">
+        <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="14,12,8,8">
+          <StackPanel Spacing="2">
+            <TextBlock Text="产物" FontSize="12.5" FontWeight="Medium" />
+            <TextBlock Text="{Binding ArtifactSummary}"
+                       FontSize="10"
+                       Foreground="{StaticResource TextMutedBrush}" />
+          </StackPanel>
+          <Button Grid.Column="1"
+                  Classes="msg-action"
+                  Command="{Binding ToggleArtifactPanelCommand}"
+                  ToolTip.Tip="收起产物面板"
+                  VerticalAlignment="Top">
+            <arc:ArcGlyph Data="{x:Static arc:ArcIcons.ChevronRight}" Size="12" />
+          </Button>
+        </Grid>
+
+        <ScrollViewer Grid.Row="1"
+                      VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled"
+                      Margin="8,0,8,10">
+          <ItemsControl ItemsSource="{Binding Artifacts}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Border Background="{StaticResource SurfaceBrush}"
+                        BorderBrush="{StaticResource BorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="10"
+                        Padding="10,9"
+                        Margin="0,0,0,6">
+                  <StackPanel Spacing="7">
+                    <Grid ColumnDefinitions="Auto,*,Auto">
+                      <arc:ArcGlyph Data="{x:Static arc:ArcIcons.FileText}"
+                                    Size="13"
+                                    Margin="0,2,7,0"
+                                    VerticalAlignment="Top"
+                                    Foreground="{Binding KindBrush}" />
+                      <StackPanel Grid.Column="1" Spacing="1">
+                        <TextBlock Text="{Binding FileName}"
+                                   FontSize="12"
+                                   FontWeight="Medium"
+                                   TextTrimming="CharacterEllipsis"
+                                   ToolTip.Tip="{Binding Detail}" />
+                        <TextBlock Text="{Binding Folder}"
+                                   FontSize="9.5"
+                                   Foreground="{StaticResource TextMutedBrush}"
+                                   TextTrimming="CharacterEllipsis"
+                                   IsVisible="{Binding HasFolder}" />
+                      </StackPanel>
+                      <Border Grid.Column="2"
+                              Background="{StaticResource SurfaceMutedBrush}"
+                              CornerRadius="4"
+                              Padding="5,1"
+                              VerticalAlignment="Top">
+                        <TextBlock Text="{Binding KindText}"
+                                   FontSize="10"
+                                   FontWeight="Medium"
+                                   Foreground="{Binding KindBrush}" />
+                      </Border>
+                    </Grid>
+
+                    <Grid ColumnDefinitions="Auto,*,Auto">
+                      <TextBlock Text="{Binding ChangeText}"
+                                 FontSize="10"
+                                 VerticalAlignment="Center"
+                                 Foreground="{Binding KindBrush}" />
+                      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2">
+                        <Button Classes="msg-action"
+                                IsVisible="{Binding HasDiff}"
+                                Command="{Binding ToggleCommand}"
+                                ToolTip.Tip="{Binding ExpandHint}">
+                          <TextBlock Text="差异" FontSize="10" />
+                        </Button>
+                        <Button Classes="msg-action" Command="{Binding OpenCommand}" ToolTip.Tip="用默认程序打开">
+                          <TextBlock Text="打开" FontSize="10" />
+                        </Button>
+                        <Button Classes="msg-action" Command="{Binding RevealCommand}" ToolTip.Tip="在资源管理器中定位">
+                          <TextBlock Text="定位" FontSize="10" />
+                        </Button>
+                      </StackPanel>
+                    </Grid>
+
+                    <!-- 逐行差异：+ 绿 − 红，跟代码托管站一致，用户不用再学一套配色。
+                         窄栏里横向滚动反而更难读，长行折行、整行铺满。 -->
+                    <Border IsVisible="{Binding IsExpanded}"
+                            Background="{StaticResource CodeBackgroundBrush}"
+                            CornerRadius="8"
+                            Padding="0,5"
+                            MaxHeight="260">
+                      <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                    HorizontalScrollBarVisibility="Disabled">
+                        <ItemsControl ItemsSource="{Binding Lines}">
+                          <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                              <Border Background="{Binding Background}"
+                                      Padding="8,0"
+                                      HorizontalAlignment="Stretch">
+                                <TextBlock Text="{Binding Text}"
+                                           FontFamily="{StaticResource MonoFontFamily}"
+                                           FontSize="10.5"
+                                           LineHeight="16"
+                                           TextWrapping="Wrap"
+                                           Foreground="{Binding Foreground}" />
+                              </Border>
+                            </DataTemplate>
+                          </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                      </ScrollViewer>
+                    </Border>
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+      </Grid>
+    </Border>
+    </Grid>
 
     <Border Grid.Row="3" Padding="26,8,26,14" Background="{StaticResource SurfaceBrush}">
       <StackPanel MaxWidth="840" HorizontalAlignment="Center">
