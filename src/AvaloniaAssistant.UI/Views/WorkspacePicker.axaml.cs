@@ -169,8 +169,7 @@ internal static class WorkspacePickerPopup
         };
 
         picker.CloseRequested += (_, _) => flyout.Hide();
-        flyout.Opened += (_, _) => FlyoutDismiss.Attach(flyout, anchor);
-        flyout.ShowAt(anchor);
+        FlyoutDismiss.Show(flyout, anchor);
 
         return flyout;
     }

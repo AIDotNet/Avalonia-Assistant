@@ -296,6 +296,12 @@ public static class AppLaunchOptions
     /// <summary>开发用：真的打开模型浮层并出图，检查当前项勾选、分组和说明。</summary>
     public static bool ModelFlyout { get; set; }
 
+    /// <summary>
+    /// 开发用：真打开工具权限浮层，点一次窗口别处、再按一次 Esc，验收「点外面收起」。
+    /// 浮层是自己装配的，忘了挂 FlyoutDismiss 编译不会报错，只能这么验。
+    /// </summary>
+    public static bool VerifyFlyoutDismiss { get; set; }
+
     /// <summary>开发用：给侧栏搜索框预置关键词，检查正文命中摘要。</summary>
     public static string? SessionQuery { get; set; }
 

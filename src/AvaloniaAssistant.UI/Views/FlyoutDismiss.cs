@@ -10,11 +10,20 @@ namespace AvaloniaAssistant.UI.Views;
 /// <summary>
 /// 主题自带的 light dismiss 不生效（点窗口别处不收起），这里自己接管：
 /// 窗口里任何一次按下、或者按 Esc，都把弹层收起来。弹层关掉时解绑，避免越挂越多。
-/// 侧栏菜单、输入框里的工作区浮层都走这一份。
+///
+/// 浮层要什么内容只能各自装配，但「点外面收起」统一从这里走（<see cref="Show"/>）：
+/// 少一次手动 Attach，就少一个点不掉的浮层——工具权限浮层就漏过。
 /// </summary>
 internal static class FlyoutDismiss
 {
-    public static void Attach(Flyout flyout, Visual owner)
+    /// <summary>挂上「点外面 / Esc 收起」再把浮层贴到锚点上。</summary>
+    public static void Show(Flyout flyout, Control anchor)
+    {
+        flyout.Opened += (_, _) => Attach(flyout, anchor);
+        flyout.ShowAt(anchor);
+    }
+
+    private static void Attach(Flyout flyout, Control owner)
     {
         if (TopLevel.GetTopLevel(owner) is not { } topLevel)
         {
@@ -35,6 +44,13 @@ internal static class FlyoutDismiss
             {
                 // 弹层自己也挂在另一个 TopLevel 上：它的点击不该把弹层关掉
                 if (TopLevel.GetTopLevel(source) is { } sourceTop && !ReferenceEquals(sourceTop, topLevel))
+                {
+                    return;
+                }
+
+                // 弹层被同层托管时（OverlayPopupHost）上面那条判不出来，按子树再判一次：
+                // 否则点菜单项会先收起弹层，Click 就丢了，看着像点了没反应。
+                if (IsInsideFlyout(flyout, source))
                 {
                     return;
                 }
@@ -73,6 +89,26 @@ internal static class FlyoutDismiss
             topLevel.RemoveHandler(InputElement.PointerPressedEvent, OnPointerPressed);
             topLevel.RemoveHandler(InputElement.KeyDownEvent, OnKeyDown);
         };
+    }
+
+    /// <summary>这次按下是不是落在弹层自己的内容上。</summary>
+    private static bool IsInsideFlyout(Flyout flyout, Visual source)
+    {
+        if (flyout.Content is not Visual content)
+        {
+            return false;
+        }
+
+        // 内容被套在模板产出的 FlyoutPresenter 里，它就是「层内 / 层外」的分界
+        foreach (var ancestor in content.GetVisualAncestors())
+        {
+            if (ancestor is FlyoutPresenter presenter)
+            {
+                return IsWithin(source, presenter);
+            }
+        }
+
+        return false;
     }
 
     private static bool IsWithin(Visual source, Visual? owner)

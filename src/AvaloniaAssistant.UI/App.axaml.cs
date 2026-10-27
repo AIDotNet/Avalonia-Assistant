@@ -589,6 +589,48 @@ public partial class AssistantApp : Application
                 }
             }
 
+            // 验收用：工具权限浮层「点外面 / Esc 收起」曾经漏掉过一次（内容自绘，
+            // 忘了挂收起就点不掉）。这里打开后真发一次按在窗口上的 PointerPressed——
+            // 和用户点输入框走同一条隧道；再开一次发 Esc，两条路都要收得掉。
+            if (AppLaunchOptions.VerifyFlyoutDismiss)
+            {
+                await Task.Delay(700);
+                var probeComposer = window.GetVisualDescendants().OfType<ComposerView>().FirstOrDefault();
+
+                var pointerFlyout = probeComposer?.ShowPermissionFlyout();
+                await Task.Delay(500);
+                var opened = pointerFlyout?.IsOpen == true;
+
+                window.RaiseEvent(new PointerPressedEventArgs(
+                    window,
+                    new Pointer(1, PointerType.Mouse, true),
+                    window,
+                    new Point(40, 40),
+                    0,
+                    new PointerPointProperties(RawInputModifiers.LeftMouseButton, PointerUpdateKind.LeftButtonPressed),
+                    KeyModifiers.None));
+                await Task.Delay(400);
+
+                var escFlyout = probeComposer?.ShowPermissionFlyout();
+                await Task.Delay(400);
+                window.RaiseEvent(new KeyEventArgs
+                {
+                    RoutedEvent = InputElement.KeyDownEvent,
+                    Key = Key.Escape,
+                    Source = window,
+                });
+                await Task.Delay(300);
+
+                var byPointer = pointerFlyout?.IsOpen == false;
+                var byEscape = escFlyout?.IsOpen == false;
+
+                Console.WriteLine(
+                    $"[verify-flyout-dismiss] 打开={opened} 点外面收起={byPointer} Esc收起={byEscape}");
+
+                desktop.Shutdown(opened && byPointer && byEscape ? 0 : 3);
+                return;
+            }
+
             if (string.IsNullOrWhiteSpace(AppLaunchOptions.ScreenshotPath))
             {
                 return;

@@ -78,12 +78,10 @@ public partial class SidebarView : UserControl
         // 重命名是在同一个弹层里换内容，不再另外开一个：换窗口容易丢掉锚点，弹到屏幕左上角去
         flyout.Content = BuildMenu(flyout, item);
 
-        // 打开之后再挂「点外面收起」：刚开始展开时，打开它的那一下点击还在路上，
-        // 提前挂上去会把菜单自己关掉，看着像点了没反应。
-        flyout.Opened += (_, _) => FlyoutDismiss.Attach(flyout, target);
-
+        // 「点外面收起」由 FlyoutDismiss.Show 在 Opened 之后挂：刚开始展开时，
+        // 打开它的那一下点击还在路上，提前挂会把菜单自己关掉，看着像点了没反应。
         _menuFlyout = flyout;
-        flyout.ShowAt(target);
+        FlyoutDismiss.Show(flyout, target);
     }
 
     /// <summary>
@@ -239,10 +237,9 @@ public partial class SidebarView : UserControl
         };
 
         flyout.Content = BuildSessionMenu(flyout, item);
-        flyout.Opened += (_, _) => FlyoutDismiss.Attach(flyout, target);
 
         _menuFlyout = flyout;
-        flyout.ShowAt(target);
+        FlyoutDismiss.Show(flyout, target);
     }
 
     private Control BuildSessionMenu(Flyout flyout, SessionItemViewModel item)

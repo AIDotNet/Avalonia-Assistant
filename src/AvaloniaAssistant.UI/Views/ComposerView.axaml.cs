@@ -274,7 +274,7 @@ public partial class ComposerView : UserControl
 
         _modelFlyout?.Hide();
         _modelFlyout = BuildModelFlyout(viewModel);
-        _modelFlyout.ShowAt(target);
+        FlyoutDismiss.Show(_modelFlyout, target);
     }
 
     private Flyout? _modelFlyout;
@@ -289,7 +289,7 @@ public partial class ComposerView : UserControl
 
         _modelFlyout?.Hide();
         _modelFlyout = BuildModelFlyout(ViewModel);
-        _modelFlyout.ShowAt(target);
+        FlyoutDismiss.Show(_modelFlyout, target);
         return _modelFlyout;
     }
 
@@ -479,12 +479,37 @@ public partial class ComposerView : UserControl
             return;
         }
 
+        // 再点一次收起，和模型胶囊一样：否则会「收起又立刻弹一个一样的」，看着像没反应
+        if (_permissionFlyout is { IsOpen: true })
+        {
+            _permissionFlyout.Hide();
+            return;
+        }
+
         _permissionFlyout?.Hide();
         _permissionFlyout = BuildPermissionFlyout(viewModel);
-        _permissionFlyout.ShowAt(target);
+        FlyoutDismiss.Show(_permissionFlyout, target);
     }
 
     private Flyout? _permissionFlyout;
+
+    /// <summary>开发用：打开工具权限浮层并把弹层交出去，供 --verify-flyout-dismiss 验收收起。</summary>
+    public Flyout? ShowPermissionFlyout()
+    {
+        var target = this.GetVisualDescendants()
+            .OfType<Button>()
+            .FirstOrDefault(button => button.Classes.Contains("permission-pill"));
+
+        if (ViewModel is null || target is null)
+        {
+            return null;
+        }
+
+        _permissionFlyout?.Hide();
+        _permissionFlyout = BuildPermissionFlyout(ViewModel);
+        FlyoutDismiss.Show(_permissionFlyout, target);
+        return _permissionFlyout;
+    }
 
     /// <summary>
     /// 权限浮层：一句当前说明 + 三个档位。完全访问是危险态，选中它之后所有工具直接执行。

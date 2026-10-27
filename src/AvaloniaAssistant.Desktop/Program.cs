@@ -161,6 +161,9 @@ internal static class Program
                 case "--model-flyout":
                     AppLaunchOptions.ModelFlyout = true;
                     break;
+                case "--verify-flyout-dismiss":
+                    AppLaunchOptions.VerifyFlyoutDismiss = true;
+                    break;
                 case "--scroll-bottom":
                     AppLaunchOptions.ScrollToEnd = true;
                     break;
