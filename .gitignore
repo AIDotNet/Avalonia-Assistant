@@ -182,6 +182,9 @@ DocProject/Help/html
 # Click-Once directory
 publish/
 
+# 本项目的发布产物（单文件 exe 有 80 MB+，不进仓库）
+/dist
+
 # Publish Web Output
 *.[Pp]ublish.xml
 *.azurePubxml

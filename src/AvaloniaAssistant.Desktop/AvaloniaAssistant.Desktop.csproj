@@ -18,4 +18,16 @@
     <ProjectReference Include="..\AvaloniaAssistant.Speech\AvaloniaAssistant.Speech.csproj" />
     <ProjectReference Include="..\AvaloniaAssistant.UI\AvaloniaAssistant.UI.csproj" />
   </ItemGroup>
+
+  <!--
+    单文件发布时不带 pdb。SkiaSharp / HarfBuzzSharp 的 native 包会各带一个几十 MB 的符号文件
+    （libSkiaSharp.pdb 96 MB），运行完全不需要，但会跟着掉进发布目录，
+    「单文件」就名不副实了。
+  -->
+  <Target Name="DropPdbsFromPublish" AfterTargets="ComputeFilesToPublish">
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+                             Condition="'%(ResolvedFileToPublish.Extension)' == '.pdb'" />
+    </ItemGroup>
+  </Target>
 </Project>

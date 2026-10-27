@@ -140,11 +140,34 @@ dotnet run --project src/AvaloniaAssistant.Desktop
 
 ### 发布
 
+框架依赖（体积小，要求目标机器装了 .NET 10 运行时）：
+
 ```bash
 dotnet publish src/AvaloniaAssistant.Desktop -c Release -r win-x64 --self-contained false
 ```
 
-产物在 `src/AvaloniaAssistant.Desktop/bin/Release/net10.0/win-x64/publish/`。
+自包含单文件（一个 exe，双击就跑，约 82 MB）：
+
+```bash
+dotnet publish src/AvaloniaAssistant.Desktop -c Release -r win-x64 --self-contained true \
+  -p:PublishSingleFile=true \
+  -p:IncludeNativeLibrariesForSelfExtract=true \
+  -p:IncludeAllContentForSelfExtract=true \
+  -p:EnableCompressionInSingleFile=true \
+  -o dist/win-x64-single
+```
+
+三个 `Include*` 参数各有用处，少一个就凑不齐单文件：
+
+- `IncludeNativeLibrariesForSelfExtract` —— Avalonia / SkiaSharp / HarfBuzz 的 native 库得一起塞进去
+- `IncludeAllContentForSelfExtract` —— `Pi.CodingAgent` 带了一批内容文件（导出模板、schema、主题），
+  不加这个它们会散落在 exe 旁边，变成「exe + Assets 目录」
+- `EnableCompressionInSingleFile` —— 压到 82 MB，不压约 150 MB
+
+产物目录里只有一个 `AvaloniaAssistant.exe`：native 库的 pdb（`libSkiaSharp.pdb` 就有 96 MB）
+在 `Desktop.csproj` 里被 `DropPdbsFromPublish` 排掉了。
+
+首次运行时内容文件会解到 `%TEMP%\.net\` 下，之后启动直接复用。
 
 ## 项目结构
 
