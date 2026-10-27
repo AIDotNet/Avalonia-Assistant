@@ -8,5 +8,8 @@
     <AvaloniaVersion>12.1.4</AvaloniaVersion>
     <ArcVersion>0.3.1-preview.3</ArcVersion>
     <PiVersion>1.4.4</PiVersion>
+
+    <!-- 应用版本的唯一来源：界面从程序集读，发版只改这一处 -->
+    <Version>1.0.1</Version>
   </PropertyGroup>
 </Project>

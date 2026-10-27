@@ -3,6 +3,7 @@ using System.Globalization;
 using Avalonia.Media;
 using Avalonia.Threading;
 using AvaloniaAssistant.Abstractions;
+using AvaloniaAssistant.UI.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TKCode.Arc;
@@ -679,6 +680,9 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(IsStartupLast));
         await _host.SaveSettingsQuietlyAsync();
     }
+
+    /// <summary>「关于」卡片里的版本行。和侧栏同一个来源，不会再出现两处对不上。</summary>
+    public string AppVersionText => "Avalonia Assistant " + AppVersion.Number;
 
     public bool IsSoundOn => Settings.PlayFinishSound;
 

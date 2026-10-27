@@ -112,7 +112,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     public string PlanText => "本地运行 · 数据留在本机";
 
-    public string VersionText => "v1.0.0";
+    public string VersionText => Services.AppVersion.Display;
 
     /// <summary>有任务在跑、但窗口不在前台时，让视图闪一下任务栏。</summary>
     public event EventHandler? AttentionRequested;

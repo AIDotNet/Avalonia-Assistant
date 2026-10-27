@@ -406,7 +406,7 @@
                 <TextBlock Text="关于" FontSize="13" FontWeight="SemiBold" />
                 <Grid ColumnDefinitions="86,*" RowDefinitions="Auto,Auto,Auto,Auto">
                   <TextBlock Text="版本" FontSize="12" Margin="0,4" Foreground="{StaticResource TextSecondaryBrush}" />
-                  <TextBlock Grid.Column="1" Text="Avalonia Assistant 1.0.0" FontSize="12" Margin="0,4" />
+                  <TextBlock Grid.Column="1" Text="{Binding AppVersionText}" FontSize="12" Margin="0,4" />
                   <TextBlock Grid.Row="1" Text="技术栈" FontSize="12" Margin="0,4" Foreground="{StaticResource TextSecondaryBrush}" />
                   <TextBlock Grid.Row="1" Grid.Column="1" Text="Avalonia 12 · TKCode.Arc · pi.net" FontSize="12" Margin="0,4" />
                   <TextBlock Grid.Row="2" Text="数据目录" FontSize="12" Margin="0,4" Foreground="{StaticResource TextSecondaryBrush}" />
