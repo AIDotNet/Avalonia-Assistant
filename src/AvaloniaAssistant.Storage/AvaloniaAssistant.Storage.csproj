@@ -3,6 +3,10 @@
     <RootNamespace>AvaloniaAssistant.Storage</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="DocumentFormat.OpenXml" />
+    <PackageReference Include="PdfPig" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\AvaloniaAssistant.Abstractions\AvaloniaAssistant.Abstractions.csproj" />
   </ItemGroup>
 </Project>

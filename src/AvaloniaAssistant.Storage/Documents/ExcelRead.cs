@@ -2,10 +2,10 @@ using System.Text;
 using DocumentFormat.OpenXml.Packaging;
 using S = DocumentFormat.OpenXml.Spreadsheet;
 
-namespace AvaloniaAssistant.Agent.Tools;
+namespace AvaloniaAssistant.Storage.Documents;
 
 /// <summary>读 xlsx：每张工作表转成一张 Markdown 表，表名当标题。</summary>
-internal static class ExcelRead
+public static class ExcelRead
 {
     /// <summary>每张表最多读多少行。几百行的表全灌进上下文，对模型没有增量信息。</summary>
     private const int MaxSheetRows = 200;

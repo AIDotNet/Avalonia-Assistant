@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using AvaloniaAssistant.Abstractions;
 using AvaloniaAssistant.Agent.Tools;
+using AvaloniaAssistant.Storage.Documents;
 using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Validation;

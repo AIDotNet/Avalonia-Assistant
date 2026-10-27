@@ -3,10 +3,10 @@ using DocumentFormat.OpenXml.Packaging;
 using A = DocumentFormat.OpenXml.Drawing;
 using P = DocumentFormat.OpenXml.Presentation;
 
-namespace AvaloniaAssistant.Agent.Tools;
+namespace AvaloniaAssistant.Storage.Documents;
 
 /// <summary>读 pptx：按页给文字，并把演讲者备注带上——备注常常是整页里信息量最大的部分。</summary>
-internal static class PowerPointRead
+public static class PowerPointRead
 {
     public static string Read(string path)
     {

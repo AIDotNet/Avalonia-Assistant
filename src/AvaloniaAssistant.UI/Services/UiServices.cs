@@ -4,6 +4,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Input.Platform;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using AvaloniaAssistant.Storage.Documents;
 
 namespace AvaloniaAssistant.UI.Services;
 
@@ -152,6 +153,59 @@ public static class Ui
         {
             await window.Clipboard.SetTextAsync(text);
         }
+    }
+
+    /// <summary>能在应用内预览的扩展名。不在这里的一律走系统程序。</summary>
+    private static readonly HashSet<string> PreviewableExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".docx", ".xlsx", ".pptx", ".pdf",
+        ".md", ".markdown", ".txt", ".csv", ".tsv", ".json", ".xml", ".yaml", ".yml",
+        ".cs", ".js", ".ts", ".py", ".html", ".htm", ".css", ".sql", ".log",
+    };
+
+    /// <summary>预览最多读多少字符。再长界面也读不完，让人打开原文件更实际。</summary>
+    private const int PreviewMaxChars = 60_000;
+
+    public static bool CanPreview(string? path)
+        => !string.IsNullOrWhiteSpace(path) && PreviewableExtensions.Contains(Path.GetExtension(path));
+
+    /// <summary>
+    /// 在应用内预览文档。解析走 <c>Storage.Documents</c>，和 <c>read_document</c> 工具同一套，
+    /// 所以 docx 的标题层级与表格、xlsx 的每张工作表、pdf 的按页正文都能保留。
+    /// 打不开时退回系统程序——点了没反应比弹出去更让人困惑。
+    /// </summary>
+    public static async Task<bool> PreviewDocumentAsync(string path)
+    {
+        if (!File.Exists(path) || !CanPreview(path))
+        {
+            return false;
+        }
+
+        string content;
+        try
+        {
+            content = await DocumentRead
+                .ReadAsync(path, PreviewMaxChars, CancellationToken.None)
+                .ConfigureAwait(true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            return OpenExternal(path);
+        }
+
+        var owner = (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
+        var preview = new Views.DocumentPreviewWindow(path, content, content.Length >= PreviewMaxChars);
+
+        if (owner is not null)
+        {
+            await preview.ShowDialog(owner);
+        }
+        else
+        {
+            preview.Show();
+        }
+
+        return true;
     }
 
     /// <summary>
@@ -346,6 +400,9 @@ public static class AppLaunchOptions
 
     /// <summary>设置页直接停在「系统设置」那一栏，省得每次手动切。</summary>
     public static bool SettingsSystem { get; set; }
+
+    /// <summary>要打开文档预览的文件路径（配合 --page preview 截图验收）。</summary>
+    public static string? PreviewPath { get; set; }
 
     /// <summary>开发用：截图前把主内容滚到底，检查长页面下半截。</summary>
     public static bool ScrollToEnd { get; set; }

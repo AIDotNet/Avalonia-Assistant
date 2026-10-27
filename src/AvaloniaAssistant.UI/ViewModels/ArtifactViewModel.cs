@@ -128,6 +128,25 @@ public sealed partial class ArtifactViewModel : ObservableObject
         IsExpanded = !IsExpanded;
     }
 
+    /// <summary>
+    /// 能不能在应用内看一眼内容。office 文档、PDF 和纯文本可以；
+    /// 图片和二进制走「打开」，塞进文本框只会是一堆乱码。
+    /// </summary>
+    public bool CanPreview => Ui.CanPreview(FullPath);
+
+    [RelayCommand]
+    private async Task PreviewAsync()
+    {
+        if (File.Exists(FullPath) && await Ui.PreviewDocumentAsync(FullPath))
+        {
+            return;
+        }
+
+        _report(File.Exists(FullPath)
+            ? $"这个文件没法在应用内预览，试试「打开」：{DisplayPath}"
+            : $"文件已经不在了：{FullPath}");
+    }
+
     [RelayCommand]
     private void Open()
     {

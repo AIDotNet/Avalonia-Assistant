@@ -25,6 +25,9 @@ Windows 桌面 AI 助理。Agent 循环用 [pi.net](https://github.com/AIDotNet/
 - **改了什么看得见**：写过的文件右侧列成一张产物清单，显示新建 / 修改 / 删除、增删行数，
   点开是逐行差异（`+` 绿 `−` 红），能直接打开文件或在资源管理器里定位。导出会话时会一起带上。
   工具卡说的是过程，这里说的是结果——两者不混在一起。
+- **文档在应用内就能看**：产物卡上点「预览」，docx / xlsx / pptx / pdf 的内容直接开窗显示——
+  标题层级、表格、工作表、按页正文都在。是文字预览不是版式预览，窗口里写明了，
+  要看排版还是点「打开原文件」。
 - **真的产出办公文件**：`read_document` 读 docx / xlsx / pptx / pdf，表格和标题层级都还原成 Markdown；
   `write_document` 把 Markdown 写成 .docx / .xlsx，标题、项目符号、表格、代码块都落成真正的样式。
 - **多步任务先给计划**：模型调 `update_plan` 列出步骤，对话里显示成清单，做到哪一步标到哪一步
@@ -375,6 +378,9 @@ dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --pag
 
 # 消息编辑态：最后一条提问变成输入框 + 保存并重发
 dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --page chat --chat-edit
+
+# 文档预览窗：--preview 指定文件，docx / xlsx / pptx / pdf / 纯文本都行
+dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --page preview --preview "docs/项目介绍.pdf"
 
 # 设置页直接停在「系统设置」：检查权限、缩放、跑完提示三张卡片
 dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --page settings --settings-system

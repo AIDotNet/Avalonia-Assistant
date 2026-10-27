@@ -268,6 +268,31 @@ public partial class AssistantApp : Application
                     }
 
                     break;
+                case "preview" when !string.IsNullOrWhiteSpace(AppLaunchOptions.PreviewPath):
+                {
+                    // 文档预览窗是独立窗口，主窗口截图截不到它，单独开一个再拍
+                    var target = AppLaunchOptions.PreviewPath;
+                    var body = await AvaloniaAssistant.Storage.Documents.DocumentRead
+                        .ReadAsync(target, 60_000, CancellationToken.None);
+
+                    var previewWindow = new Views.DocumentPreviewWindow(target, body, body.Length >= 60_000)
+                    {
+                        WindowStartupLocation = WindowStartupLocation.Manual,
+                        Position = new PixelPoint(40, 40),
+                    };
+
+                    previewWindow.Show();
+                    await Task.Delay(700);
+
+                    if (!string.IsNullOrWhiteSpace(AppLaunchOptions.ScreenshotPath))
+                    {
+                        Capture(previewWindow, AppLaunchOptions.ScreenshotPath);
+                    }
+
+                    previewWindow.Close();
+                    break;
+                }
+
                 case "tools":
                     if (AppLaunchOptions.SettingsFromChat)
                     {
@@ -704,7 +729,13 @@ public partial class AssistantApp : Application
                 await Task.Delay(250);
             }
 
-            Capture(window, AppLaunchOptions.ScreenshotPath);
+            // 预览窗口是独立窗口，已经在自己的分支里拍过了；
+            // 这里再拍主窗口会把同一个文件覆盖掉，等于白截。
+            if (string.IsNullOrWhiteSpace(AppLaunchOptions.PreviewPath))
+            {
+                Capture(window, AppLaunchOptions.ScreenshotPath);
+            }
+
             desktop.Shutdown();
         }
         catch (Exception ex)

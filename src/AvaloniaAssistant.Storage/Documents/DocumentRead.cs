@@ -1,7 +1,8 @@
 using System.Text;
 using UglyToad.PdfPig;
+using UglyToad.PdfPig.DocumentLayoutAnalysis.TextExtractor;
 
-namespace AvaloniaAssistant.Agent.Tools;
+namespace AvaloniaAssistant.Storage.Documents;
 
 /// <summary>
 /// 把办公文档读成模型能用的文本，按扩展名分发。
@@ -14,7 +15,7 @@ namespace AvaloniaAssistant.Agent.Tools;
 /// 来回改的时候才不会走样。
 /// </para>
 /// </summary>
-internal static class DocumentRead
+public static class DocumentRead
 {
     /// <summary>一次最多吐多少字符。超了截断并说明，别把上下文一次撑爆。</summary>
     public const int DefaultMaxChars = 24_000;
@@ -71,7 +72,9 @@ internal static class DocumentRead
 
         foreach (var page in document.GetPages())
         {
-            var text = page.Text;
+            // Page.Text 只是把字块拼起来，同一行的字会粘成一串（「1Windows 桌面」）。
+            // ContentOrderTextExtractor 按阅读顺序重排并保留换行，读起来才像文章。
+            var text = ContentOrderTextExtractor.GetText(page);
             if (string.IsNullOrWhiteSpace(text))
             {
                 continue;

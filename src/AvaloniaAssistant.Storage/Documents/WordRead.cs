@@ -2,10 +2,10 @@ using System.Text;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Wordprocessing;
 
-namespace AvaloniaAssistant.Agent.Tools;
+namespace AvaloniaAssistant.Storage.Documents;
 
 /// <summary>读 docx：段落和表格按文档顺序走，标题按样式还原成 Markdown 的 #。</summary>
-internal static class WordRead
+public static class WordRead
 {
     public static string Read(string path)
     {

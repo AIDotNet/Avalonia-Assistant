@@ -1,4 +1,5 @@
 using AvaloniaAssistant.Abstractions;
+using AvaloniaAssistant.Storage.Documents;
 
 namespace AvaloniaAssistant.Agent.Tools;
 

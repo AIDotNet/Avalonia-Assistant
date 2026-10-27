@@ -149,6 +149,9 @@ internal static class Program
                 case "--settings-system":
                     AppLaunchOptions.SettingsSystem = true;
                     break;
+                case "--preview" when index + 1 < args.Length:
+                    AppLaunchOptions.PreviewPath = args[++index];
+                    break;
                 case "--chat-empty":
                     AppLaunchOptions.ChatEmpty = true;
                     break;

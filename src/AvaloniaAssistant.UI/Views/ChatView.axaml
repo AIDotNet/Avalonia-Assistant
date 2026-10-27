@@ -1115,6 +1115,13 @@
                                 ToolTip.Tip="{Binding ExpandHint}">
                           <TextBlock Text="差异" FontSize="10" />
                         </Button>
+                        <!-- 能在应用内看内容就别弹出去：文档类文件点一次就能读 -->
+                        <Button Classes="msg-action"
+                                IsVisible="{Binding CanPreview}"
+                                Command="{Binding PreviewCommand}"
+                                ToolTip.Tip="在应用内预览内容（文字与表格，非版式）">
+                          <TextBlock Text="预览" FontSize="10" />
+                        </Button>
                         <Button Classes="msg-action" Command="{Binding OpenCommand}" ToolTip.Tip="用默认程序打开">
                           <TextBlock Text="打开" FontSize="10" />
                         </Button>
