@@ -4,7 +4,7 @@
 
 | 项目 | 本地路径 | 本次使用方式 | 版本 |
 | --- | --- | --- | --- |
-| pi.net | `D:\AI\参考项目\pi.net` | NuGet 包 `Pi.CodingAgent`（传递引入 `Pi.Agent`、`Pi.Ai`、`Pi.Mcp`） | 1.4.2 |
+| pi.net | `D:\AI\参考项目\pi.net` | NuGet 包 `Pi.CodingAgent`（传递引入 `Pi.Agent`、`Pi.Ai`、`Pi.Mcp`） | 1.4.4 |
 | TKCode.Arc | `D:\AI\参考项目\TKCode.Arc` | NuGet 包 `TKCode.Arc`、`TKCode.Arc.Fonts` | 0.3.1-preview.3 |
 
 > 包和本地源码在少数地方不完全一致，下面单独标注。实现以**包实际暴露的 API**为准，本地源码用来理解行为和边界。
@@ -97,8 +97,10 @@ new AgentTool(
 
 ### 1.4 包与源码的差异
 
-- 包 `Pi.CodingAgent` 1.4.2 与本地源码 API 对得上；本地源码的 `<Version>` 仍是 1.4.1，
-  发版时靠 `-p:Version=` 覆盖，下次发包记得别漏（否则新包会被当成 1.4.1 撞车）。
+- 包 `Pi.CodingAgent` 1.4.4 与本地源码 API 对得上，源码 `<Version>` 也是 1.4.4。
+- 1.4.4 把扩展的默认装载器换成了真实 ALC。本项目没有直接加载外部程序集（不用
+  `AssemblyLoadContext` / ExtensionLoader），只借 `ToolDefinition` 注册自建工具、
+  用 `skillsOverride` 过滤启用的技能，所以这条改动碰不到。
 - 本地源码的 `TreatWarningsAsErrors=true` 只影响它自己的仓库；以包方式引用不会把这条规则带进来。
 
 ## 2. TKCode.Arc：UI 框架
