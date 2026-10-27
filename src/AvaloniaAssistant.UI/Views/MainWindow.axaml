@@ -61,7 +61,7 @@
             CornerRadius="16"
             ClipToBounds="True">
       <Grid>
-        <ContentControl Content="{Binding CurrentPage}" />
+        <ContentControl x:Name="PageHost" Content="{Binding CurrentPage}" />
       </Grid>
     </Border>
   </Grid>

@@ -734,6 +734,141 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
         return added;
     }
 
+    /// <summary>一次拖放加进来的东西：文件几次、图片几张、文件夹几个、重复几个、失败几个。</summary>
+    public readonly record struct DropAcceptance(int Files, int Images, int Folders, int Duplicates, int Failed)
+    {
+        public bool Added => Files + Images > 0;
+    }
+
+    /// <summary>
+    /// 接住一次拖放。图片走贴图那条路（落盘 + 缩略图，发送时当图片交给模型），
+    /// 其它文件走引用那条路（发送时才读正文）。两条路都和纸夹、@、Ctrl+V 共用同一份实现。
+    /// </summary>
+    public async Task<DropAcceptance> AcceptDropAsync(IReadOnlyList<string> paths, Bitmap? bitmap)
+    {
+        var files = 0;
+        var images = 0;
+        var folders = 0;
+        var duplicates = 0;
+        var failed = 0;
+
+        if (bitmap is not null)
+        {
+            if (AddImage(bitmap))
+            {
+                images++;
+            }
+            else
+            {
+                bitmap.Dispose();
+                failed++;
+            }
+        }
+
+        foreach (var path in paths)
+        {
+            if (Directory.Exists(path))
+            {
+                folders++;
+                continue;
+            }
+
+            if (!File.Exists(path))
+            {
+                failed++;
+                continue;
+            }
+
+            // 图片必须当图片：当引用发出去的话，发送时会把二进制当文本读，模型拿到的是乱码
+            if (ComposerDropPayload.IsImagePath(path))
+            {
+                var decoded = await DecodeImageAsync(path);
+                if (decoded is not null)
+                {
+                    if (AddImage(decoded))
+                    {
+                        images++;
+                        continue;
+                    }
+
+                    decoded.Dispose();
+                }
+            }
+
+            if (AddFileReference(path))
+            {
+                files++;
+            }
+            else
+            {
+                // 存在性上面已经查过，这里返回 false 基本就是「已经在引用里了」
+                duplicates++;
+            }
+        }
+
+        if (files + images > 0)
+        {
+            RequestFocus();
+        }
+
+        if (folders > 0)
+        {
+            NotifyDropNotice("文件夹不能直接拖进来：把工作区切到那个目录，再用 @ 引用里面的文件。");
+        }
+        else if (failed > 0 && files + images == 0)
+        {
+            NotifyDropNotice("这几个文件没能加进来：可能已经被移走，或者没有读取权限。");
+        }
+        else if (duplicates > 0 && files + images == 0)
+        {
+            NotifyDropNotice("这个文件已经在引用里了。");
+        }
+
+        return new DropAcceptance(files, images, folders, duplicates, failed);
+    }
+
+    /// <summary>
+    /// 把磁盘上的图读成位图。解码很吃 CPU（4K 截图几十毫秒起），扔到后台线程，
+    /// 免得拖一张大图进来界面顿一下。解不出来返回 null，调用方退回成引用。
+    /// </summary>
+    private static async Task<Bitmap?> DecodeImageAsync(string path)
+    {
+        try
+        {
+            return await Task.Run(() => new Bitmap(path));
+        }
+        catch
+        {
+            // 损坏、格式不支持、权限不足：都当解不出来
+            return null;
+        }
+    }
+
+    /// <summary>拖放相关的提示（文件夹被拒、文件加不进来）。和贴图错误分开，措辞才不会串。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasDropNotice))]
+    private string? dropNotice;
+
+    public bool HasDropNotice => !string.IsNullOrWhiteSpace(DropNotice);
+
+    private DispatcherTimer? _dropNoticeTimer;
+
+    /// <summary>拖放提示只占一会儿，几秒后自己消失，不长期压在输入框下面。</summary>
+    public void NotifyDropNotice(string message)
+    {
+        DropNotice = message;
+
+        _dropNoticeTimer?.Stop();
+        _dropNoticeTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(6) };
+        _dropNoticeTimer.Tick += (_, _) =>
+        {
+            _dropNoticeTimer?.Stop();
+            _dropNoticeTimer = null;
+            DropNotice = null;
+        };
+        _dropNoticeTimer.Start();
+    }
+
     private bool AddReference(MentionItemViewModel item)
     {
         if (References.Any(reference => reference.Id == item.Id))

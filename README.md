@@ -16,6 +16,8 @@ Windows 桌面 AI 助理。Agent 循环用 [pi.net](https://github.com/AIDotNet/
   自动跳过 `node_modules` / `.git` 这类目录；选中即引用，**发送时才读内容**，不用先把文件导入到哪里。
 - **粘贴图片**：输入框里 Ctrl+V 直接贴图（截图也行），缩略图挂在输入框上方，和文字一起发；
   图片落在数据目录的 `images/` 下，会话 JSON 只记路径，存档不会被 base64 撑大。
+- **拖进来就行**：文件/图片拖到窗口任意位置都能接住，不用先去找输入框；
+  图片按图片加，其它文件走引用，文件夹和重复项各有提示。
 - **长会话能自己压缩**：CodingAgent 的上下文压缩与自动重试，不必手动清空。
 - **三档权限**：只读 / 工作区 / 完全访问；执行命令会在对话里弹授权卡。
 - **工具过程可见**：每次调用压成一行（「执行命令：dotnet build」+ 耗时），点开才看参数和结果；
@@ -356,6 +358,12 @@ dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --pag
 
 # 悬停提示的皮：短提示 / 中等长度 / 长路径折行三种样例
 dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --tooltips
+
+# 输入框拖放提示层：文件 / 图片 / 文件夹三种落点各是什么样
+dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --composer-drop
+
+# 拖放探针：在输入框上真的走一遍路由（无 OLE，其余链路都是真的）
+dotnet run --project src/AvaloniaAssistant.Desktop -- --drop-probe "D:/some/文件.md"
 
 # 隔离数据目录：设置/会话都写到这里，验收启动恢复时不碰真实数据
 dotnet run --project src/AvaloniaAssistant.Desktop -- --data-dir .tmp/verify

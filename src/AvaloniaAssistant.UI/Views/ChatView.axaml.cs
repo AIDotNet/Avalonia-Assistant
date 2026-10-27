@@ -180,8 +180,6 @@ public partial class ChatView : UserControl
     {
         AttachScrollViewer();
         AttachSearchInput();
-        AttachDropSurface();
-        Dispatcher.UIThread.Post(AttachDropSurface, DispatcherPriority.Loaded);
         ScheduleInitialScroll();
         RestoreSearchHighlight();
     }
@@ -207,25 +205,6 @@ public partial class ChatView : UserControl
         _searchTargets = viewModel.SearchHitMessages;
         ApplySearchHighlight();
     }
-
-    /// <summary>把整页变成拖放落点：拖到消息区中间时不用先去找输入框。</summary>
-    private void AttachDropSurface()
-    {
-        if (_dropSurfaceWired)
-        {
-            return;
-        }
-
-        if (this.GetVisualDescendants().OfType<ComposerView>().FirstOrDefault() is not { } composer)
-        {
-            return;
-        }
-
-        composer.AttachDropSurface(this);
-        _dropSurfaceWired = true;
-    }
-
-    private bool _dropSurfaceWired;
 
     /// <summary>
     /// 查找框的按键要在隧道阶段截：arc:Input 内部的 TextBox 自己也会吃 Enter。

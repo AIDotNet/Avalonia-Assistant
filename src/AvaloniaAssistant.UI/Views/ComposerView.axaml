@@ -537,6 +537,14 @@
                TextWrapping="Wrap"
                Margin="4,7,4,0" />
 
+    <!-- 拖放没接住（拖的是文件夹、文件被移走）：说清为什么，别让用户以为拖没反应 -->
+    <TextBlock Text="{Binding DropNotice}"
+               IsVisible="{Binding HasDropNotice}"
+               Foreground="{StaticResource WarningBrush}"
+               FontSize="11"
+               TextWrapping="Wrap"
+               Margin="4,7,4,0" />
+
     <Grid ColumnDefinitions="*,Auto" Margin="4,7,4,0">
       <StackPanel Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
         <Button x:Name="WorkspaceButton" Classes="pill" Click="OnWorkspaceClick" ToolTip.Tip="{Binding WorkspacePathHint}">
