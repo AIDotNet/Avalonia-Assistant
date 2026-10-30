@@ -266,15 +266,8 @@
             </StackPanel>
           </Button>
 
-          <Button Classes="nav" Classes.active="{Binding IsSettingsSelected}" Command="{Binding OpenSettingsCommand}">
-            <StackPanel Orientation="Horizontal" Spacing="9">
-              <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Settings}"
-                            Size="16"
-                            Foreground="{Binding $parent[Button].Foreground}" />
-              <TextBlock Text="设置" VerticalAlignment="Center" />
-            </StackPanel>
-          </Button>
-
+          <!-- 设置不在这里再放一项：左下角已经有齿轮入口，同一个动作摆两遍反而让人
+               以为两个地方打开的不是同一个东西。 -->
           <Border Height="1" Background="{StaticResource BorderBrush}" Margin="8,12,8,10" />
 
           <!-- 「任务」是全部任务的总入口，「空间」只是另一层归类：
