@@ -213,10 +213,14 @@ public sealed partial class ToolsViewModel : ObservableObject
     /// <summary>插件工具正在读扩展清单。</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(PluginToolsHint))]
+    [NotifyPropertyChangedFor(nameof(ShowPluginToolsHint))]
+    [NotifyPropertyChangedFor(nameof(ShowPluginToolsEmpty))]
     private bool isLoadingPluginTools;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(PluginToolsHint))]
+    [NotifyPropertyChangedFor(nameof(ShowPluginToolsHint))]
+    [NotifyPropertyChangedFor(nameof(ShowPluginToolsEmpty))]
     private string? pluginToolsError;
 
     /// <summary>扩展加载失败的包。空清单要能解释清楚，否则用户只看到「没有工具」。</summary>
@@ -233,13 +237,25 @@ public sealed partial class ToolsViewModel : ObservableObject
 
     public bool HasPluginTools => PluginTools.Count > 0;
 
+    /// <summary>
+    /// 只负责加载中 / 出错 / 已有工具三种情况。空清单交给下面的空状态卡片说——
+    /// 原来那句「装一个插件后回到这里，它的工具会出现在下面」有两个毛病：
+    /// 用户此刻就在这页（"回来"无从谈起），下面也什么都没有（"出现在下面"指向空）。
+    /// </summary>
     public string PluginToolsHint => IsLoadingPluginTools
-        ? "正在读插件清单（要真加载一次扩展）…"
+        ? "正在读取插件工具（首次要真加载一次扩展，会慢几秒）…"
         : PluginToolsError is { Length: > 0 } error
             ? "读不到插件工具：" + error
             : PluginTools.Count == 0
-                ? "还没有插件提供工具。装一个插件后回到这里，它的工具会出现在下面。"
-                : $"{PluginTools.Count} 个插件工具 · 关掉后不进会话的 allowlist，下一条消息生效";
+                ? string.Empty
+                : $"{PluginTools.Count} 个插件工具 · 关掉后从下一条消息起就不给模型用了";
+
+    public bool ShowPluginToolsHint => PluginToolsHint.Length > 0;
+
+    /// <summary>没装带扩展的包时摆一张空状态卡：说清这块是干什么的，以及去哪装。</summary>
+    public bool ShowPluginToolsEmpty => !IsLoadingPluginTools
+        && string.IsNullOrEmpty(PluginToolsError)
+        && PluginTools.Count == 0;
 
     public bool HasSkills => Skills.Count > 0;
 
@@ -357,6 +373,10 @@ public sealed partial class ToolsViewModel : ObservableObject
             ShowNotice(ex.Message, isError: true);
         }
     }
+
+    /// <summary>空状态里的「去插件页」：这页只列插件带来的工具，装包得去插件页。</summary>
+    [RelayCommand]
+    private void OpenPluginsPage() => _host.OpenPlugins();
 
     [RelayCommand]
     private void OpenSkillsFolder()
@@ -531,6 +551,8 @@ public sealed partial class ToolsViewModel : ObservableObject
             LoadIssues = result.Issues;
             Refresh();
             OnPropertyChanged(nameof(PluginToolsHint));
+            OnPropertyChanged(nameof(ShowPluginToolsHint));
+            OnPropertyChanged(nameof(ShowPluginToolsEmpty));
             OnPropertyChanged(nameof(HasLoadIssues));
             OnPropertyChanged(nameof(LoadIssuesText));
             OnPropertyChanged(nameof(SubtitleText));
@@ -544,6 +566,8 @@ public sealed partial class ToolsViewModel : ObservableObject
         {
             IsLoadingPluginTools = false;
             OnPropertyChanged(nameof(PluginToolsHint));
+            OnPropertyChanged(nameof(ShowPluginToolsHint));
+            OnPropertyChanged(nameof(ShowPluginToolsEmpty));
         }
     }
 

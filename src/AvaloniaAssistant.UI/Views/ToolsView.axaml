@@ -258,7 +258,41 @@
           <TextBlock Text="{Binding PluginToolsHint}"
                      Classes="caption"
                      FontSize="10.5"
-                     TextWrapping="Wrap" />
+                     TextWrapping="Wrap"
+                     IsVisible="{Binding ShowPluginToolsHint}" />
+
+        <!-- 没装带扩展的包：这张卡负责说清「这块是什么」和「去哪装」。
+             原来只有一行灰字，还写着「装一个插件后回到这里，它的工具会出现在下面」——
+             用户此刻就在这页，下面也是空的。 -->
+        <Border IsVisible="{Binding ShowPluginToolsEmpty}" Classes="tool-tile" Padding="14,12">
+          <Grid ColumnDefinitions="Auto,*,Auto">
+            <Border Width="32"
+                    Height="32"
+                    CornerRadius="9"
+                    Background="#EFF1F4"
+                    VerticalAlignment="Top">
+              <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Package}"
+                            Size="15"
+                            Foreground="#5B6472"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center" />
+            </Border>
+            <StackPanel Grid.Column="1" Margin="10,0,12,0" Spacing="2" VerticalAlignment="Center">
+              <TextBlock Text="还没有插件提供工具" FontSize="12.5" FontWeight="Medium" />
+              <TextBlock Text="插件里的扩展注册的工具会列在这里。关掉哪个，模型就看不到那个。"
+                         Classes="caption"
+                         FontSize="11"
+                         TextWrapping="Wrap" />
+            </StackPanel>
+            <Button Grid.Column="2"
+                    Classes="chip"
+                    Height="28"
+                    Padding="12,0"
+                    Content="去插件页"
+                    VerticalAlignment="Center"
+                    Command="{Binding OpenPluginsPageCommand}" />
+          </Grid>
+        </Border>
 
         <!-- 有插件加载失败：空清单必须解释原因，否则用户只能看到「没有工具」 -->
         <Border IsVisible="{Binding HasLoadIssues}"
