@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using AvaloniaAssistant.Abstractions;
 using Pi.CodingAgent;
 using Pi.CodingAgent.Core;
+using Pi.CodingAgent.Core.Extensions;
 
 namespace AvaloniaAssistant.Agent;
 
@@ -27,6 +28,13 @@ public sealed class PiPluginStore : IPluginStore
     private readonly ISettingsProvider _settings;
     private readonly HttpClient _http;
 
+    /// <summary>
+    /// 插件工具清单缓存。加载一次扩展要 3~7 秒（Jint 转译 TypeScript），
+    /// 每次打开技能页都重来一遍太贵；装 / 卸 / 启停 / 更新时由本类主动清掉。
+    /// </summary>
+    private readonly Lock _toolsLock = new();
+    private (string Key, IReadOnlyList<AgentPluginToolInfo> Tools)? _toolsCache;
+
     public PiPluginStore(ISettingsProvider settings)
     {
         _settings = settings;
@@ -42,7 +50,8 @@ public sealed class PiPluginStore : IPluginStore
     {
         try
         {
-            var manager = CreateManager(out _);
+            var manager = CreateManager(out var settingsManager);
+            var states = ReadPackageStates(settingsManager);
             var results = new List<AgentPluginInfo>();
             foreach (var package in manager.ListConfiguredPackages())
             {
@@ -52,13 +61,16 @@ public sealed class PiPluginStore : IPluginStore
                         ? PluginDiscovery.FindExtensions(path)
                         : [];
 
+                    var state = states.GetValueOrDefault(package.Source);
                     results.Add(new AgentPluginInfo(
                         package.Source,
                         PluginDiscovery.DisplayName(package.Source),
                         package.Scope,
                         package.Filtered,
                         package.InstalledPath,
-                        entries));
+                        entries,
+                        state?.IsEnabled ?? true,
+                        package.InstalledPath is { Length: > 0 } root ? ReadPackageVersion(root) : null));
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or ArgumentException)
                 {
@@ -131,8 +143,99 @@ public sealed class PiPluginStore : IPluginStore
         }
     }
 
+    public async Task<IReadOnlyList<AgentPluginToolInfo>> ListToolsAsync(CancellationToken cancellationToken = default)
+    {
+        var cwd = ResolveWorkspace();
+        var agentDir = Config.GetAgentDir();
+        var settingsManager = SettingsManager.Create(cwd, agentDir, new SettingsManagerCreateOptions
+        {
+            ProjectTrusted = _settings.Current.TrustWorkspace,
+        });
+
+        // 一个包都没装：不用起 JS 宿主，直接空清单（绝大多数用户是这种情况）。
+        var hasPackages = settingsManager.GetPackages().Count > 0
+                          || (settingsManager.GetProjectSettings().Packages?.Count ?? 0) > 0;
+        if (!hasPackages)
+        {
+            return [];
+        }
+
+        var key = ToolsCacheKey(agentDir, cwd);
+        lock (_toolsLock)
+        {
+            if (_toolsCache is { } cached && cached.Key == key)
+            {
+                return cached.Tools;
+            }
+        }
+
+        // 这里真的把扩展加载一遍（.ts 走进程内转译），代价是几秒；
+        // 好处是清单和会话里能看到的工具同源，不会出现「页面上有、模型看不到」。
+        var loader = new DefaultResourceLoader(
+            cwd,
+            agentDir,
+            settingsManager,
+            extensionFactories: BuiltInExtensions.All);
+        await loader.ReloadAsync(null, cancellationToken).ConfigureAwait(false);
+
+        var results = new List<AgentPluginToolInfo>();
+        foreach (var extension in loader.GetExtensions().Extensions)
+        {
+            if (extension.SourceInfo.Path.StartsWith(SourceInfos.BuiltinPathPrefix, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var plugin = PluginLabel(extension.SourceInfo);
+            foreach (var (name, registered) in extension.Tools)
+            {
+                var exposure = registered.Definition.Exposure ?? ToolExposure.Default;
+                results.Add(new AgentPluginToolInfo(
+                    name,
+                    plugin,
+                    registered.Definition.Description ?? string.Empty,
+                    ExposureText(exposure),
+                    exposure is ToolExposure.Codemode or ToolExposure.Deferred));
+            }
+        }
+
+        var ordered = results
+            .OrderBy(item => item.Plugin, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(item => item.Name, StringComparer.Ordinal)
+            .ToList();
+
+        lock (_toolsLock)
+        {
+            _toolsCache = (key, ordered);
+        }
+
+        return ordered;
+    }
+
+    /// <summary>settings 文件一改（含手工编辑）缓存就失效；装 / 卸 / 启停也会主动清。</summary>
+    private static string ToolsCacheKey(string agentDir, string cwd)
+    {
+        var global = Path.Combine(agentDir, "settings.json");
+        var project = Path.Combine(cwd, Config.ConfigDirName, "settings.json");
+        return string.Join(
+            '|',
+            agentDir,
+            cwd,
+            File.Exists(global) ? File.GetLastWriteTimeUtc(global).Ticks : 0,
+            File.Exists(project) ? File.GetLastWriteTimeUtc(project).Ticks : 0);
+    }
+
+    private void InvalidateToolsCache()
+    {
+        lock (_toolsLock)
+        {
+            _toolsCache = null;
+        }
+    }
+
     public async Task<AgentPluginInstallResult> InstallAsync(
         string source,
+        bool projectScope = false,
         IProgress<string>? progress = null,
         CancellationToken cancellationToken = default)
     {
@@ -157,12 +260,13 @@ public sealed class PiPluginStore : IPluginStore
             }
 
             var path = await manager
-                .InstallAndPersistAsync(normalized, local: false, cancellationToken)
+                .InstallAndPersistAsync(normalized, local: projectScope, cancellationToken)
                 .ConfigureAwait(false);
 
             // SettingsManager 的落盘是排队异步写的：不等它冲完，界面紧接着重新扫描会读到旧文件，
             // 表现就是「装完列表里没有」。
             await settingsManager.FlushAsync().ConfigureAwait(false);
+            InvalidateToolsCache();
 
             return new AgentPluginInstallResult(true, normalized, "已安装并写入 settings.json。", path);
         }
@@ -195,6 +299,7 @@ public sealed class PiPluginStore : IPluginStore
                 .ConfigureAwait(false);
 
             await settingsManager.FlushAsync().ConfigureAwait(false);
+            InvalidateToolsCache();
 
             return removed
                 ? new AgentPluginInstallResult(true, source, "已从 settings.json 移除并卸载。")
@@ -210,8 +315,106 @@ public sealed class PiPluginStore : IPluginStore
         }
     }
 
-    public async Task<IReadOnlyList<AgentPluginMarketItem>> SearchAsync(
+    public async Task<AgentPluginInstallResult> SetEnabledAsync(
+        string source,
+        bool projectScope,
+        bool enabled,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            CreateManager(out var settingsManager);
+            var nodes = (projectScope
+                    ? settingsManager.GetProjectSettings().Packages
+                    : settingsManager.GetPackages())
+                ?.ToList() ?? [];
+
+            var index = nodes.FindIndex(node => PluginDiscovery.PackageSourceOf(node) is { } text
+                                                && string.Equals(text, source, StringComparison.OrdinalIgnoreCase));
+            if (index < 0)
+            {
+                return AgentPluginInstallResult.Failed(source, "settings.json 里没有这条包记录。");
+            }
+
+            nodes[index] = enabled ? JsonValue.Create(source) : DisabledEntry(source);
+            if (projectScope)
+            {
+                settingsManager.SetProjectPackages(nodes);
+            }
+            else
+            {
+                settingsManager.SetPackages(nodes);
+            }
+
+            await settingsManager.FlushAsync().ConfigureAwait(false);
+            InvalidateToolsCache();
+            return new AgentPluginInstallResult(
+                true,
+                source,
+                enabled ? "已启用，下一个会话生效。" : "已停用，包还留在清单里。");
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            return AgentPluginInstallResult.Failed(source, FirstLine(ex.Message));
+        }
+    }
+
+    public async Task<IReadOnlyList<AgentPluginUpdate>> CheckUpdatesAsync(CancellationToken cancellationToken = default)
+    {
+        var manager = CreateManager(out _);
+        var updates = await manager.CheckForAvailableUpdatesAsync(cancellationToken).ConfigureAwait(false);
+        return updates
+            .Select(update => new AgentPluginUpdate(update.Source, update.DisplayName, update.Type, update.Scope))
+            .ToList();
+    }
+
+    public async Task<AgentPluginInstallResult> UpdateAsync(
+        string? source = null,
+        IProgress<string>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var manager = CreateManager(out var settingsManager);
+            if (progress is not null)
+            {
+                manager.SetProgressCallback(evt =>
+                {
+                    if (DescribeProgress(evt) is { Length: > 0 } text)
+                    {
+                        progress.Report(text);
+                    }
+                });
+            }
+
+            await manager.UpdateAsync(source, cancellationToken).ConfigureAwait(false);
+            await settingsManager.FlushAsync().ConfigureAwait(false);
+            InvalidateToolsCache();
+            return new AgentPluginInstallResult(true, source ?? "全部", "已更新。");
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex) when (IsMissingNpm(ex))
+        {
+            return AgentPluginInstallResult.Failed(
+                source ?? "全部",
+                "找不到 npm。更新要用本机的 npm：先装 Node.js（含 npm），确认命令行里 npm -v 能跑。");
+        }
+        catch (Exception ex)
+        {
+            return AgentPluginInstallResult.Failed(source ?? "全部", FirstLine(ex.Message));
+        }
+    }
+
+    public async Task<AgentPluginSearchPage> SearchAsync(
         string? query,
+        int from = 0,
         CancellationToken cancellationToken = default)
     {
         var tokens = (query ?? string.Empty)
@@ -226,7 +429,8 @@ public sealed class PiPluginStore : IPluginStore
         // 有关键词时多取一些再筛：npm 的 text 搜索把额外词当「可有可无」，
         // 只搜到 40 条的话，筛完常常一条不剩，看起来像「市场里没有」。
         var size = tokens.Length > 0 ? MarketPageSize : DefaultPageSize;
-        var url = $"{NpmSearchEndpoint}?text={Uri.EscapeDataString(text)}&size={size}";
+        var offset = Math.Max(0, from);
+        var url = $"{NpmSearchEndpoint}?text={Uri.EscapeDataString(text)}&size={size}&from={offset}";
         using var response = await _http.GetAsync(url, cancellationToken).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
 
@@ -236,8 +440,10 @@ public sealed class PiPluginStore : IPluginStore
         var results = new List<AgentPluginMarketItem>();
         if (root?["objects"] is not JsonArray objects)
         {
-            return results;
+            return AgentPluginSearchPage.Empty;
         }
+
+        var rawCount = objects.Count;
 
         foreach (var entry in objects)
         {
@@ -277,7 +483,10 @@ public sealed class PiPluginStore : IPluginStore
             }
         }
 
-        return results;
+        // npm 的 total 是模糊命中的总数（动辄上万条），不能拿来当「还剩多少」。
+        // 用「这一页取满没有」判断还有没有下一页，界面只需要这一个布尔。
+        var hasMore = rawCount >= size;
+        return new AgentPluginSearchPage(results, offset + results.Count + (hasMore ? 1 : 0));
     }
 
     /// <summary>关键词要真的出现在包名 / 描述 / 关键词里才算命中，不能把 npm 的模糊结果当命中。</summary>
@@ -285,6 +494,85 @@ public sealed class PiPluginStore : IPluginStore
         => item.Name.Contains(token, StringComparison.OrdinalIgnoreCase)
            || item.Description.Contains(token, StringComparison.OrdinalIgnoreCase)
            || item.Keywords.Any(keyword => keyword.Contains(token, StringComparison.OrdinalIgnoreCase));
+
+    private sealed record PackageState(bool IsEnabled);
+
+    /// <summary>把 settings.json 里每条包的启用状态读出来，键是原始源字符串。</summary>
+    private static Dictionary<string, PackageState> ReadPackageStates(SettingsManager settingsManager)
+    {
+        var results = new Dictionary<string, PackageState>(StringComparer.OrdinalIgnoreCase);
+        foreach (var node in settingsManager.GetPackages())
+        {
+            Add(node);
+        }
+
+        foreach (var node in settingsManager.GetProjectSettings().Packages ?? [])
+        {
+            Add(node);
+        }
+
+        return results;
+
+        void Add(JsonNode? node)
+        {
+            if (PluginDiscovery.PackageSourceOf(node) is not { Length: > 0 } source)
+            {
+                return;
+            }
+
+            results[source] = new PackageState(!PluginDiscovery.IsDisabledEntry(node));
+        }
+    }
+
+    /// <summary>停用用的对象形态：pi 把空数组理解成「这一类全不要」，包本身还留在清单里。</summary>
+    private static JsonObject DisabledEntry(string source) => PluginDiscovery.DisabledEntry(source);
+
+    private static string? ReadPackageVersion(string packageRoot)
+    {
+        try
+        {
+            var manifestPath = Path.Combine(packageRoot, "package.json");
+            if (!File.Exists(manifestPath))
+            {
+                return null;
+            }
+
+            return JsonNode.Parse(File.ReadAllText(manifestPath))?["version"]?.GetValue<string>();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>扩展来自哪个包：优先用包的根目录名（npm 作用域名要连作用域一起保留）。</summary>
+    private static string PluginLabel(SourceInfo info)
+    {
+        if (!string.IsNullOrEmpty(info.BaseDir))
+        {
+            var normalized = info.BaseDir.Replace('\\', '/').TrimEnd('/');
+            const string marker = "/node_modules/";
+            var index = normalized.LastIndexOf(marker, StringComparison.OrdinalIgnoreCase);
+            if (index >= 0)
+            {
+                return normalized[(index + marker.Length)..];
+            }
+
+            return normalized.Split('/').Last();
+        }
+
+        var path = info.Path.Replace('\\', '/').TrimEnd('/');
+        return path.Split('/').Last();
+    }
+
+    private static string ExposureText(string exposure) => exposure switch
+    {
+        ToolExposure.Codemode => "codemode",
+        ToolExposure.Deferred => "deferred · 需 tool_search",
+        ToolExposure.Hidden => "hidden",
+        ToolExposure.ModelOnly => "model-only",
+        _ => "direct",
+    };
 
     private DefaultPackageManager CreateManager(out SettingsManager settingsManager)
     {
@@ -415,6 +703,38 @@ internal static class PluginDiscovery
         var extension = Path.GetExtension(path);
         return IsSourceExtension(path) || extension.Equals(".dll", StringComparison.OrdinalIgnoreCase);
     }
+
+    /// <summary>包条目可能是字符串，也可能是带过滤 / 启停的对象形态。</summary>
+    public static string? PackageSourceOf(JsonNode? node) => node switch
+    {
+        JsonValue value when value.TryGetValue<string>(out var text) => text,
+        JsonObject obj when obj["source"] is JsonValue source
+                             && source.TryGetValue<string>(out var text) => text,
+        _ => null,
+    };
+
+    /// <summary>四类资源都写成空数组才算「停用」；只关扩展的对象形态不算整体停用。</summary>
+    public static bool IsDisabledEntry(JsonNode? node)
+        => node is JsonObject obj
+           && IsEmptyArray(obj["extensions"])
+           && IsEmptyArray(obj["skills"])
+           && IsEmptyArray(obj["prompts"])
+           && IsEmptyArray(obj["themes"]);
+
+    /// <summary>
+    /// 停用用的条目形态：pi 对空数组的语义是「这一类全不要」，
+    /// 四条都写空就等于这个包一行都不加载，但记录还在清单里，能再开回来。
+    /// </summary>
+    public static JsonObject DisabledEntry(string source) => new()
+    {
+        ["source"] = source,
+        ["extensions"] = new JsonArray(),
+        ["skills"] = new JsonArray(),
+        ["prompts"] = new JsonArray(),
+        ["themes"] = new JsonArray(),
+    };
+
+    private static bool IsEmptyArray(JsonNode? node) => node is JsonArray { Count: 0 };
 
     public static string? ResolveDirectoryEntry(string directory)
     {

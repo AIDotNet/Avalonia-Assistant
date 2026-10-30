@@ -35,6 +35,15 @@
         </StackPanel>
         <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6">
           <Button Classes="pill"
+                  Command="{Binding CheckUpdatesCommand}"
+                  IsEnabled="{Binding !IsCheckingUpdates}"
+                  ToolTip.Tip="问一次 npm / git：装着的包有没有新版本">
+            <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+              <arc:ArcGlyph Data="{x:Static arc:ArcIcons.RefreshCw}" Size="12" />
+              <TextBlock Text="检查更新" FontSize="11" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+          <Button Classes="pill"
                   Command="{Binding RefreshCommand}"
                   ToolTip.Tip="重新读 settings.json 与扩展目录">
             <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
@@ -84,6 +93,22 @@
         <Border Classes="tool-tile" IsVisible="{Binding IsManualOpen}" Padding="14,12">
           <StackPanel Spacing="10">
             <TextBlock Text="从一个源安装" FontSize="12.5" FontWeight="Medium" />
+
+            <!-- 装到哪：用户目录对所有工作区生效；项目级只对当前工作区生效 -->
+            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+              <Button Classes="chip"
+                      Classes.active="{Binding InstallToWorkspace}"
+                      Command="{Binding ToggleInstallScopeCommand}"
+                      Content="{Binding InstallScopeText}"
+                      ToolTip.Tip="{Binding InstallScopeHint}" />
+              <TextBlock Grid.Column="1"
+                         Text="{Binding InstallScopeHint}"
+                         Classes="caption"
+                         FontSize="10.5"
+                         VerticalAlignment="Center"
+                         TextWrapping="Wrap" />
+            </Grid>
+
             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
               <arc:Input Size="Small"
                          Placeholder="pi-mcp-adapter / npm:包@版本 / git:… / D:\work\my-plugin"
@@ -113,7 +138,7 @@
           <ItemsControl.ItemTemplate>
             <DataTemplate>
               <Border Classes="tool-tile" Margin="0,0,12,12">
-                <Grid RowDefinitions="Auto,Auto,Auto,Auto">
+                <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto">
                   <Grid ColumnDefinitions="Auto,*,Auto">
                     <Border Width="34"
                             Height="34"
@@ -126,16 +151,26 @@
                                     VerticalAlignment="Center" />
                     </Border>
 
-                    <Grid Grid.Column="1" Margin="10,0,0,0" ColumnDefinitions="*,Auto">
+                    <Grid Grid.Column="1" Margin="10,0,0,0" ColumnDefinitions="*,Auto,Auto">
                       <TextBlock Text="{Binding Name}"
                                  FontSize="13"
                                  FontWeight="Medium"
                                  VerticalAlignment="Center"
                                  TextTrimming="CharacterEllipsis" />
                       <Border Grid.Column="1"
+                              Classes="tag"
+                              Margin="6,0,0,0"
+                              VerticalAlignment="Center"
+                              IsVisible="{Binding HasVersion}">
+                        <TextBlock Text="{Binding VersionText}"
+                                   FontSize="9"
+                                   Foreground="{StaticResource TextMutedBrush}" />
+                      </Border>
+                      <Border Grid.Column="2"
                               Background="{StaticResource SurfaceMutedBrush}"
                               CornerRadius="5"
                               Padding="5,1"
+                              Margin="6,0,0,0"
                               VerticalAlignment="Center">
                         <TextBlock Text="{Binding ScopeText}"
                                    FontSize="9"
@@ -143,16 +178,26 @@
                       </Border>
                     </Grid>
 
-                    <Button Grid.Column="2"
-                            Classes="icon"
-                            Width="22"
-                            Height="22"
-                            Command="{Binding StartRemoveCommand}"
-                            ToolTip.Tip="卸载这个包">
-                      <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Trash2}"
-                                    Size="13"
-                                    Foreground="{StaticResource TextMutedBrush}" />
-                    </Button>
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="1" VerticalAlignment="Center">
+                      <Button Classes="icon"
+                              Width="22"
+                              Height="22"
+                              Command="{Binding OpenFolderCommand}"
+                              ToolTip.Tip="打开安装目录">
+                        <arc:ArcGlyph Data="{x:Static arc:ArcIcons.FolderOpen}"
+                                      Size="12"
+                                      Foreground="{StaticResource TextMutedBrush}" />
+                      </Button>
+                      <Button Classes="icon"
+                              Width="22"
+                              Height="22"
+                              Command="{Binding StartRemoveCommand}"
+                              ToolTip.Tip="卸载这个包">
+                        <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Trash2}"
+                                      Size="13"
+                                      Foreground="{StaticResource TextMutedBrush}" />
+                      </Button>
+                    </StackPanel>
                   </Grid>
 
                   <TextBlock Grid.Row="1"
@@ -173,7 +218,32 @@
                              MaxLines="3"
                              ToolTip.Tip="{Binding PathText}" />
 
-                  <Border Grid.Row="3"
+                  <!-- 启用 / 停用 + 升级：都只改 settings.json，下一次会话重建时生效 -->
+                  <StackPanel Grid.Row="3"
+                              Orientation="Horizontal"
+                              Spacing="6"
+                              Margin="0,8,0,0">
+                    <Button Classes="ghost-action"
+                            Content="{Binding EnableActionText}"
+                            IsEnabled="{Binding !IsWorking}"
+                            Command="{Binding $parent[ItemsControl].DataContext.ToggleEnabledCommand}"
+                            CommandParameter="{Binding}"
+                            ToolTip.Tip="停用后 pi 不再加载它的扩展 / 技能，包仍留在 settings.json" />
+                    <Button Classes="ghost-action"
+                            Content="更新"
+                            IsVisible="{Binding HasUpdate}"
+                            IsEnabled="{Binding !IsWorking}"
+                            Command="{Binding $parent[ItemsControl].DataContext.UpdateCommand}"
+                            CommandParameter="{Binding}"
+                            ToolTip.Tip="新版本装好后，下一次会话重建时生效" />
+                    <TextBlock Text="处理中…"
+                               Classes="caption"
+                               FontSize="10.5"
+                               VerticalAlignment="Center"
+                               IsVisible="{Binding IsWorking}" />
+                  </StackPanel>
+
+                  <Border Grid.Row="4"
                           IsVisible="{Binding IsConfirmingRemove}"
                           Background="{StaticResource DangerSubtleBrush}"
                           BorderBrush="#F0CFCB"
@@ -374,6 +444,11 @@
                                  LineHeight="16"
                                  TextWrapping="Wrap"
                                  Foreground="{StaticResource WarningBrush}" />
+                      <TextBlock Text="{Binding $parent[ItemsControl].DataContext.InstallScopeHint}"
+                                 FontSize="10.5"
+                                 LineHeight="15"
+                                 TextWrapping="Wrap"
+                                 Foreground="{StaticResource TextMutedBrush}" />
                       <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
                         <Button Classes="ghost-action" Content="取消" Command="{Binding CancelInstallCommand}" />
                         <Button Classes="pill"
@@ -398,6 +473,14 @@
                        TextWrapping="Wrap" />
           </StackPanel>
         </Border>
+
+        <!-- 一页 40 张卡；还有下一页时给一个明确的入口，不靠无边界滚动 -->
+        <Button Classes="pill"
+                HorizontalAlignment="Center"
+                Content="{Binding LoadMoreText}"
+                Command="{Binding LoadMoreCommand}"
+                IsVisible="{Binding HasMore}"
+                IsEnabled="{Binding !IsSearchingMarket}" />
       </StackPanel>
     </ScrollViewer>
   </Grid>

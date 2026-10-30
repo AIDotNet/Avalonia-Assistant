@@ -82,6 +82,66 @@ public sealed class PluginToolActivationTests : IDisposable
         Assert.False(ToolAccess.RequiresApproval(name, null));
     }
 
+    [Fact]
+    public async Task DisabledPluginToolIsNotActivated()
+    {
+        var workspace = await CreateFixtureAsync("disabled-tool", "fixture_tool", exposure: "direct");
+
+        var settings = new TestSettings().Current;
+        settings.DisabledTools.Add("fixture_tool");
+
+        var session = await CodingSessionFactory.CreateAsync(
+            settings, workspace, [], null, CancellationToken.None);
+
+        Assert.DoesNotContain("fixture_tool", session.GetAllTools().Select(tool => tool.Name));
+        Assert.DoesNotContain("fixture_tool", session.GetActiveToolNames());
+    }
+
+    [Fact]
+    public async Task DeferredPluginToolBringsToolSearch()
+    {
+        // 暴露方式是 deferred 的插件工具，模型得先能搜到它；这时 tool_search 要一起放出去
+        var workspace = await CreateFixtureAsync("deferred-tool", "fixture_deferred", exposure: "deferred");
+
+        var session = await CodingSessionFactory.CreateAsync(
+            new TestSettings().Current, workspace, [], null, CancellationToken.None);
+
+        Assert.Contains("fixture_deferred", session.GetAllTools().Select(tool => tool.Name));
+        Assert.Contains("tool_search", session.GetActiveToolNames());
+    }
+
+    /// <summary>建一个本地包 + 工作区 settings，注册一个工具（可指定 exposure）。</summary>
+    private async Task<string> CreateFixtureAsync(string name, string toolName, string exposure)
+    {
+        var workspace = Path.Combine(_root, "ws-" + name);
+        var package = Path.Combine(_root, "pkg-" + name);
+        Directory.CreateDirectory(Path.Combine(workspace, ".pi"));
+        Directory.CreateDirectory(package);
+
+        File.WriteAllText(Path.Combine(package, "package.json"), $$"""
+            { "name": "{{name}}", "pi": { "extensions": ["./index.ts"] } }
+            """);
+
+        File.WriteAllText(Path.Combine(package, "index.ts"), $$"""
+            export default function (pi: any) {
+              pi.registerTool({
+                name: "{{toolName}}",
+                label: "Fixture",
+                description: "测试用工具",
+                exposure: "{{exposure}}",
+                parameters: { type: "object", properties: { q: { type: "string" } } },
+                execute: async () => ({ content: [{ type: "text", text: "ok" }] })
+              });
+            }
+            """);
+
+        await File.WriteAllTextAsync(
+            Path.Combine(workspace, ".pi", "settings.json"),
+            System.Text.Json.JsonSerializer.Serialize(new { packages = new[] { package.Replace('\\', '/') } }));
+
+        return workspace;
+    }
+
     [Theory]
     [InlineData("bash")]
     [InlineData("edit")]

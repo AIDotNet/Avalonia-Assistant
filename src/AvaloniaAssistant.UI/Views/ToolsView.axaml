@@ -219,6 +219,101 @@
           </Grid>
         </Border>
 
+        <!-- 插件工具：来自 pi 包（扩展注册的工具），不是本应用自建的 -->
+        <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,10,0,0">
+          <TextBlock Text="插件工具" FontSize="13" FontWeight="Medium" VerticalAlignment="Center" />
+          <TextBlock Grid.Column="1"
+                     Text="{Binding PluginToolsHint}"
+                     Classes="caption"
+                     FontSize="10.5"
+                     Margin="10,0,0,0"
+                     VerticalAlignment="Center"
+                     TextWrapping="Wrap" />
+          <Button Grid.Column="2"
+                  Classes="chip"
+                  Height="28"
+                  Padding="12,0"
+                  Content="重新读取"
+                  IsEnabled="{Binding !IsLoadingPluginTools}"
+                  Command="{Binding LoadPluginToolsCommand}" />
+        </Grid>
+
+        <ItemsControl ItemsSource="{Binding VisiblePluginTools}" Margin="0,2,-12,0">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <UniformGrid Columns="3" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <Border Classes="tool-tile" Margin="0,0,12,12" ToolTip.Tip="{Binding Description}">
+                <Grid RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="Auto,*">
+                  <Border Width="34"
+                          Height="34"
+                          CornerRadius="10"
+                          Background="#EFF1F4">
+                    <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Package}"
+                                  Size="17"
+                                  Foreground="#5B6472"
+                                  HorizontalAlignment="Center"
+                                  VerticalAlignment="Center" />
+                  </Border>
+
+                  <Grid Grid.Column="1" Margin="10,0,0,0" ColumnDefinitions="*,Auto">
+                    <TextBlock Text="{Binding Name}"
+                               FontSize="13"
+                               FontWeight="Medium"
+                               VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis"
+                               ToolTip.Tip="{Binding Name}" />
+                    <arc:Switch Grid.Column="1"
+                                IsChecked="{Binding IsEnabled, Mode=TwoWay}"
+                                VerticalAlignment="Center"
+                                Margin="8,0,0,0"
+                                Opacity="0.9"
+                                RenderTransformOrigin="100%,50%"
+                                RenderTransform="scale(0.86)"
+                                ToolTip.Tip="关掉后这个工具不进模型的工具清单（插件本身还在）" />
+                  </Grid>
+
+                  <TextBlock Grid.Row="1"
+                             Grid.ColumnSpan="2"
+                             Margin="0,9,0,0"
+                             Text="{Binding Description}"
+                             Classes="caption"
+                             FontSize="11.5"
+                             LineHeight="16"
+                             TextWrapping="Wrap"
+                             MaxLines="2"
+                             TextTrimming="CharacterEllipsis" />
+
+                  <StackPanel Grid.Row="2"
+                              Grid.ColumnSpan="2"
+                              Orientation="Horizontal"
+                              Spacing="5"
+                              Margin="0,8,0,0">
+                    <Border Classes="tag" VerticalAlignment="Center">
+                      <TextBlock Text="{Binding Plugin}"
+                                 FontSize="9"
+                                 Foreground="{StaticResource TextMutedBrush}"
+                                 TextTrimming="CharacterEllipsis"
+                                 MaxWidth="110" />
+                    </Border>
+                    <TextBlock Text="·" FontSize="10" Foreground="{StaticResource TextMutedBrush}" />
+                    <TextBlock Text="调用需确认"
+                               FontSize="10"
+                               Foreground="{StaticResource TextMutedBrush}" />
+                    <TextBlock Text="·" FontSize="10" Foreground="{StaticResource TextMutedBrush}" />
+                    <TextBlock Text="{Binding ExposureText}"
+                               FontSize="10"
+                               Foreground="{StaticResource TextMutedBrush}" />
+                  </StackPanel>
+                </Grid>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
         <!-- 工具 -->
         <Grid ColumnDefinitions="Auto,*" Margin="0,10,0,0">
           <TextBlock Text="工具" FontSize="13" FontWeight="Medium" VerticalAlignment="Center" />

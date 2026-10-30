@@ -165,6 +165,69 @@ public sealed class PluginTests : IDisposable
         Assert.Empty(PluginDiscovery.FindExtensions(package));
     }
 
+    // ---- 停用形态 ----
+
+    [Fact]
+    public void DisabledEntryIsRecognized()
+    {
+        // 停用 = 四类资源都写成空数组；只关一类不算整体停用
+        var disabled = PluginDiscovery.DisabledEntry("npm:pi-memory");
+        Assert.True(PluginDiscovery.IsDisabledEntry(disabled));
+        Assert.Equal("npm:pi-memory", PluginDiscovery.PackageSourceOf(disabled));
+
+        var onlyExtensionsOff = System.Text.Json.Nodes.JsonNode.Parse("""
+            { "source": "npm:x", "extensions": [] }
+            """);
+        Assert.False(PluginDiscovery.IsDisabledEntry(onlyExtensionsOff));
+
+        Assert.False(PluginDiscovery.IsDisabledEntry(System.Text.Json.Nodes.JsonValue.Create("npm:x")));
+        Assert.Equal("npm:x", PluginDiscovery.PackageSourceOf(System.Text.Json.Nodes.JsonValue.Create("npm:x")));
+    }
+
+    [Fact]
+    public async Task DisabledPackageIsNotLoaded()
+    {
+        var workspace = Path.Combine(_root, "ws-disabled");
+        var package = Path.Combine(_root, "plugin-disabled");
+        Directory.CreateDirectory(Path.Combine(workspace, ".pi"));
+        Directory.CreateDirectory(package);
+
+        File.WriteAllText(Path.Combine(package, "package.json"), """
+            { "name": "disabled-fixture", "pi": { "extensions": ["./index.ts"] } }
+            """);
+        File.WriteAllText(Path.Combine(package, "index.ts"), """
+            export default function (pi: any) {
+              pi.registerCommand("disabled-fixture-hello", { description: "x", handler: async () => {} });
+            }
+            """);
+
+        // 项目级对象条目：source 指向本地包，四类资源全空 = 停用
+        File.WriteAllText(
+            Path.Combine(workspace, ".pi", "settings.json"),
+            System.Text.Json.JsonSerializer.Serialize(new
+            {
+                packages = new object[]
+                {
+                    new
+                    {
+                        source = package.Replace('\\', '/'),
+                        extensions = Array.Empty<string>(),
+                        skills = Array.Empty<string>(),
+                        prompts = Array.Empty<string>(),
+                        themes = Array.Empty<string>(),
+                    },
+                },
+            }));
+
+        var session = await CodingSessionFactory.CreateAsync(
+            new TestSettings().Current, workspace, [], null, CancellationToken.None);
+
+        var loaded = session.ResourceLoader.GetExtensions();
+        Assert.DoesNotContain(
+            loaded.Extensions,
+            extension => extension.Commands.ContainsKey("disabled-fixture-hello"));
+    }
+
     // ---- 1.4.5：TypeScript 扩展真能加载 ----
 
     [Fact]

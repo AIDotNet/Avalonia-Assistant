@@ -7,13 +7,14 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace AvaloniaAssistant.UI.ViewModels;
 
-/// <summary>已安装的插件卡：名字、来源、作用域、扩展入口，卸载要二次确认。</summary>
+/// <summary>已安装的插件卡：名字、来源、作用域、扩展入口，可停用、可升级、可卸载。</summary>
 public sealed partial class InstalledPluginViewModel : ObservableObject
 {
     public InstalledPluginViewModel(AgentPluginInfo info)
     {
         Info = info;
         PathText = Ui.ShortenPath(info.InstalledPath ?? string.Empty);
+        IsEnabled = info.IsEnabled;
     }
 
     public AgentPluginInfo Info { get; }
@@ -28,26 +29,59 @@ public sealed partial class InstalledPluginViewModel : ObservableObject
 
     public string PathText { get; }
 
-    /// <summary>settings.json 里有记录、磁盘上没有包：下次启动会重试安装，别显示得像装好了。</summary>
+    public string VersionText => string.IsNullOrWhiteSpace(Info.Version) ? string.Empty : "v" + Info.Version;
+
+    public bool HasVersion => VersionText.Length > 0;
+
+    /// <summary>settings.json 里有记录、磁盘上没有包：下次会话启动会重试安装，别显示得像装好了。</summary>
     public bool IsMissing => !Info.IsInstalled;
 
-    /// <summary>扩展入口。没有扩展的包（只带技能/提示词/主题）也要说清楚，不然像装失败了。</summary>
-    public string ExtensionsText => IsMissing
-        ? "没装上：settings.json 有记录，磁盘上没有这个包（下次会话启动会重试）"
-        : Info.Extensions.Count == 0
-            ? "没有扩展入口（技能 / 提示词 / 主题类包）"
-            : $"扩展 {Info.Extensions.Count} 个 · {string.Join("、", Info.Extensions)}";
+    /// <summary>停用的包 pi 不加载任何资源，但记录还在，随时能开回来。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(EnableActionText))]
+    [NotifyPropertyChangedFor(nameof(DetailBrush))]
+    [NotifyPropertyChangedFor(nameof(ExtensionsText))]
+    private bool isEnabled;
 
-    public IBrush DetailBrush => IsMissing ? Brush.Parse("#A15C07") : Brush.Parse("#6F6F69");
+    public string EnableActionText => IsEnabled ? "停用" : "启用";
+
+    /// <summary>扩展入口。没有扩展的包（只带技能/提示词/主题）也要说清楚，不然像装失败了。</summary>
+    public string ExtensionsText => !IsEnabled
+        ? "已停用：包还在清单里，pi 不会加载它的任何扩展 / 技能 / 提示词 / 主题"
+        : IsMissing
+            ? "没装上：settings.json 有记录，磁盘上没有这个包（下次会话启动会重试）"
+            : Info.Extensions.Count == 0
+                ? "没有扩展入口（技能 / 提示词 / 主题类包）"
+                : $"扩展 {Info.Extensions.Count} 个 · {string.Join("、", Info.Extensions)}";
+
+    public IBrush DetailBrush => IsMissing
+        ? Brush.Parse("#A15C07")
+        : IsEnabled ? Brush.Parse("#6F6F69") : Brush.Parse("#9C9C94");
 
     [ObservableProperty]
     private bool isConfirmingRemove;
+
+    /// <summary>npm / git 上检测到新版本。</summary>
+    [ObservableProperty]
+    private bool hasUpdate;
+
+    [ObservableProperty]
+    private bool isWorking;
 
     [RelayCommand]
     private void StartRemove() => IsConfirmingRemove = true;
 
     [RelayCommand]
     private void CancelRemove() => IsConfirmingRemove = false;
+
+    [RelayCommand]
+    private void OpenFolder()
+    {
+        if (!string.IsNullOrWhiteSpace(Info.InstalledPath))
+        {
+            Ui.OpenExternal(Info.InstalledPath);
+        }
+    }
 }
 
 /// <summary>市场里的一张卡。安装前要用户点一次确认：扩展是能读文件、能起进程的代码。</summary>
@@ -129,23 +163,24 @@ public sealed partial class PluginsViewModel : ObservableObject
 {
     private readonly MainWindowViewModel _host;
 
-    /// <summary>同一时刻只让一个 npm 安装跑：并发跑会抢同一个 npm 目录的锁。</summary>
-    private readonly SemaphoreSlim _installGate = new(1, 1);
+    /// <summary>同一时刻只让一个安装 / 卸载 / 更新跑：并发会抢同一个 npm 目录的锁。</summary>
+    private readonly SemaphoreSlim _gate = new(1, 1);
 
     /// <summary>搜索序号。慢请求回来时如果已经不是最后一次搜索，结果直接丢掉。</summary>
     private int _searchToken;
 
-    /// <summary>这一轮搜索一共命中多少条。卡片只摆前 <see cref="MaxMarketCards"/> 张，剩下的靠关键词收窄。</summary>
-    private int _marketTotal;
+    /// <summary>当前关键词 / 是否还有下一页。加载更多沿用同一个关键词。</summary>
+    private string _query = string.Empty;
+    private bool _hasMore;
 
-    /// <summary>市场一次最多摆多少张卡。100 张卡挤在一个非虚拟化列表里，滚动会明显发涩。</summary>
-    private const int MaxMarketCards = 40;
+    /// <summary>检测到新版本的源。刷新清单时按它给卡片打标。</summary>
+    private readonly HashSet<string> _updates = new(StringComparer.OrdinalIgnoreCase);
 
     public PluginsViewModel(MainWindowViewModel host)
     {
         _host = host;
         Refresh();
-        _ = SearchAsync(string.Empty);
+        _ = SearchAsync(string.Empty, reset: true);
     }
 
     public ObservableCollection<InstalledPluginViewModel> Installed { get; } = [];
@@ -163,7 +198,12 @@ public sealed partial class PluginsViewModel : ObservableObject
     /// <summary>空结果提示：正在搜的时候不摆「没有搜到」，那会像搜索失败了。</summary>
     public bool ShowMarketEmpty => !IsSearchingMarket && !HasMarket;
 
-    /// <summary>标题下的计数。有没装上的要单独说出来，不然「1 个已安装」和卡片上的警告自相矛盾。</summary>
+    /// <summary>还有下一页时底部给一个「加载更多」。</summary>
+    public bool HasMore => _hasMore;
+
+    public string LoadMoreText => $"加载更多（已显示 {Market.Count} 个）";
+
+    /// <summary>标题下的计数。有没装上的、停用的要单独说出来，不然和卡片上的状态自相矛盾。</summary>
     public string InstalledCountText
     {
         get
@@ -173,10 +213,20 @@ public sealed partial class PluginsViewModel : ObservableObject
                 return "还没有装插件";
             }
 
+            var parts = new List<string> { $"{Installed.Count} 个插件" };
+            var disabled = Installed.Count(item => !item.IsEnabled);
+            if (disabled > 0)
+            {
+                parts.Add($"{disabled} 个已停用");
+            }
+
             var missing = Installed.Count(item => item.IsMissing);
-            return missing == 0
-                ? $"{Installed.Count} 个已安装"
-                : $"{Installed.Count} 个插件 · {missing} 个没装上";
+            if (missing > 0)
+            {
+                parts.Add($"{missing} 个没装上");
+            }
+
+            return string.Join(" · ", parts);
         }
     }
 
@@ -184,9 +234,7 @@ public sealed partial class PluginsViewModel : ObservableObject
         ? "正在查 npm…"
         : string.IsNullOrWhiteSpace(SearchText)
             ? $"热门 {Market.Count} 个"
-            : _marketTotal > Market.Count
-                ? $"命中 {_marketTotal} 个 · 显示前 {Market.Count}"
-                : $"命中 {_marketTotal} 个";
+            : $"命中 {Market.Count} 个";
 
     public string PackagesRootText => Ui.ShortenPath(_host.Plugins.PackagesRoot);
 
@@ -199,6 +247,34 @@ public sealed partial class PluginsViewModel : ObservableObject
 
     [RelayCommand]
     private void Back() => _host.GoBack();
+
+    // ---- 安装位置 ----
+
+    /// <summary>true = 装到当前工作区的 <c>.pi</c>；false = 装到用户目录（默认）。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(InstallScopeText))]
+    [NotifyPropertyChangedFor(nameof(InstallScopeHint))]
+    private bool installToWorkspace;
+
+    public bool CanInstallToWorkspace => !string.IsNullOrWhiteSpace(_host.Settings.WorkspacePath);
+
+    public string InstallScopeText => InstallToWorkspace ? "装到当前工作区" : "装到用户目录";
+
+    public string InstallScopeHint => CanInstallToWorkspace
+        ? "项目级包只在当前工作区生效，写进 .pi/settings.json"
+        : "还没有选工作区，只能装到用户目录";
+
+    [RelayCommand]
+    private void ToggleInstallScope()
+    {
+        if (!CanInstallToWorkspace)
+        {
+            ShowNotice("先选一个工作区，才能装项目级插件。", isError: true);
+            return;
+        }
+
+        InstallToWorkspace = !InstallToWorkspace;
+    }
 
     // ---- 搜索 ----
 
@@ -213,17 +289,21 @@ public sealed partial class PluginsViewModel : ObservableObject
     {
         if (string.IsNullOrWhiteSpace(value) && !IsSearchingMarket)
         {
-            _ = SearchAsync(string.Empty);
+            _ = SearchAsync(string.Empty, reset: true);
         }
     }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(MarketCountText))]
     [NotifyPropertyChangedFor(nameof(ShowMarketEmpty))]
+    [NotifyPropertyChangedFor(nameof(HasMore))]
     private bool isSearchingMarket;
 
     [RelayCommand]
-    private Task Search() => SearchAsync(SearchText);
+    private Task Search() => SearchAsync(SearchText, reset: true);
+
+    [RelayCommand]
+    private Task LoadMore() => SearchAsync(_query, reset: false);
 
     [RelayCommand]
     private void ClearSearch()
@@ -231,35 +311,56 @@ public sealed partial class PluginsViewModel : ObservableObject
         if (SearchText.Length == 0)
         {
             // 本来就是空的：清空按钮不会触发变更事件，直接补一次热门搜索
-            _ = SearchAsync(string.Empty);
+            _ = SearchAsync(string.Empty, reset: true);
             return;
         }
 
         SearchText = string.Empty;
     }
 
-    private async Task SearchAsync(string query)
+    private async Task SearchAsync(string query, bool reset)
     {
+        if (!reset && (!_hasMore || IsSearchingMarket))
+        {
+            return;
+        }
+
         var token = ++_searchToken;
+        var from = reset ? 0 : Market.Count;
+        _query = query;
         IsSearchingMarket = true;
-        Notice = null;
+        if (reset)
+        {
+            Notice = null;
+        }
 
         try
         {
-            var items = await _host.Plugins.SearchAsync(query);
+            var page = await _host.Plugins.SearchAsync(query, from);
             if (token != _searchToken)
             {
                 return;
             }
 
             var installed = InstalledNames();
-            _marketTotal = items.Count;
-            Market.Clear();
-            foreach (var item in items.Take(MaxMarketCards))
+            if (reset)
             {
+                Market.Clear();
+            }
+
+            foreach (var item in page.Items)
+            {
+                if (Market.Any(existing => string.Equals(existing.Name, item.Name, StringComparison.OrdinalIgnoreCase)))
+                {
+                    continue;
+                }
+
                 Market.Add(new MarketPluginViewModel(item, installed.Contains(item.Name)));
             }
 
+            _hasMore = page.Total > Market.Count;
+            OnPropertyChanged(nameof(HasMore));
+            OnPropertyChanged(nameof(LoadMoreText));
             OnPropertyChanged(nameof(MarketCountText));
             OnPropertyChanged(nameof(HasMarket));
             OnPropertyChanged(nameof(ShowMarketEmpty));
@@ -269,10 +370,11 @@ public sealed partial class PluginsViewModel : ObservableObject
             if (token == _searchToken)
             {
                 Market.Clear();
-                _marketTotal = 0;
+                _hasMore = false;
                 ShowNotice($"市场连不上：{ex.Message}。可以直接用「手动安装」填包名或 git 地址。", isError: true);
                 OnPropertyChanged(nameof(HasMarket));
                 OnPropertyChanged(nameof(ShowMarketEmpty));
+                OnPropertyChanged(nameof(HasMore));
             }
         }
         finally
@@ -296,7 +398,7 @@ public sealed partial class PluginsViewModel : ObservableObject
         Installed.Clear();
         foreach (var plugin in _host.Plugins.ListInstalled())
         {
-            Installed.Add(new InstalledPluginViewModel(plugin));
+            Installed.Add(new InstalledPluginViewModel(plugin) { HasUpdate = _updates.Contains(plugin.Source) });
         }
 
         ManualExtensions.Clear();
@@ -308,12 +410,156 @@ public sealed partial class PluginsViewModel : ObservableObject
         OnPropertyChanged(nameof(HasInstalled));
         OnPropertyChanged(nameof(HasManualExtensions));
         OnPropertyChanged(nameof(InstalledCountText));
+        OnPropertyChanged(nameof(CanInstallToWorkspace));
+        OnPropertyChanged(nameof(InstallScopeHint));
 
         // 装完 / 卸完之后市场里的按钮状态要跟着变，不用重新联网。
         var names = InstalledNames();
         foreach (var item in Market)
         {
             item.IsInstalled = names.Contains(item.Name);
+        }
+    }
+
+    // ---- 启用 / 停用 ----
+
+    [RelayCommand]
+    private async Task ToggleEnabledAsync(InstalledPluginViewModel? item)
+    {
+        if (item is null || item.IsWorking)
+        {
+            return;
+        }
+
+        if (!await _gate.WaitAsync(0))
+        {
+            ShowNotice("有一个安装 / 卸载正在进行，等它结束。", isError: true);
+            return;
+        }
+
+        item.IsWorking = true;
+        var enable = !item.IsEnabled;
+        try
+        {
+            var result = await _host.Plugins.SetEnabledAsync(item.Info.Source, item.Info.IsProjectScope, enable);
+            if (!result.Ok)
+            {
+                ShowNotice($"改不了：{result.Detail}", isError: true);
+                return;
+            }
+
+            _host.Runtime.InvalidateSessions();
+            Refresh();
+            ShowNotice(
+                enable
+                    ? $"已启用 {item.Name}，下一条消息生效。"
+                    : $"已停用 {item.Name}。包还在 settings.json 里，扩展和技能都不再加载。",
+                isError: false);
+        }
+        catch (Exception ex)
+        {
+            ShowNotice($"改不了：{ex.Message}", isError: true);
+        }
+        finally
+        {
+            item.IsWorking = false;
+            _gate.Release();
+        }
+    }
+
+    // ---- 更新 ----
+
+    [ObservableProperty]
+    private bool isCheckingUpdates;
+
+    public string UpdateSummary => _updates.Count == 0 ? string.Empty : $"{_updates.Count} 个可更新";
+
+    [RelayCommand]
+    private async Task CheckUpdatesAsync()
+    {
+        if (IsCheckingUpdates)
+        {
+            return;
+        }
+
+        IsCheckingUpdates = true;
+        try
+        {
+            var updates = await _host.Plugins.CheckUpdatesAsync();
+            _updates.Clear();
+            foreach (var update in updates)
+            {
+                _updates.Add(update.Source);
+            }
+
+            foreach (var card in Installed)
+            {
+                card.HasUpdate = _updates.Contains(card.Info.Source);
+            }
+
+            OnPropertyChanged(nameof(UpdateSummary));
+            ShowNotice(
+                updates.Count == 0
+                    ? "都装的是最新版。"
+                    : $"有 {updates.Count} 个包可以更新：{string.Join('、', updates.Select(update => update.Name))}。",
+                isError: false);
+        }
+        catch (Exception ex)
+        {
+            ShowNotice($"检查更新失败：{ex.Message}", isError: true);
+        }
+        finally
+        {
+            IsCheckingUpdates = false;
+        }
+    }
+
+    [RelayCommand]
+    private async Task UpdateAsync(InstalledPluginViewModel? item)
+    {
+        if (item is null || item.IsWorking)
+        {
+            return;
+        }
+
+        if (!await _gate.WaitAsync(0))
+        {
+            ShowNotice("有一个安装 / 卸载正在进行，等它结束。", isError: true);
+            return;
+        }
+
+        item.IsWorking = true;
+        try
+        {
+            // 进度只在更新期间更新，迟到的投递不能把结果盖掉。
+            var progress = new Progress<string>(text =>
+            {
+                if (item.IsWorking)
+                {
+                    ShowNotice(text, isError: false);
+                }
+            });
+
+            var result = await _host.Plugins.UpdateAsync(item.Info.Source, progress);
+            if (!result.Ok)
+            {
+                ShowNotice($"更新失败：{result.Detail}", isError: true);
+                return;
+            }
+
+            _updates.Remove(item.Info.Source);
+            _host.Runtime.InvalidateSessions();
+            Refresh();
+            ShowNotice($"已更新 {item.Name}，下一条消息生效。", isError: false);
+        }
+        catch (Exception ex)
+        {
+            ShowNotice($"更新失败：{ex.Message}", isError: true);
+        }
+        finally
+        {
+            item.IsWorking = false;
+            _gate.Release();
         }
     }
 
@@ -355,7 +601,6 @@ public sealed partial class PluginsViewModel : ObservableObject
         ManualInstalling = true;
         try
         {
-            // Progress 是异步投递的：安装结束后才到的消息不能把成功提示盖掉。
             var progress = new Progress<string>(text =>
             {
                 if (ManualInstalling)
@@ -364,7 +609,7 @@ public sealed partial class PluginsViewModel : ObservableObject
                 }
             });
 
-            if (await InstallAsync(source, progress))
+            if (await InstallAsync(source, InstallToWorkspace, progress))
             {
                 IsManualOpen = false;
                 ManualSource = string.Empty;
@@ -395,9 +640,10 @@ public sealed partial class PluginsViewModel : ObservableObject
                 item.Progress = text;
             }
         });
+
         try
         {
-            if (await InstallAsync("npm:" + item.Name, progress))
+            if (await InstallAsync("npm:" + item.Name, InstallToWorkspace, progress))
             {
                 item.IsInstalled = true;
             }
@@ -411,9 +657,9 @@ public sealed partial class PluginsViewModel : ObservableObject
     }
 
     /// <summary>安装的唯一入口：串行、失败把 npm 的原话带回来、成功后丢掉旧会话。</summary>
-    private async Task<bool> InstallAsync(string source, IProgress<string>? progress)
+    private async Task<bool> InstallAsync(string source, bool projectScope, IProgress<string>? progress)
     {
-        if (!await _installGate.WaitAsync(0))
+        if (!await _gate.WaitAsync(0))
         {
             ShowNotice("已经有一个安装在跑，等它结束再装下一个。", isError: true);
             return false;
@@ -422,7 +668,7 @@ public sealed partial class PluginsViewModel : ObservableObject
         try
         {
             ShowNotice($"正在安装 {source}…", isError: false);
-            var result = await _host.Plugins.InstallAsync(source, progress);
+            var result = await _host.Plugins.InstallAsync(source, projectScope, progress);
 
             if (!result.Ok)
             {
@@ -439,8 +685,9 @@ public sealed partial class PluginsViewModel : ObservableObject
                 ?.Name;
 
             ShowNotice(
-                $"已安装 {installedName ?? result.Source}，写进 settings.json。"
-                + "下一条消息生效——会重建会话上下文，长任务可能要重放一遍。",
+                $"已安装 {installedName ?? result.Source}，写进"
+                + (projectScope ? "工作区的 .pi/settings.json" : " settings.json")
+                + "。下一条消息生效——会重建会话上下文，长任务可能要重放一遍。",
                 isError: false);
             return true;
         }
@@ -451,7 +698,7 @@ public sealed partial class PluginsViewModel : ObservableObject
         }
         finally
         {
-            _installGate.Release();
+            _gate.Release();
         }
     }
 
@@ -465,12 +712,13 @@ public sealed partial class PluginsViewModel : ObservableObject
             return;
         }
 
-        if (!await _installGate.WaitAsync(0))
+        if (!await _gate.WaitAsync(0))
         {
             ShowNotice("有一个安装 / 卸载正在进行，等它结束。", isError: true);
             return;
         }
 
+        item.IsWorking = true;
         try
         {
             var result = await _host.Plugins.RemoveAsync(item.Info.Source, item.Info.IsProjectScope);
@@ -480,6 +728,7 @@ public sealed partial class PluginsViewModel : ObservableObject
                 return;
             }
 
+            _updates.Remove(item.Info.Source);
             _host.Runtime.InvalidateSessions();
             Refresh();
             ShowNotice($"已卸载 {item.Name}。settings.json 里的包记录同时删掉了。", isError: false);
@@ -490,7 +739,8 @@ public sealed partial class PluginsViewModel : ObservableObject
         }
         finally
         {
-            _installGate.Release();
+            item.IsWorking = false;
+            _gate.Release();
         }
     }
 

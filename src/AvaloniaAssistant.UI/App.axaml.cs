@@ -357,6 +357,11 @@ public partial class AssistantApp : Application
                         {
                             pluginsPage.ShowManual();
                         }
+
+                        if (AppLaunchOptions.PluginCheckUpdates)
+                        {
+                            await pluginsPage.CheckUpdatesCommand.ExecuteAsync(null);
+                        }
                     }
                     break;
             }
@@ -742,9 +747,13 @@ public partial class AssistantApp : Application
 
             // 插件页第一屏要等 npm 市场回来，否则截到的是「正在查 npm…」。
             var waitingForPluginMarket = string.Equals(AppLaunchOptions.Page, "plugins", StringComparison.OrdinalIgnoreCase);
+
+            // 技能页的「插件工具」要真加载一次扩展（TS 转译实测 ~7 秒），普通 1.6 秒截到的是「正在读…」。
+            var waitingForPluginTools = string.Equals(AppLaunchOptions.Page, "tools", StringComparison.OrdinalIgnoreCase);
             var wait = waitingForRun ? 4500
                 : waitingForMcpProbe ? 9000
                 : waitingForPluginMarket ? 5000
+                : waitingForPluginTools ? 11000
                 : 1600;
             await Task.Delay(wait);
 

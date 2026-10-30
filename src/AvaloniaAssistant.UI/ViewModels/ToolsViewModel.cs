@@ -72,6 +72,52 @@ public sealed partial class ToolItemViewModel : ObservableObject
 public delegate void ToolToggle(string name, bool enabled);
 
 /// <summary>
+/// 插件带来的工具。它没有本地元数据（是不是只读、会不会起进程都写在扩展代码里），
+/// 所以统一按「调用要确认」展示，关掉就是不进会话的 allowlist。
+/// </summary>
+public sealed partial class PluginToolItemViewModel : ObservableObject
+{
+    private readonly ToolToggle _toggle;
+    private bool _initializing = true;
+
+    public PluginToolItemViewModel(AgentPluginToolInfo info, bool enabled, ToolToggle toggle)
+    {
+        Info = info;
+        _toggle = toggle;
+        IsEnabled = enabled;
+        _initializing = false;
+    }
+
+    public AgentPluginToolInfo Info { get; }
+
+    public string Name => Info.Name;
+
+    public string Plugin => Info.Plugin;
+
+    public string Description => string.IsNullOrWhiteSpace(Info.Description) ? "（这个工具没写描述）" : Info.Description;
+
+    public string ExposureText => Info.Exposure;
+
+    public bool RequiresSearch => Info.RequiresSearch;
+
+    [ObservableProperty]
+    private bool isEnabled;
+
+    partial void OnIsEnabledChanged(bool value)
+    {
+        if (!_initializing)
+        {
+            _toggle(Name, value);
+        }
+    }
+
+    public bool Matches(string keyword) =>
+        Name.Contains(keyword, StringComparison.OrdinalIgnoreCase)
+        || Plugin.Contains(keyword, StringComparison.OrdinalIgnoreCase)
+        || Description.Contains(keyword, StringComparison.OrdinalIgnoreCase);
+}
+
+/// <summary>
 /// 技能卡片。开关只改「这一轮要不要把它放进系统提示」，不碰磁盘上的 SKILL.md；
 /// 卡片本身还能点开看正文——以前只能看到两行描述，想确认它到底干什么得去资源管理器翻。
 /// </summary>
@@ -118,6 +164,7 @@ public sealed partial class ToolsViewModel : ObservableObject
 
     private readonly MainWindowViewModel _host;
     private readonly List<ToolItemViewModel> _all = [];
+    private readonly List<PluginToolItemViewModel> _pluginTools = [];
     private string _skillsRoot = string.Empty;
     private string _skillsRootRaw = string.Empty;
 
@@ -140,6 +187,10 @@ public sealed partial class ToolsViewModel : ObservableObject
         SelectedCategory = AllCategory;
         Refresh();
         RefreshCapabilities();
+
+        // 插件工具要真加载一次扩展才知道有哪些（.ts 走进程内转译，1~3 秒），
+        // 所以页面先出来、清单后到，不把整页卡住。
+        _ = LoadPluginToolsAsync();
     }
 
     /// <summary>分类名（全部 / 系统 / …），直接喂给 ChipGroup。</summary>
@@ -151,6 +202,29 @@ public sealed partial class ToolsViewModel : ObservableObject
 
     /// <summary>按搜索词过滤后的技能。搜索框写着「搜索技能」，技能卡片必须跟着一起筛。</summary>
     public ObservableCollection<SkillItemViewModel> VisibleSkills { get; } = [];
+
+    public ObservableCollection<PluginToolItemViewModel> PluginTools { get; } = [];
+
+    public ObservableCollection<PluginToolItemViewModel> VisiblePluginTools { get; } = [];
+
+    /// <summary>插件工具正在读扩展清单。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PluginToolsHint))]
+    private bool isLoadingPluginTools;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PluginToolsHint))]
+    private string? pluginToolsError;
+
+    public bool HasPluginTools => PluginTools.Count > 0;
+
+    public string PluginToolsHint => IsLoadingPluginTools
+        ? "正在读插件清单（要真加载一次扩展）…"
+        : PluginToolsError is { Length: > 0 } error
+            ? "读不到插件工具：" + error
+            : PluginTools.Count == 0
+                ? "还没有插件提供工具。装一个插件后回到这里，它的工具会出现在下面。"
+                : $"{PluginTools.Count} 个插件工具 · 关掉后不进会话的 allowlist，下一条消息生效";
 
     public bool HasSkills => Skills.Count > 0;
 
@@ -166,7 +240,9 @@ public sealed partial class ToolsViewModel : ObservableObject
         ? $"{Skills.Count} 个技能"
         : $"{VisibleSkills.Count} / {Skills.Count} 个技能";
 
-    public string SubtitleText => $"{_all.Count} 个内置工具 · {_all.Count(tool => tool.IsEnabled)} 个已启用";
+    public string SubtitleText => PluginTools.Count == 0
+        ? $"{_all.Count} 个内置工具 · {_all.Count(tool => tool.IsEnabled)} 个已启用"
+        : $"{_all.Count} 个内置工具 · {PluginTools.Count} 个插件工具";
 
     [ObservableProperty]
     private string searchText = string.Empty;
@@ -312,6 +388,7 @@ public sealed partial class ToolsViewModel : ObservableObject
     {
         VisibleTools.Clear();
         VisibleSkills.Clear();
+        VisiblePluginTools.Clear();
 
         var keyword = SearchText.Trim();
         foreach (var tool in _all)
@@ -339,9 +416,19 @@ public sealed partial class ToolsViewModel : ObservableObject
             }
         }
 
-        HasNothing = VisibleTools.Count == 0 && VisibleSkills.Count == 0;
+        // 插件工具不参与上面的分类筛选：它们的来源是插件，不是「文件 / 命令 / 网络」这些内置分类。
+        foreach (var tool in _pluginTools)
+        {
+            if (keyword.Length == 0 || tool.Matches(keyword))
+            {
+                VisiblePluginTools.Add(tool);
+            }
+        }
+
+        HasNothing = VisibleTools.Count == 0 && VisibleSkills.Count == 0 && VisiblePluginTools.Count == 0;
         OnPropertyChanged(nameof(SubtitleText));
         OnPropertyChanged(nameof(CapabilityText));
+        OnPropertyChanged(nameof(HasPluginTools));
     }
 
     private static bool Matches(SkillItemViewModel skill, string keyword)
@@ -375,6 +462,73 @@ public sealed partial class ToolsViewModel : ObservableObject
             enabled
                 ? $"已启用「{name}」：下一轮生效。"
                 : $"已关掉「{name}」：下一轮不再把它放进系统提示，SKILL.md 还在原处。",
+            isError: false);
+    }
+
+    /// <summary>
+    /// 读插件工具。真加载一次扩展才知道插件注册了什么（TS 要过一遍进程内转译），
+    /// 所以这是显式命令 + 首次进页面自动跑一次。
+    /// </summary>
+    [RelayCommand]
+    private async Task LoadPluginToolsAsync()
+    {
+        if (IsLoadingPluginTools)
+        {
+            return;
+        }
+
+        IsLoadingPluginTools = true;
+        PluginToolsError = null;
+        try
+        {
+            // 加载扩展（Jint 转译 TypeScript）是纯 CPU 活，放在 UI 线程上会把首帧卡住 2 秒以上，
+            // 页面看起来像没打开。丢到线程池，清单回来了再更新绑定。
+            var tools = await Task.Run(() => _host.Plugins.ListToolsAsync());
+            var disabled = _host.Settings.DisabledTools;
+
+            _pluginTools.Clear();
+            PluginTools.Clear();
+            foreach (var info in tools)
+            {
+                var item = new PluginToolItemViewModel(info, !disabled.Contains(info.Name), TogglePluginTool);
+                _pluginTools.Add(item);
+                PluginTools.Add(item);
+            }
+
+            Refresh();
+            OnPropertyChanged(nameof(PluginToolsHint));
+            OnPropertyChanged(nameof(SubtitleText));
+        }
+        catch (Exception ex)
+        {
+            PluginToolsError = ex.Message;
+            ShowNotice("读不到插件工具：" + ex.Message, isError: true);
+        }
+        finally
+        {
+            IsLoadingPluginTools = false;
+            OnPropertyChanged(nameof(PluginToolsHint));
+        }
+    }
+
+    /// <summary>
+    /// 插件工具没有本地元数据，关掉就是把名字从会话的 allowlist 里摘掉（settings.json 的 disabledTools）。
+    /// </summary>
+    private void TogglePluginTool(string name, bool enabled)
+    {
+        var settings = _host.Settings;
+        settings.DisabledTools.RemoveAll(item => string.Equals(item, name, StringComparison.OrdinalIgnoreCase));
+        if (!enabled)
+        {
+            settings.DisabledTools.Add(name);
+        }
+
+        _ = _host.SettingsProvider.SaveAsync(settings);
+        _host.Runtime.InvalidateSessions();
+        ShowNotice(
+            enabled
+                ? $"已启用插件工具「{name}」：下一条消息生效。"
+                : $"已关掉插件工具「{name}」：下一条消息起它就进不了模型的工具清单。",
             isError: false);
     }
 

@@ -59,12 +59,12 @@ Windows 桌面 AI 助理。Agent 循环用 [pi.net](https://github.com/AIDotNet/
   整段粘贴标准 JSON（`mcpServers` / VS Code 的 `servers` 写法）就能一次导入多个，也能从现成的
   `mcp.json` 文件读进来；只加一个 stdio 服务端时用表单。
 - **插件市场**：装的是 pi 自己的包——一个包可以同时带扩展、技能、提示词和主题。搜 npm 上的
-  `pi-package`（和 pi 官方 gallery 同一份来源），也可以手动填包名 / `npm:` 版本 / `git:` 地址 / 本地目录。
-  安装走本机 npm，写进 `settings.json` 的 `packages`，**下一条消息生效**（会重建会话上下文）；已装的能一键卸载，
-  扩展目录里手工放的 `.ts` / `.js` / `.dll` 也一并列出来。升级到 pi.net 1.4.5 之后，
-  上游的 TypeScript 扩展由进程内 JS 宿主直接加载，不用先编译成程序集。
-  插件注册的工具会进会话；它们没有本地元数据，按「会改本机」对待——只读模式不执行，
-  其它模式逐次确认（和 MCP 工具同一套策略）。
+  `pi-package`（和 pi 官方 gallery 同一份来源，分页加载），也可以手动填包名 / `npm:` 版本 / `git:` 地址 /
+  本地目录；装用户级还是当前工作区（项目级）由页面上的开关决定。已装的能**停用**（包留在 `settings.json`，
+  pi 不再加载它的资源）、能**检查更新并升级**、能一键卸载；扩展目录里手工放的 `.ts` / `.js` / `.dll`
+  也一并列出。升级到 pi.net 1.4.5 之后，上游的 TypeScript 扩展由进程内 JS 宿主直接加载，不用先编译成程序集。
+  插件注册的工具会进会话，并在「技能」页单独列出来、可以逐个关掉；它们没有本地元数据，按「会改本机」对待——
+  只读模式不执行，其它模式逐次确认（和 MCP 工具同一套策略）。
 - **导出会话**：对话页右上角一键存成 Markdown，工具调用、失败轮次、引用文件都在里面。
 
 | 会话 | 设置 |
@@ -74,6 +74,8 @@ Windows 桌面 AI 助理。Agent 循环用 [pi.net](https://github.com/AIDotNet/
 ![技能](docs/images/tools.png)
 
 ![插件](docs/images/plugins.png)
+
+![插件工具](docs/images/plugin-tools.png)
 
 ## 两个核心框架
 
@@ -431,6 +433,11 @@ dotnet run --project src/AvaloniaAssistant.Desktop -- --run "用三句话介绍�
 - **API Key 明文保存**在 `settings.json`，目前没有接 DPAPI；不要在共享机器上使用生产密钥。
 - **语音转写依赖端点**支持 `/audio/transcriptions`；DeepSeek 官方端点不支持，会给出错误提示。
 - **MCP 工具要写 `exposure: "direct"`**：不写就只有 codemode / tool_search 能碰到，模型直接调不到。
+- **插件工具的 JS 宿主还有两处毛边**（pi.net 1.4.5）：`fs` 读不存在的文件时抛的是 .NET 异常，JS 的
+  `try/catch` 接不住（`pi-memory` 首次写入就会踩到，先建好 `~/.pi/agent/memory/MEMORY.md` 可绕开）；
+  插件在 `session_start` 之后**动态注册**的工具不会被 allowlist 收进来。两处都要上游修。
+- **停用插件的语义是「一条资源都不加载」**：`settings.json` 里那条记录会从字符串改成对象，四类资源写空数组；
+  想只关扩展、保留技能，得自己改 `settings.json`。
 - **会话存档仍是本项目自己的 JSON**：CodingAgent 的会话跑在内存里，压缩结果不跨进程保存；
   重启后由 `sessions/*.json` 的历史重建上下文，压缩收益会重新累计。
 - **上下文窗口读本地模型目录**：从 `~/.pi/agent/models-store.json` 取当前模型的 `contextWindow`，

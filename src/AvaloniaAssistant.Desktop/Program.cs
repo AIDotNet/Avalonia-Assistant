@@ -132,6 +132,9 @@ internal static class Program
                 case "--plugin-confirm":
                     AppLaunchOptions.PluginConfirm = true;
                     break;
+                case "--plugin-check-updates":
+                    AppLaunchOptions.PluginCheckUpdates = true;
+                    break;
                 case "--composer-mention" when index + 1 < args.Length:
                     AppLaunchOptions.ComposerMention = args[++index];
                     break;

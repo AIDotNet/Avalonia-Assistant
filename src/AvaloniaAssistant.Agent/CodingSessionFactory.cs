@@ -152,13 +152,23 @@ internal sealed class CodingSessionFactory
         // 所以装完插件、扩展加载成功，模型仍然看不到它的工具——必须在这里把名字补进名单。
         // 内置扩展（mcp / codemode / tool_search / llama）不补：它们的能力由本应用自己决定要不要暴露，
         // 补进来等于把 codemode、tool_search 一起塞给模型。
-        var pluginTools = resourceLoader.GetExtensions().Extensions
+        var disabledTools = new HashSet<string>(settings.DisabledTools, StringComparer.Ordinal);
+        var pluginToolDefinitions = resourceLoader.GetExtensions().Extensions
             .Where(extension => !extension.SourceInfo.Path.StartsWith(
                 SourceInfos.BuiltinPathPrefix,
                 StringComparison.Ordinal))
-            .SelectMany(extension => extension.Tools.Keys)
+            .SelectMany(extension => extension.Tools.Values.Select(tool => tool.Definition))
+            .Where(definition => !disabledTools.Contains(definition.Name))
+            .ToList();
+        var pluginTools = pluginToolDefinitions
+            .Select(definition => definition.Name)
             .Distinct(StringComparer.Ordinal)
             .ToArray();
+
+        // 暴露方式是 deferred / codemode 的插件工具，模型得先能搜到它们；
+        // 只有真存在这种工具时才把 tool_search 一起放出去，平时不占模型的工具位。
+        var needsToolSearch = pluginToolDefinitions.Any(definition =>
+            definition.Exposure is ToolExposure.Deferred or ToolExposure.Codemode);
 
         var result = await Sdk.CreateAgentSessionAsync(
             new CreateAgentSessionOptions
@@ -188,6 +198,7 @@ internal sealed class CodingSessionFactory
                     .. customTools.Select(tool => tool.Name),
                     "mcp__*",
                     .. pluginTools,
+                    .. (needsToolSearch ? new[] { "tool_search" } : Array.Empty<string>()),
                 ],
                 CustomTools = customTools,
             },
