@@ -198,6 +198,22 @@ public sealed partial class PluginsViewModel : ObservableObject
     /// <summary>空结果提示：正在搜的时候不摆「没有搜到」，那会像搜索失败了。</summary>
     public bool ShowMarketEmpty => !IsSearchingMarket && !HasMarket;
 
+    /// <summary>
+    /// 已安装 / 市场 两个分页。原来两块上下叠着，标题、卡片、按钮互相抢，
+    /// 用户还得自己判断哪块是主体。默认停在「已安装」——装完就该看见它。
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowingInstalled))]
+    private bool showingMarket;
+
+    public bool ShowingInstalled => !ShowingMarket;
+
+    [RelayCommand]
+    private void ShowInstalledTab() => ShowingMarket = false;
+
+    [RelayCommand]
+    private void ShowMarketTab() => ShowingMarket = true;
+
     /// <summary>还有下一页时底部给一个「加载更多」。</summary>
     public bool HasMore => _hasMore;
 

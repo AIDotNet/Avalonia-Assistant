@@ -439,6 +439,49 @@
     <Setter Property="BorderBrush" Value="#3A3A36" />
   </Style>
 
+  <!-- 分段选项卡：浅槽里浮一块白。两块内容并排会互相干扰（技能 vs 插件工具、已安装 vs 市场），
+       一次只给一块。选中项用白底，不是 chip 那种深色填充——这里要的是「页」，不是「按钮」。 -->
+  <Style Selector="Border.tabbar">
+    <!-- 比 SurfaceMuted(#F8F8F6) 再深一档：那个色和白底只差 3 个色阶，选中的白块会看不见 -->
+    <Setter Property="Background" Value="#F2F2EE" />
+    <Setter Property="CornerRadius" Value="11" />
+    <Setter Property="Padding" Value="3" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="Button.tab">
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.12" />
+      </Transitions>
+    </Setter>
+    <Setter Property="Height" Value="30" />
+    <Setter Property="Padding" Value="14,0" />
+    <Setter Property="CornerRadius" Value="9" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="FontSize" Value="12.5" />
+    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="Button.tab:pointerover">
+    <Setter Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+  </Style>
+
+  <!-- active 必须写在 :pointerover 之后：同特异性下后写的赢，否则悬停会把选中的白底盖成灰的 -->
+  <Style Selector="Button.tab.active">
+    <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+    <Setter Property="FontWeight" Value="Medium" />
+  </Style>
+  <Style Selector="Button.tab.active:pointerover">
+    <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+  </Style>
+
   <Style Selector="Button.card-button">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />

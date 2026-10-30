@@ -44,18 +44,8 @@
 
     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
       <StackPanel Margin="96,16,96,24" Spacing="12">
-        <TextBlock Text="技能来自 SKILL.md，工具是本机能力。关掉的技能不进系统提示、关掉的工具不进模型上下文；执行命令仍需逐次确认。"
-                   Classes="caption"
-                   TextWrapping="Wrap"
-                   LineHeight="19" />
-
-        <!-- 开关改了会重建会话，长会话的上下文要重放一遍。这个因果关系必须写在开关旁边 -->
-        <TextBlock Text="开关下一轮生效。改动会重建会话上下文——长会话可能因此变慢、变贵。"
-                   Classes="caption"
-                   FontSize="10.5"
-                   Foreground="{StaticResource TextMutedBrush}"
-                   TextWrapping="Wrap"
-                   Margin="0,-6,0,0" />
+        <!-- 页首不放说明。开关的后果每次切换都会以提示条说一遍（ToolsViewModel 的 ShowNotice），
+             工具卡上也标了「需要确认 / 自动执行」，不需要常驻小字。 -->
 
         <Border IsVisible="{Binding HasNotice}"
                 Background="{Binding NoticeBackground}"
@@ -68,16 +58,39 @@
                      LineHeight="17" />
         </Border>
 
-        <!-- 技能 -->
-        <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,6,0,0">
-          <TextBlock Text="技能" FontSize="13" FontWeight="Medium" VerticalAlignment="Center" />
-          <TextBlock Grid.Column="1"
-                     Text="{Binding CapabilityText}"
-                     Classes="caption"
-                     FontSize="10.5"
-                     Margin="10,0,0,0"
-                     VerticalAlignment="Center" />
-          <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6">
+        <!-- 技能 / 插件工具 两个分页。tab 和当前分页的操作按钮放在同一行：
+             切 tab 时按钮跟着换，不会再让两组无关的按钮挤在一个工具栏里。 -->
+        <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,4,0,0">
+          <Border Classes="tabbar">
+            <StackPanel Orientation="Horizontal" Spacing="2">
+              <Button Classes="tab"
+                      Classes.active="{Binding ShowingSkills}"
+                      Command="{Binding ShowSkillsTabCommand}"
+                      ToolTip.Tip="技能目录里的 SKILL.md">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <TextBlock Text="技能" VerticalAlignment="Center" />
+                  <TextBlock Text="{Binding Skills.Count}"
+                             FontSize="11"
+                             Opacity="0.5"
+                             VerticalAlignment="Center" />
+                </StackPanel>
+              </Button>
+              <Button Classes="tab"
+                      Classes.active="{Binding ShowingPluginTools}"
+                      Command="{Binding ShowPluginToolsTabCommand}"
+                      ToolTip.Tip="插件里的扩展注册的工具">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <TextBlock Text="插件工具" VerticalAlignment="Center" />
+                  <TextBlock Text="{Binding PluginTools.Count}"
+                             FontSize="11"
+                             Opacity="0.5"
+                             VerticalAlignment="Center" />
+                </StackPanel>
+              </Button>
+            </StackPanel>
+          </Border>
+
+          <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" IsVisible="{Binding ShowingSkills}">
             <Button Classes="pill"
                     Command="{Binding OpenSkillsFolderCommand}"
                     ToolTip.Tip="在资源管理器里打开技能目录">
@@ -111,7 +124,27 @@
               </StackPanel>
             </Button>
           </StackPanel>
+
+          <!-- 插件工具分页只有一个操作，独立成按钮，和技能那四个不共用一个容器 -->
+          <Button Grid.Column="2"
+                  Classes="pill"
+                  IsVisible="{Binding ShowingPluginTools}"
+                  IsEnabled="{Binding !IsLoadingPluginTools}"
+                  Command="{Binding LoadPluginToolsCommand}"
+                  ToolTip.Tip="重新加载扩展，拿最新的工具清单">
+            <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+              <arc:ArcGlyph Data="{x:Static arc:ArcIcons.RefreshCw}" Size="12" />
+              <TextBlock Text="重新读取" FontSize="11" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
         </Grid>
+
+        <!-- 技能分页 -->
+        <StackPanel IsVisible="{Binding ShowingSkills}" Spacing="12">
+          <TextBlock Text="{Binding CapabilityText}"
+                     Classes="caption"
+                     FontSize="10.5"
+                     IsVisible="{Binding HasCapabilityText}" />
 
         <ItemsControl ItemsSource="{Binding VisibleSkills}" Margin="0,0,-12,0">
           <ItemsControl.ItemsPanel>
@@ -218,25 +251,14 @@
                     Command="{Binding RefreshCapabilitiesCommand}" />
           </Grid>
         </Border>
+        </StackPanel>
 
-        <!-- 插件工具：来自 pi 包（扩展注册的工具），不是本应用自建的 -->
-        <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,10,0,0">
-          <TextBlock Text="插件工具" FontSize="13" FontWeight="Medium" VerticalAlignment="Center" />
-          <TextBlock Grid.Column="1"
-                     Text="{Binding PluginToolsHint}"
+        <!-- 插件工具分页：来自 pi 包（扩展注册的工具），不是本应用自建的 -->
+        <StackPanel IsVisible="{Binding ShowingPluginTools}" Spacing="12">
+          <TextBlock Text="{Binding PluginToolsHint}"
                      Classes="caption"
                      FontSize="10.5"
-                     Margin="10,0,0,0"
-                     VerticalAlignment="Center"
                      TextWrapping="Wrap" />
-          <Button Grid.Column="2"
-                  Classes="chip"
-                  Height="28"
-                  Padding="12,0"
-                  Content="重新读取"
-                  IsEnabled="{Binding !IsLoadingPluginTools}"
-                  Command="{Binding LoadPluginToolsCommand}" />
-        </Grid>
 
         <!-- 有插件加载失败：空清单必须解释原因，否则用户只能看到「没有工具」 -->
         <Border IsVisible="{Binding HasLoadIssues}"
@@ -337,105 +359,9 @@
             </DataTemplate>
           </ItemsControl.ItemTemplate>
         </ItemsControl>
+        </StackPanel>
 
-        <!-- 工具 -->
-        <Grid ColumnDefinitions="Auto,*" Margin="0,10,0,0">
-          <TextBlock Text="工具" FontSize="13" FontWeight="Medium" VerticalAlignment="Center" />
-          <TextBlock Grid.Column="1"
-                     Text="关掉后不会出现在模型可用的工具里"
-                     Classes="caption"
-                     FontSize="10.5"
-                     Margin="10,0,0,0"
-                     VerticalAlignment="Center" />
-        </Grid>
-
-        <arc:ChipGroup Label="工具分类"
-                       IsMultiple="False"
-                       HorizontalAlignment="Left"
-                       ItemsSource="{Binding Categories}"
-                       SelectedItem="{Binding SelectedCategory, Mode=TwoWay}" />
-
-        <ItemsControl ItemsSource="{Binding VisibleTools}" Margin="0,2,-12,0">
-          <ItemsControl.ItemsPanel>
-            <ItemsPanelTemplate>
-              <UniformGrid Columns="3" />
-            </ItemsPanelTemplate>
-          </ItemsControl.ItemsPanel>
-          <ItemsControl.ItemTemplate>
-            <DataTemplate>
-              <Border Classes="tool-tile" Margin="0,0,12,12">
-                <Grid RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="Auto,*">
-                  <Border Width="34"
-                          Height="34"
-                          CornerRadius="10"
-                          Background="{Binding TileBrush}">
-                    <arc:ArcGlyph Data="{Binding Icon}"
-                                  Size="17"
-                                  Foreground="{Binding AccentBrush}"
-                                  HorizontalAlignment="Center"
-                                  VerticalAlignment="Center" />
-                  </Border>
-
-                  <Grid Grid.Column="1" Margin="10,0,0,0" ColumnDefinitions="*,Auto">
-                    <TextBlock Text="{Binding Label}"
-                               FontSize="13"
-                               FontWeight="Medium"
-                               VerticalAlignment="Center"
-                               TextTrimming="CharacterEllipsis" />
-                    <arc:Switch Grid.Column="1"
-                                IsChecked="{Binding IsEnabled, Mode=TwoWay}"
-                                VerticalAlignment="Center"
-                                Margin="8,0,0,0"
-                                Opacity="0.9"
-                                RenderTransformOrigin="100%,50%"
-                                RenderTransform="scale(0.86)" />
-                  </Grid>
-
-                  <TextBlock Grid.Row="1"
-                             Grid.ColumnSpan="2"
-                             Margin="0,9,0,0"
-                             Text="{Binding Description}"
-                             Classes="caption"
-                             FontSize="11.5"
-                             LineHeight="16"
-                             TextWrapping="Wrap"
-                             MaxLines="2"
-                             TextTrimming="CharacterEllipsis"
-                             ToolTip.Tip="{Binding Description}" />
-
-                  <StackPanel Grid.Row="2"
-                              Grid.ColumnSpan="2"
-                              Orientation="Horizontal"
-                              Spacing="5"
-                              Margin="0,8,0,0">
-                    <TextBlock Text="{Binding ApprovalText}"
-                               FontSize="10"
-                               Foreground="{StaticResource TextMutedBrush}" />
-                    <TextBlock Text="·" FontSize="10" Foreground="{StaticResource TextMutedBrush}" />
-                    <TextBlock Text="{Binding MutatingText}"
-                               FontSize="10"
-                               Foreground="{StaticResource TextMutedBrush}" />
-                    <TextBlock Text="·" FontSize="10" Foreground="{StaticResource TextMutedBrush}" />
-                    <TextBlock Text="{Binding ParameterText}"
-                               FontSize="10"
-                               Foreground="{StaticResource TextMutedBrush}" />
-                  </StackPanel>
-                </Grid>
-              </Border>
-            </DataTemplate>
-          </ItemsControl.ItemTemplate>
-        </ItemsControl>
-
-        <arc:EmptyState IsVisible="{Binding HasNothing}"
-                        Icon="{x:Static arc:ArcIcons.Search}"
-                        Title="没有匹配的技能或工具"
-                        Description="换个关键词，或者切回「全部」。">
-          <arc:EmptyState.Action>
-            <Button Classes="chip"
-                    Content="清空搜索"
-                    Command="{Binding ClearSearchCommand}" />
-          </arc:EmptyState.Action>
-        </arc:EmptyState>
+        <!-- 内置工具（读文件 / 执行命令 / 看时间这些）不在这页：技能页只管 SKILL.md 和插件带来的工具。 -->
       </StackPanel>
     </ScrollViewer>
   </Grid>

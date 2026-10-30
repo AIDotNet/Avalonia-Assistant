@@ -73,10 +73,7 @@
 
     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
       <StackPanel Margin="96,16,96,24" Spacing="12">
-        <TextBlock Text="插件就是 pi 的包：一个包里可以同时带扩展、技能、提示词和主题。扩展是能读文件、能起进程的代码，会和本应用同一个权限运行——只装你信得过的来源。装完写进 settings.json 的 packages，下一条消息生效（会重建会话上下文）。"
-                   Classes="caption"
-                   TextWrapping="Wrap"
-                   LineHeight="19" />
+        <!-- 页首不放说明：进来就看已装的和市场。装插件的风险提示在安装确认里给，不靠常驻小字。 -->
 
         <Border IsVisible="{Binding HasNotice}"
                 Background="{Binding NoticeBackground}"
@@ -89,6 +86,39 @@
                      LineHeight="17" />
         </Border>
 
+        <!-- 已安装 / 市场 两个分页。装完就在第一页，找新的去第二页。
+             上下叠着摆时两边的标题、卡片、按钮互相抢，用户还得自己判断哪块是主体。 -->
+        <Border Classes="tabbar" Margin="0,4,0,0">
+          <StackPanel Orientation="Horizontal" Spacing="2">
+            <Button Classes="tab"
+                    Classes.active="{Binding ShowingInstalled}"
+                    Command="{Binding ShowInstalledTabCommand}"
+                    ToolTip.Tip="已经装上的包">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <TextBlock Text="已安装" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding Installed.Count}"
+                           FontSize="11"
+                           Opacity="0.5"
+                           VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+            <Button Classes="tab"
+                    Classes.active="{Binding ShowingMarket}"
+                    Command="{Binding ShowMarketTabCommand}"
+                    ToolTip.Tip="npm 上的 pi 包">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <TextBlock Text="市场" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding Market.Count}"
+                           FontSize="11"
+                           Opacity="0.5"
+                           VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+          </StackPanel>
+        </Border>
+
+        <!-- 已安装分页 -->
+        <StackPanel IsVisible="{Binding ShowingInstalled}" Spacing="12">
         <!-- 手动安装：市场搜不到（私有包 / 内网 git / 本地在改的目录）时的主路径 -->
         <Border Classes="tool-tile" IsVisible="{Binding IsManualOpen}" Padding="14,12">
           <StackPanel Spacing="10">
@@ -125,9 +155,6 @@
                        LineHeight="16" />
           </StackPanel>
         </Border>
-
-        <!-- 已安装 -->
-        <TextBlock Text="已安装" FontSize="12.5" FontWeight="Medium" Margin="0,4,0,0" />
 
         <ItemsControl ItemsSource="{Binding Installed}" Margin="0,0,-12,0">
           <ItemsControl.ItemsPanel>
@@ -333,11 +360,12 @@
             </ItemsControl.ItemTemplate>
           </ItemsControl>
         </StackPanel>
+        </StackPanel>
 
-        <!-- 市场 -->
-        <Grid ColumnDefinitions="*,Auto" Margin="0,10,0,0">
+        <!-- 市场分页 -->
+        <StackPanel IsVisible="{Binding ShowingMarket}" Spacing="12">
+        <Grid ColumnDefinitions="*,Auto">
           <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-            <TextBlock Text="市场" FontSize="12.5" FontWeight="Medium" VerticalAlignment="Center" />
             <TextBlock Text="{Binding MarketCountText}"
                        Classes="caption"
                        FontSize="10.5"
@@ -481,6 +509,7 @@
                 Command="{Binding LoadMoreCommand}"
                 IsVisible="{Binding HasMore}"
                 IsEnabled="{Binding !IsSearchingMarket}" />
+        </StackPanel>
       </StackPanel>
     </ScrollViewer>
   </Grid>

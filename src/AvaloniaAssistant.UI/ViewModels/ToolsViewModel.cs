@@ -196,6 +196,9 @@ public sealed partial class ToolsViewModel : ObservableObject
     /// <summary>分类名（全部 / 系统 / …），直接喂给 ChipGroup。</summary>
     public ObservableCollection<string> Categories { get; }
 
+    // 下面是内置工具（读文件 / 执行命令 / 看时间这些）的数据和开关。
+    // 2026-10-30 起技能页不再展示它们——那页只管 SKILL.md 和插件带来的工具。
+    // 逻辑特意留着：要挪到设置页当「能力开关」时直接接视图，不用重写一遍。
     public ObservableCollection<ToolItemViewModel> VisibleTools { get; } = [];
 
     public ObservableCollection<SkillItemViewModel> Skills { get; } = [];
@@ -247,14 +250,31 @@ public sealed partial class ToolsViewModel : ObservableObject
     /// <summary>技能目录，用户目录已缩成 ~。</summary>
     public string SkillsRootText => _skillsRoot;
 
-    /// <summary>技能数量。搜索时显示「命中 / 总数」，免得以为技能被删了。</summary>
+    /// <summary>搜索时才显示「命中 / 总数」。平时数量已经印在分页 tab 上，再写一行是重复。</summary>
     public string CapabilityText => string.IsNullOrWhiteSpace(SearchText)
-        ? $"{Skills.Count} 个技能"
+        ? string.Empty
         : $"{VisibleSkills.Count} / {Skills.Count} 个技能";
 
-    public string SubtitleText => PluginTools.Count == 0
-        ? $"{_all.Count} 个内置工具 · {_all.Count(tool => tool.IsEnabled)} 个已启用"
-        : $"{_all.Count} 个内置工具 · {PluginTools.Count} 个插件工具";
+    public bool HasCapabilityText => CapabilityText.Length > 0;
+
+    /// <summary>页头副标题跟着这页实际展示的东西走。这里已经不放内置工具了，就别再报它们的数量。</summary>
+    public string SubtitleText => $"{Skills.Count} 个技能 · {PluginTools.Count} 个插件工具";
+
+    /// <summary>
+    /// 技能 / 插件工具 两个分页。两者内容性质不同（本地 SKILL.md vs 插件注册的工具），
+    /// 上下叠着摆会让人分不清哪张卡属于哪边，改成一次只显示一块。默认停在「技能」。
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowingSkills))]
+    private bool showingPluginTools;
+
+    public bool ShowingSkills => !ShowingPluginTools;
+
+    [RelayCommand]
+    private void ShowSkillsTab() => ShowingPluginTools = false;
+
+    [RelayCommand]
+    private void ShowPluginToolsTab() => ShowingPluginTools = true;
 
     [ObservableProperty]
     private string searchText = string.Empty;
@@ -440,6 +460,7 @@ public sealed partial class ToolsViewModel : ObservableObject
         HasNothing = VisibleTools.Count == 0 && VisibleSkills.Count == 0 && VisiblePluginTools.Count == 0;
         OnPropertyChanged(nameof(SubtitleText));
         OnPropertyChanged(nameof(CapabilityText));
+        OnPropertyChanged(nameof(HasCapabilityText));
         OnPropertyChanged(nameof(HasPluginTools));
     }
 

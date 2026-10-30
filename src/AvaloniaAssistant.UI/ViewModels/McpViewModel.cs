@@ -143,8 +143,9 @@ public sealed partial class McpViewModel : ObservableObject
     /// <summary>配置文件路径，用户目录缩成 ~。</summary>
     public string ConfigPathText => Ui.ShortenPath(_configPathRaw);
 
+    /// <summary>空状态只讲「怎么开第一步」。什么时候生效由页首那句统一交代，不在这里重复。</summary>
     public string EmptyHint => "点右上角「导入 JSON」，把 mcp.json 的内容整段粘进来；"
-                               + "写入后下一个会话启动时连接。只想加一个 stdio 服务端可以用「表单添加」。";
+                               + "只想加一个 stdio 服务端可以用「表单添加」。";
 
     /// <summary>导入面板开着的时候不再叠一个表单，两个都占地方。</summary>
     [ObservableProperty]
