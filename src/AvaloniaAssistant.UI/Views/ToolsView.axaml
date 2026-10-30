@@ -58,7 +58,7 @@
                      LineHeight="17" />
         </Border>
 
-        <!-- 技能 / 插件工具 两个分页。tab 和当前分页的操作按钮放在同一行：
+        <!-- 技能 / 技能市场 两个分页。tab 和当前分页的操作按钮放在同一行：
              切 tab 时按钮跟着换，不会再让两组无关的按钮挤在一个工具栏里。 -->
         <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,4,0,0">
           <Border Classes="tabbar">
@@ -76,16 +76,10 @@
                 </StackPanel>
               </Button>
               <Button Classes="tab"
-                      Classes.active="{Binding ShowingPluginTools}"
-                      Command="{Binding ShowPluginToolsTabCommand}"
-                      ToolTip.Tip="插件里的扩展注册的工具">
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                  <TextBlock Text="插件工具" VerticalAlignment="Center" />
-                  <TextBlock Text="{Binding PluginTools.Count}"
-                             FontSize="11"
-                             Opacity="0.5"
-                             VerticalAlignment="Center" />
-                </StackPanel>
+                      Classes.active="{Binding ShowingSkillMarket}"
+                      Command="{Binding ShowSkillMarketTabCommand}"
+                      ToolTip.Tip="skills.sh 上的公开技能">
+                <TextBlock Text="技能市场" VerticalAlignment="Center" />
               </Button>
             </StackPanel>
           </Border>
@@ -124,19 +118,6 @@
               </StackPanel>
             </Button>
           </StackPanel>
-
-          <!-- 插件工具分页只有一个操作，独立成按钮，和技能那四个不共用一个容器 -->
-          <Button Grid.Column="2"
-                  Classes="pill"
-                  IsVisible="{Binding ShowingPluginTools}"
-                  IsEnabled="{Binding !IsLoadingPluginTools}"
-                  Command="{Binding LoadPluginToolsCommand}"
-                  ToolTip.Tip="重新加载扩展，拿最新的工具清单">
-            <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
-              <arc:ArcGlyph Data="{x:Static arc:ArcIcons.RefreshCw}" Size="12" />
-              <TextBlock Text="重新读取" FontSize="11" VerticalAlignment="Center" />
-            </StackPanel>
-          </Button>
         </Grid>
 
         <!-- 技能分页 -->
@@ -253,146 +234,137 @@
         </Border>
         </StackPanel>
 
-        <!-- 插件工具分页：来自 pi 包（扩展注册的工具），不是本应用自建的 -->
-        <StackPanel IsVisible="{Binding ShowingPluginTools}" Spacing="12">
-          <TextBlock Text="{Binding PluginToolsHint}"
+        <!-- 技能市场分页：数据来自 skills.sh 的公开接口，安装走官方 CLI（npx skills add）。
+             技能在仓库里的路径是任意的（skills/engineering/tdd 这种），自己拼 raw URL 拼不出来。 -->
+        <StackPanel IsVisible="{Binding ShowingSkillMarket}" Spacing="12">
+          <Grid ColumnDefinitions="*,Auto">
+            <arc:SearchField x:Name="SkillMarketSearch"
+                             Width="320"
+                             Size="Small"
+                             HorizontalAlignment="Left"
+                             Placeholder="搜技能（skills.sh，至少两个字）"
+                             Text="{Binding MarketQuery, Mode=TwoWay}" />
+            <Button Grid.Column="1"
+                    Classes="pill"
+                    Content="搜索"
+                    Command="{Binding SearchMarketCommand}" />
+          </Grid>
+
+          <TextBlock Text="公开技能目录，装完就和本地技能一样用。"
                      Classes="caption"
                      FontSize="10.5"
-                     TextWrapping="Wrap"
-                     IsVisible="{Binding ShowPluginToolsHint}" />
+                     IsVisible="{Binding !IsSearchingMarket}" />
 
-        <!-- 没装带扩展的包：这张卡负责说清「这块是什么」和「去哪装」。
-             原来只有一行灰字，还写着「装一个插件后回到这里，它的工具会出现在下面」——
-             用户此刻就在这页，下面也是空的。 -->
-        <Border IsVisible="{Binding ShowPluginToolsEmpty}" Classes="tool-tile" Padding="14,12">
-          <Grid ColumnDefinitions="Auto,*,Auto">
-            <Border Width="32"
-                    Height="32"
-                    CornerRadius="9"
-                    Background="#EFF1F4"
-                    VerticalAlignment="Top">
-              <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Package}"
-                            Size="15"
-                            Foreground="#5B6472"
-                            HorizontalAlignment="Center"
-                            VerticalAlignment="Center" />
-            </Border>
-            <StackPanel Grid.Column="1" Margin="10,0,12,0" Spacing="2" VerticalAlignment="Center">
-              <TextBlock Text="还没有插件提供工具" FontSize="12.5" FontWeight="Medium" />
-              <TextBlock Text="插件里的扩展注册的工具会列在这里。关掉哪个，模型就看不到那个。"
-                         Classes="caption"
-                         FontSize="11"
-                         TextWrapping="Wrap" />
-            </StackPanel>
-            <Button Grid.Column="2"
-                    Classes="chip"
-                    Height="28"
-                    Padding="12,0"
-                    Content="去插件页"
-                    VerticalAlignment="Center"
-                    Command="{Binding OpenPluginsPageCommand}" />
-          </Grid>
-        </Border>
+          <TextBlock Text="正在搜 skills.sh…"
+                     Classes="caption"
+                     FontSize="10.5"
+                     IsVisible="{Binding IsSearchingMarket}" />
 
-        <!-- 有插件加载失败：空清单必须解释原因，否则用户只能看到「没有工具」 -->
-        <Border IsVisible="{Binding HasLoadIssues}"
-                Background="{StaticResource WarningSubtleBrush}"
-                BorderBrush="#F2D8A8"
-                BorderThickness="1"
-                CornerRadius="9"
-                Padding="10,8"
-                Margin="0,2,12,10">
-          <StackPanel Spacing="4">
-            <TextBlock Text="有插件加载失败"
+          <Border IsVisible="{Binding HasMarketNotice}"
+                  Background="{StaticResource SurfaceMutedBrush}"
+                  CornerRadius="8"
+                  Padding="12,8">
+            <TextBlock Text="{Binding MarketNotice}"
                        FontSize="11.5"
-                       FontWeight="Medium"
-                       Foreground="{StaticResource WarningBrush}" />
-            <TextBlock Text="{Binding LoadIssuesText}"
-                       FontSize="10.5"
-                       LineHeight="16"
-                       TextWrapping="Wrap" />
-            <TextBlock Text="装是装上了，但扩展代码没跑起来（多半是 JS 宿主还没实现它用到的 node 模块）。可以换一个包，或等 pi.net 更新。"
-                       Classes="caption"
-                       FontSize="10"
-                       TextWrapping="Wrap" />
-          </StackPanel>
-        </Border>
+                       TextWrapping="Wrap"
+                       LineHeight="17" />
+          </Border>
 
-        <ItemsControl ItemsSource="{Binding VisiblePluginTools}" Margin="0,2,-12,0">
-          <ItemsControl.ItemsPanel>
-            <ItemsPanelTemplate>
-              <UniformGrid Columns="3" />
-            </ItemsPanelTemplate>
-          </ItemsControl.ItemsPanel>
-          <ItemsControl.ItemTemplate>
-            <DataTemplate>
-              <Border Classes="tool-tile" Margin="0,0,12,12" ToolTip.Tip="{Binding Description}">
-                <Grid RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="Auto,*">
-                  <Border Width="34"
-                          Height="34"
-                          CornerRadius="10"
-                          Background="#EFF1F4">
-                    <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Package}"
-                                  Size="17"
-                                  Foreground="#5B6472"
-                                  HorizontalAlignment="Center"
-                                  VerticalAlignment="Center" />
-                  </Border>
-
-                  <Grid Grid.Column="1" Margin="10,0,0,0" ColumnDefinitions="*,Auto">
-                    <TextBlock Text="{Binding Name}"
-                               FontSize="13"
-                               FontWeight="Medium"
-                               VerticalAlignment="Center"
-                               TextTrimming="CharacterEllipsis"
-                               ToolTip.Tip="{Binding Name}" />
-                    <arc:Switch Grid.Column="1"
-                                IsChecked="{Binding IsEnabled, Mode=TwoWay}"
-                                VerticalAlignment="Center"
-                                Margin="8,0,0,0"
-                                Opacity="0.9"
-                                RenderTransformOrigin="100%,50%"
-                                RenderTransform="scale(0.86)"
-                                ToolTip.Tip="关掉后这个工具不进模型的工具清单（插件本身还在）" />
-                  </Grid>
-
-                  <TextBlock Grid.Row="1"
-                             Grid.ColumnSpan="2"
-                             Margin="0,9,0,0"
-                             Text="{Binding Description}"
-                             Classes="caption"
-                             FontSize="11.5"
-                             LineHeight="16"
-                             TextWrapping="Wrap"
-                             MaxLines="2"
-                             TextTrimming="CharacterEllipsis" />
-
-                  <StackPanel Grid.Row="2"
-                              Grid.ColumnSpan="2"
-                              Orientation="Horizontal"
-                              Spacing="5"
-                              Margin="0,8,0,0">
-                    <Border Classes="tag" VerticalAlignment="Center">
-                      <TextBlock Text="{Binding Plugin}"
-                                 FontSize="9"
-                                 Foreground="{StaticResource TextMutedBrush}"
-                                 TextTrimming="CharacterEllipsis"
-                                 MaxWidth="110" />
-                    </Border>
-                    <TextBlock Text="·" FontSize="10" Foreground="{StaticResource TextMutedBrush}" />
-                    <TextBlock Text="调用需确认"
-                               FontSize="10"
-                               Foreground="{StaticResource TextMutedBrush}" />
-                    <TextBlock Text="·" FontSize="10" Foreground="{StaticResource TextMutedBrush}" />
-                    <TextBlock Text="{Binding ExposureText}"
-                               FontSize="10"
-                               Foreground="{StaticResource TextMutedBrush}" />
-                  </StackPanel>
-                </Grid>
+          <!-- 还没搜过：这张卡负责说清这块是什么、怎么用，不摆一句「暂无数据」了事 -->
+          <Border IsVisible="{Binding ShowMarketEmpty}" Classes="tool-tile" Padding="14,12">
+            <Grid ColumnDefinitions="Auto,*">
+              <Border Width="32"
+                      Height="32"
+                      CornerRadius="9"
+                      Background="#FCE9F1"
+                      VerticalAlignment="Top">
+                <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Sparkles}"
+                              Size="15"
+                              Foreground="#C2417B"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Center" />
               </Border>
-            </DataTemplate>
-          </ItemsControl.ItemTemplate>
-        </ItemsControl>
+              <StackPanel Grid.Column="1" Margin="10,0,0,0" Spacing="2" VerticalAlignment="Center">
+                <TextBlock Text="搜 skills.sh 上的技能" FontSize="12.5" FontWeight="Medium" />
+                <TextBlock Text="上面填个关键词（至少两个字），回车或点「搜索」。挑中哪个点「安装」，它就会落到你的技能目录里。"
+                           Classes="caption"
+                           FontSize="11"
+                           TextWrapping="Wrap" />
+              </StackPanel>
+            </Grid>
+          </Border>
+
+          <ItemsControl ItemsSource="{Binding MarketSkills}" Margin="0,0,-12,0">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <UniformGrid Columns="2" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Border Classes="tool-tile" Margin="0,0,12,12" ToolTip.Tip="{Binding Url}">
+                  <Grid RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="Auto,*">
+                    <Border Width="34"
+                            Height="34"
+                            CornerRadius="10"
+                            Background="#FCE9F1">
+                      <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Sparkles}"
+                                    Size="17"
+                                    Foreground="#C2417B"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center" />
+                    </Border>
+
+                    <Grid Grid.Column="1" Margin="10,0,0,0" ColumnDefinitions="*,Auto">
+                      <TextBlock Text="{Binding Name}"
+                                 FontSize="13"
+                                 FontWeight="Medium"
+                                 VerticalAlignment="Center"
+                                 TextTrimming="CharacterEllipsis" />
+                      <Button Grid.Column="1"
+                              Classes="chip"
+                              Height="28"
+                              Padding="12,0"
+                              Content="{Binding ActionText}"
+                              IsEnabled="{Binding CanInstall}"
+                              Command="{Binding InstallCommand}" />
+                    </Grid>
+
+                    <TextBlock Grid.Row="1"
+                               Grid.ColumnSpan="2"
+                               Margin="0,9,0,0"
+                               Text="{Binding Description}"
+                               Classes="caption"
+                               FontSize="11.5"
+                               LineHeight="16"
+                               TextWrapping="Wrap"
+                               MaxLines="2"
+                               TextTrimming="CharacterEllipsis"
+                               ToolTip.Tip="{Binding Description}" />
+
+                    <StackPanel Grid.Row="2"
+                                Grid.ColumnSpan="2"
+                                Orientation="Horizontal"
+                                Spacing="5"
+                                Margin="0,8,0,0">
+                      <Border Classes="tag" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Source}"
+                                   FontSize="9"
+                                   Foreground="{StaticResource TextMutedBrush}"
+                                   TextTrimming="CharacterEllipsis"
+                                   MaxWidth="150" />
+                      </Border>
+                      <TextBlock Text="·" FontSize="10" Foreground="{StaticResource TextMutedBrush}" />
+                      <TextBlock Text="{Binding InstallsText}"
+                                 FontSize="10"
+                                 Foreground="{StaticResource TextMutedBrush}" />
+                      <TextBlock Text="次安装" FontSize="10" Foreground="{StaticResource TextMutedBrush}" />
+                    </StackPanel>
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
         </StackPanel>
 
         <!-- 内置工具（读文件 / 执行命令 / 看时间这些）不在这页：技能页只管 SKILL.md 和插件带来的工具。 -->

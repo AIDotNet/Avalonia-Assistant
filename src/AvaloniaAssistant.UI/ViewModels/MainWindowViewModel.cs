@@ -56,7 +56,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
         IFilePicker picker,
         IVoiceInput voice,
         WorkspaceFileSearch fileSearch,
-        IPluginStore plugins)
+        IPluginStore plugins,
+        ISkillMarket skillMarket,
+        IMcpMarket mcpMarket)
     {
         _sessions = sessions;
         Runtime = runtime;
@@ -65,6 +67,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
         Voice = voice;
         FileSearch = fileSearch;
         Plugins = plugins;
+        SkillMarket = skillMarket;
+        McpMarket = mcpMarket;
         Home = new HomeViewModel(this);
 
         _relativeTimeTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(1) };
@@ -99,6 +103,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     /// <summary>pi 包的安装与市场搜索。插件页用它，其它页面不碰。</summary>
     public IPluginStore Plugins { get; }
+
+    /// <summary>skills.sh 的技能搜索与安装。技能页的「技能市场」分页用它。</summary>
+    public ISkillMarket SkillMarket { get; }
+
+    /// <summary>MCP 服务端市场（ModelScope + mcp.so）。MCP 页的「市场」分页用它。</summary>
+    public IMcpMarket McpMarket { get; }
 
     /// <summary>@ 时的工作区文件索引。带缓存，首页和对话页的输入框共用一个实例。</summary>
     public WorkspaceFileSearch FileSearch { get; }

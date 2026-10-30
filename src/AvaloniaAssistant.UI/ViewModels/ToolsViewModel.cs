@@ -158,6 +158,54 @@ public sealed partial class SkillItemViewModel : ObservableObject
     }
 }
 
+/// <summary>
+/// 技能市场里的一张卡。和已安装的 <see cref="SkillItemViewModel"/> 分开：
+/// 这个还没落地，只有来源、安装量和一段描述，按钮是「安装」而不是开关。
+/// </summary>
+public sealed partial class SkillMarketItemViewModel(
+    AgentSkillMarketItem info,
+    Func<SkillMarketItemViewModel, Task> install) : ObservableObject
+{
+    public AgentSkillMarketItem Info { get; } = info;
+
+    public string Name => Info.Name;
+
+    public string Source => Info.Source;
+
+    public string InstallsText => Info.InstallsText;
+
+    public string Description => Info.Description.Length == 0
+        ? "（作者没写描述，装完看 SKILL.md 正文）"
+        : Info.Description;
+
+    public string Url => Info.Url;
+
+    [ObservableProperty]
+    private bool isInstalling;
+
+    [ObservableProperty]
+    private bool isInstalled;
+
+    public string ActionText => IsInstalled ? "已安装" : IsInstalling ? "安装中…" : "安装";
+
+    public bool CanInstall => !IsInstalled && !IsInstalling;
+
+    [RelayCommand]
+    private Task InstallAsync() => install(this);
+
+    partial void OnIsInstalledChanged(bool value)
+    {
+        OnPropertyChanged(nameof(ActionText));
+        OnPropertyChanged(nameof(CanInstall));
+    }
+
+    partial void OnIsInstallingChanged(bool value)
+    {
+        OnPropertyChanged(nameof(ActionText));
+        OnPropertyChanged(nameof(CanInstall));
+    }
+}
+
 public sealed partial class ToolsViewModel : ObservableObject
 {
     private const string AllCategory = "全部";
@@ -188,9 +236,8 @@ public sealed partial class ToolsViewModel : ObservableObject
         Refresh();
         RefreshCapabilities();
 
-        // 插件工具要真加载一次扩展才知道有哪些（.ts 走进程内转译，1~3 秒），
-        // 所以页面先出来、清单后到，不把整页卡住。
-        _ = LoadPluginToolsAsync();
+        // 插件工具的清单这里不读了：技能页已经不展示它，读一次要真加载扩展（1~3 秒），
+        // 白等没有意义。设置页要接「能力开关」时再把 LoadPluginToolsAsync 挂回去。
     }
 
     /// <summary>分类名（全部 / 系统 / …），直接喂给 ChipGroup。</summary>
@@ -210,17 +257,11 @@ public sealed partial class ToolsViewModel : ObservableObject
 
     public ObservableCollection<PluginToolItemViewModel> VisiblePluginTools { get; } = [];
 
-    /// <summary>插件工具正在读扩展清单。</summary>
+    /// <summary>插件工具正在读扩展清单。这页不展示了，但清单仍然给设置页留着。</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(PluginToolsHint))]
-    [NotifyPropertyChangedFor(nameof(ShowPluginToolsHint))]
-    [NotifyPropertyChangedFor(nameof(ShowPluginToolsEmpty))]
     private bool isLoadingPluginTools;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(PluginToolsHint))]
-    [NotifyPropertyChangedFor(nameof(ShowPluginToolsHint))]
-    [NotifyPropertyChangedFor(nameof(ShowPluginToolsEmpty))]
     private string? pluginToolsError;
 
     /// <summary>扩展加载失败的包。空清单要能解释清楚，否则用户只看到「没有工具」。</summary>
@@ -235,27 +276,11 @@ public sealed partial class ToolsViewModel : ObservableObject
         "\n",
         LoadIssues.Select(issue => $"{issue.Path}：{issue.Message}"));
 
-    public bool HasPluginTools => PluginTools.Count > 0;
-
     /// <summary>
-    /// 只负责加载中 / 出错 / 已有工具三种情况。空清单交给下面的空状态卡片说——
-    /// 原来那句「装一个插件后回到这里，它的工具会出现在下面」有两个毛病：
-    /// 用户此刻就在这页（"回来"无从谈起），下面也什么都没有（"出现在下面"指向空）。
+    /// 插件工具的清单读取和开关还留着（设置页将来接「能力开关」时能直接用），
+    /// 但这页不再展示它：技能页只管 SKILL.md 和技能市场。
     /// </summary>
-    public string PluginToolsHint => IsLoadingPluginTools
-        ? "正在读取插件工具（首次要真加载一次扩展，会慢几秒）…"
-        : PluginToolsError is { Length: > 0 } error
-            ? "读不到插件工具：" + error
-            : PluginTools.Count == 0
-                ? string.Empty
-                : $"{PluginTools.Count} 个插件工具 · 关掉后从下一条消息起就不给模型用了";
-
-    public bool ShowPluginToolsHint => PluginToolsHint.Length > 0;
-
-    /// <summary>没装带扩展的包时摆一张空状态卡：说清这块是干什么的，以及去哪装。</summary>
-    public bool ShowPluginToolsEmpty => !IsLoadingPluginTools
-        && string.IsNullOrEmpty(PluginToolsError)
-        && PluginTools.Count == 0;
+    public bool HasPluginTools => PluginTools.Count > 0;
 
     public bool HasSkills => Skills.Count > 0;
 
@@ -273,24 +298,122 @@ public sealed partial class ToolsViewModel : ObservableObject
 
     public bool HasCapabilityText => CapabilityText.Length > 0;
 
-    /// <summary>页头副标题跟着这页实际展示的东西走。这里已经不放内置工具了，就别再报它们的数量。</summary>
-    public string SubtitleText => $"{Skills.Count} 个技能 · {PluginTools.Count} 个插件工具";
+    /// <summary>页头副标题跟着这页实际展示的东西走。插件工具已经不在这页了，不再提它。</summary>
+    public string SubtitleText => $"{Skills.Count} 个技能";
 
     /// <summary>
-    /// 技能 / 插件工具 两个分页。两者内容性质不同（本地 SKILL.md vs 插件注册的工具），
-    /// 上下叠着摆会让人分不清哪张卡属于哪边，改成一次只显示一块。默认停在「技能」。
+    /// 技能 / 技能市场 两个分页。已装的和能装的分开看——并排铺会让人分不清哪张卡是在自己盘上的。
+    /// 默认停在「技能」。
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowingSkills))]
-    private bool showingPluginTools;
+    private bool showingSkillMarket;
 
-    public bool ShowingSkills => !ShowingPluginTools;
-
-    [RelayCommand]
-    private void ShowSkillsTab() => ShowingPluginTools = false;
+    public bool ShowingSkills => !ShowingSkillMarket;
 
     [RelayCommand]
-    private void ShowPluginToolsTab() => ShowingPluginTools = true;
+    private void ShowSkillsTab() => ShowingSkillMarket = false;
+
+    [RelayCommand]
+    private void ShowSkillMarketTab() => ShowingSkillMarket = true;
+
+    // ── 技能市场（skills.sh） ───────────────────────────────────────────────
+
+    public ObservableCollection<SkillMarketItemViewModel> MarketSkills { get; } = [];
+
+    [ObservableProperty]
+    private string marketQuery = string.Empty;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowMarketEmpty))]
+    private bool isSearchingMarket;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowMarketEmpty))]
+    private string? marketNotice;
+
+    /// <summary>搜完了、结果是空的才摆空状态；正搜着的时候摆出来像「没搜到」。</summary>
+    public bool ShowMarketEmpty => !IsSearchingMarket
+        && MarketSkills.Count == 0
+        && MarketNotice is not { Length: > 0 };
+
+    public bool HasMarketNotice => MarketNotice is { Length: > 0 };
+
+    [RelayCommand]
+    private async Task SearchMarketAsync()
+    {
+        var keyword = MarketQuery.Trim();
+        if (keyword.Length < 2)
+        {
+            MarketNotice = "至少输入两个字再搜";
+            return;
+        }
+
+        IsSearchingMarket = true;
+        MarketNotice = null;
+        OnPropertyChanged(nameof(ShowMarketEmpty));
+        OnPropertyChanged(nameof(HasMarketNotice));
+
+        try
+        {
+            var result = await _host.SkillMarket.SearchAsync(keyword);
+            MarketSkills.Clear();
+            foreach (var item in result.Items)
+            {
+                MarketSkills.Add(new SkillMarketItemViewModel(item, InstallMarketSkillAsync));
+            }
+
+            if (result.Items.Count == 0)
+            {
+                MarketNotice = $"skills.sh 上没有搜到「{keyword}」";
+            }
+
+        }
+        catch (Exception exception)
+        {
+            MarketNotice = "搜索失败：" + exception.Message;
+        }
+        finally
+        {
+            IsSearchingMarket = false;
+            OnPropertyChanged(nameof(ShowMarketEmpty));
+            OnPropertyChanged(nameof(HasMarketNotice));
+        }
+    }
+
+    /// <summary>
+    /// 装完立刻重扫技能目录，「技能」分页能马上看到它。
+    /// CLI 会重写技能的 SKILL.md，缓存那一层也要跟着失效。
+    /// </summary>
+    private async Task InstallMarketSkillAsync(SkillMarketItemViewModel item)
+    {
+        if (string.IsNullOrEmpty(_skillsRootRaw))
+        {
+            ShowNotice("技能目录不可用，先选一个工作区。", isError: true);
+            return;
+        }
+
+        item.IsInstalling = true;
+        try
+        {
+            var result = await _host.SkillMarket.InstallAsync(item.Info, _skillsRootRaw);
+            if (result.Success)
+            {
+                item.IsInstalled = true;
+                ShowNotice($"{item.Name} 装好了，下一条消息生效。", isError: false);
+                _host.Runtime.InvalidateSessions();
+                RefreshCapabilities();
+            }
+            else
+            {
+                ShowNotice(result.Message, isError: true);
+            }
+        }
+        finally
+        {
+            item.IsInstalling = false;
+        }
+    }
 
     [ObservableProperty]
     private string searchText = string.Empty;
@@ -373,10 +496,6 @@ public sealed partial class ToolsViewModel : ObservableObject
             ShowNotice(ex.Message, isError: true);
         }
     }
-
-    /// <summary>空状态里的「去插件页」：这页只列插件带来的工具，装包得去插件页。</summary>
-    [RelayCommand]
-    private void OpenPluginsPage() => _host.OpenPlugins();
 
     [RelayCommand]
     private void OpenSkillsFolder()
@@ -550,9 +669,6 @@ public sealed partial class ToolsViewModel : ObservableObject
 
             LoadIssues = result.Issues;
             Refresh();
-            OnPropertyChanged(nameof(PluginToolsHint));
-            OnPropertyChanged(nameof(ShowPluginToolsHint));
-            OnPropertyChanged(nameof(ShowPluginToolsEmpty));
             OnPropertyChanged(nameof(HasLoadIssues));
             OnPropertyChanged(nameof(LoadIssuesText));
             OnPropertyChanged(nameof(SubtitleText));
@@ -565,9 +681,6 @@ public sealed partial class ToolsViewModel : ObservableObject
         finally
         {
             IsLoadingPluginTools = false;
-            OnPropertyChanged(nameof(PluginToolsHint));
-            OnPropertyChanged(nameof(ShowPluginToolsHint));
-            OnPropertyChanged(nameof(ShowPluginToolsEmpty));
         }
     }
 

@@ -38,6 +38,8 @@ internal static class Program
         services.AddSingleton<AgentToolRegistry>();
         services.AddSingleton<IAssistantRuntime, PiAgentRuntime>();
         services.AddSingleton<IPluginStore, PiPluginStore>();
+        services.AddSingleton<ISkillMarket, SkillMarketStore>();
+        services.AddSingleton<IMcpMarket, McpMarketStore>();
         services.AddSingleton<MainWindowViewModel>();
         services.AddSingleton<MainWindow>();
 

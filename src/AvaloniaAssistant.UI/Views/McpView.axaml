@@ -65,7 +65,32 @@
 
     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
       <StackPanel Margin="96,16,96,24" Spacing="12">
-        <!-- 页首不放说明。状态点是什么意思，卡片自己的 ToolTip 会讲（见下面 StatusText 那行）。 -->
+        <!-- 服务端 / 市场 两个分页。和插件页、技能页用同一套结构。 -->
+        <Border Classes="tabbar" Margin="0,4,0,0">
+          <StackPanel Orientation="Horizontal" Spacing="2">
+            <Button Classes="tab"
+                    Classes.active="{Binding ShowingServers}"
+                    Command="{Binding ShowServersTabCommand}"
+                    ToolTip.Tip="mcp.json 里配好的服务端">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <TextBlock Text="服务端" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding Servers.Count}"
+                           FontSize="11"
+                           Opacity="0.5"
+                           VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+            <Button Classes="tab"
+                    Classes.active="{Binding ShowingMarket}"
+                    Command="{Binding ShowMarketTabCommand}"
+                    ToolTip.Tip="ModelScope 和 mcp.so 上的服务端">
+              <TextBlock Text="市场" VerticalAlignment="Center" />
+            </Button>
+          </StackPanel>
+        </Border>
+
+        <!-- 服务端分页 -->
+        <StackPanel IsVisible="{Binding ShowingServers}" Spacing="12">
 
         <Border IsVisible="{Binding HasNotice}"
                 Background="{Binding NoticeBackground}"
@@ -377,6 +402,138 @@
             </StackPanel>
           </StackPanel>
         </Border>
+        </StackPanel>
+
+        <!-- 市场分页：两个来源的能力不一样，用切换而不是混排。
+             ModelScope 有搜索和可写入的 server_config；mcp.so 只能抓一页热门，点开是网页。 -->
+        <StackPanel IsVisible="{Binding ShowingMarket}" Spacing="12">
+          <Grid ColumnDefinitions="*,Auto">
+            <arc:SearchField x:Name="McpMarketSearch"
+                             Width="320"
+                             Size="Small"
+                             HorizontalAlignment="Left"
+                             Placeholder="搜 MCP 服务端（ModelScope）"
+                             Text="{Binding MarketQuery, Mode=TwoWay}"
+                             IsEnabled="{Binding IsModelScopeSource}" />
+            <Button Grid.Column="1"
+                    Classes="pill"
+                    Content="搜索"
+                    IsEnabled="{Binding IsModelScopeSource}"
+                    Command="{Binding SearchMarketCommand}" />
+          </Grid>
+
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <Button Classes="chip"
+                    Classes.active="{Binding IsModelScopeSource}"
+                    Command="{Binding UseModelScopeSourceCommand}"
+                    Content="ModelScope" />
+            <Button Classes="chip"
+                    Classes.active="{Binding IsDirectorySource}"
+                    Command="{Binding UseDirectorySourceCommand}"
+                    Content="mcp.so 热门" />
+          </StackPanel>
+
+          <TextBlock Text="{Binding MarketHint}"
+                     Classes="caption"
+                     FontSize="10.5"
+                     TextWrapping="Wrap" />
+
+          <TextBlock Text="正在搜…"
+                     Classes="caption"
+                     FontSize="10.5"
+                     IsVisible="{Binding IsSearchingMarket}" />
+
+          <Border IsVisible="{Binding HasMarketNotice}"
+                  Background="{StaticResource SurfaceMutedBrush}"
+                  CornerRadius="8"
+                  Padding="12,8">
+            <TextBlock Text="{Binding MarketNotice}"
+                       FontSize="11.5"
+                       TextWrapping="Wrap"
+                       LineHeight="17" />
+          </Border>
+
+          <ItemsControl ItemsSource="{Binding MarketItems}" Margin="0,0,-12,0">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <UniformGrid Columns="2" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Border Classes="tool-tile" Margin="0,0,12,12">
+                  <Grid RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="Auto,*">
+                    <Border Width="34"
+                            Height="34"
+                            CornerRadius="10"
+                            Background="#EFF1F4">
+                      <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Server}"
+                                    Size="17"
+                                    Foreground="#5B6472"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center" />
+                    </Border>
+
+                    <Grid Grid.Column="1" Margin="10,0,0,0" ColumnDefinitions="*,Auto">
+                      <TextBlock Text="{Binding Name}"
+                                 FontSize="13"
+                                 FontWeight="Medium"
+                                 VerticalAlignment="Center"
+                                 TextTrimming="CharacterEllipsis" />
+                      <Button Grid.Column="1"
+                              Classes="chip"
+                              Height="28"
+                              Padding="12,0"
+                              Content="{Binding ActionText}"
+                              IsEnabled="{Binding IsActionEnabled}"
+                              Command="{Binding ActCommand}" />
+                    </Grid>
+
+                    <TextBlock Grid.Row="1"
+                               Grid.ColumnSpan="2"
+                               Margin="0,9,0,0"
+                               Text="{Binding Description}"
+                               Classes="caption"
+                               FontSize="11.5"
+                               LineHeight="16"
+                               TextWrapping="Wrap"
+                               MaxLines="2"
+                               TextTrimming="CharacterEllipsis"
+                               ToolTip.Tip="{Binding Description}" />
+
+                    <StackPanel Grid.Row="2"
+                                Grid.ColumnSpan="2"
+                                Orientation="Horizontal"
+                                Spacing="5"
+                                Margin="0,8,0,0">
+                      <Border Classes="tag"
+                              VerticalAlignment="Center"
+                              IsVisible="{Binding HasCategory}">
+                        <TextBlock Text="{Binding Category}"
+                                   FontSize="9"
+                                   Foreground="{StaticResource TextMutedBrush}" />
+                      </Border>
+                      <TextBlock Text="·" FontSize="10" Foreground="{StaticResource TextMutedBrush}"
+                                 IsVisible="{Binding ShowViews}" />
+                      <TextBlock Text="{Binding ViewsText}"
+                                 FontSize="10"
+                                 Foreground="{StaticResource TextMutedBrush}"
+                                 IsVisible="{Binding ShowViews}" />
+                      <TextBlock Text="浏览" FontSize="10" Foreground="{StaticResource TextMutedBrush}"
+                                 IsVisible="{Binding ShowViews}" />
+                      <TextBlock Text="·" FontSize="10" Foreground="{StaticResource TextMutedBrush}"
+                                 IsVisible="{Binding !CanInstall}" />
+                      <TextBlock Text="无标准配置"
+                                 FontSize="10"
+                                 Foreground="{StaticResource WarningBrush}"
+                                 IsVisible="{Binding !CanInstall}" />
+                    </StackPanel>
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
       </StackPanel>
     </ScrollViewer>
   </Grid>

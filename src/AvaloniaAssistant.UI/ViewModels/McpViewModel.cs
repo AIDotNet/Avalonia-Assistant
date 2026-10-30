@@ -89,6 +89,66 @@ public sealed partial class McpServerCardViewModel : ObservableObject
 /// 写入后清掉会话缓存，下一个会话就能连上新服务端。
 /// 添加有两路：整段粘贴标准 JSON（主路径，多服务端一次进去），或者填三个框的表单。
 /// </summary>
+/// <summary>
+/// MCP 市场里的一张卡。ModelScope 的条目能一键写进 mcp.json；
+/// mcp.so 的只能浏览——它的详情页对多数服务端写着「No standard config provided」。
+/// </summary>
+public sealed partial class McpMarketItemViewModel(
+    McpMarketItem info,
+    Func<McpMarketItemViewModel, Task> install) : ObservableObject
+{
+    public McpMarketItem Info { get; } = info;
+
+    public string Name => Info.Name;
+
+    public string Description => Info.Description.Length == 0
+        ? "（这个条目没写描述）"
+        : Info.Description;
+
+    public string Category => Info.Category;
+
+    public bool HasCategory => Info.Category.Length > 0;
+
+    public string ViewsText => Info.ViewsText;
+
+    public bool ShowViews => Info.Views > 0;
+
+    public bool CanInstall => Info.CanInstall;
+
+    public string ActionText => IsInstalled
+        ? "已添加"
+        : IsInstalling
+            ? "添加中…"
+            : CanInstall ? "添加" : "去网页看";
+
+    [ObservableProperty]
+    private bool isInstalling;
+
+    [ObservableProperty]
+    private bool isInstalled;
+
+    public bool IsActionEnabled => !IsInstalled && !IsInstalling;
+
+    [RelayCommand]
+    private Task ActAsync() => CanInstall ? install(this) : OpenPageAsync();
+
+    private Task OpenPageAsync()
+    {
+        Ui.OpenExternal(Info.Url);
+        return Task.CompletedTask;
+    }
+
+    partial void OnIsInstalledChanged(bool value) => NotifyAction();
+
+    partial void OnIsInstallingChanged(bool value) => NotifyAction();
+
+    private void NotifyAction()
+    {
+        OnPropertyChanged(nameof(ActionText));
+        OnPropertyChanged(nameof(IsActionEnabled));
+    }
+}
+
 public sealed partial class McpViewModel : ObservableObject
 {
     private const string ExampleJson = """
@@ -138,13 +198,155 @@ public sealed partial class McpViewModel : ObservableObject
 
     public bool HasServers => Servers.Count > 0;
 
+    // ── 市场（ModelScope / mcp.so） ───────────────────────────────────────
+
+    /// <summary>服务端列表 / 市场 两个分页。和插件页、技能页保持同一套结构。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowingServers))]
+    private bool showingMarket;
+
+    public bool ShowingServers => !ShowingMarket;
+
+    [RelayCommand]
+    private void ShowServersTab() => ShowingMarket = false;
+
+    [RelayCommand]
+    private void ShowMarketTab() => ShowingMarket = true;
+
+    public ObservableCollection<McpMarketItemViewModel> MarketItems { get; } = [];
+
+    [ObservableProperty]
+    private string marketQuery = string.Empty;
+
+    /// <summary>
+    /// 两个来源的能力不一样，用切换而不是混排：ModelScope 有搜索和可写的配置，
+    /// mcp.so 只能抓一页热门、条目点开是网页。混在一起用户分不清哪个能装。
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsDirectorySource))]
+    private bool isModelScopeSource = true;
+
+    public bool IsDirectorySource => !IsModelScopeSource;
+
+    [ObservableProperty]
+    private bool isSearchingMarket;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasMarketNotice))]
+    private string? marketNotice;
+
+    public bool HasMarketNotice => MarketNotice is { Length: > 0 };
+
+    public bool IsMarketEmpty => !IsSearchingMarket
+        && MarketItems.Count == 0
+        && MarketNotice is not { Length: > 0 };
+
+    public string MarketHint => IsModelScopeSource
+        ? "ModelScope MCP 广场，搜到什么点「添加」就能写进 mcp.json。"
+        : "mcp.so 的热门榜。这个站没有公开接口，只能列出来——点「去网页看」到原始页面。";
+
+    [RelayCommand]
+    private void UseModelScopeSource()
+    {
+        if (IsModelScopeSource)
+        {
+            return;
+        }
+
+        IsModelScopeSource = true;
+        OnPropertyChanged(nameof(MarketHint));
+        _ = SearchMarketAsync();
+    }
+
+    [RelayCommand]
+    private void UseDirectorySource()
+    {
+        if (!IsModelScopeSource)
+        {
+            return;
+        }
+
+        IsModelScopeSource = false;
+        OnPropertyChanged(nameof(MarketHint));
+        _ = SearchMarketAsync();
+    }
+
+    [RelayCommand]
+    private async Task SearchMarketAsync()
+    {
+        IsSearchingMarket = true;
+        MarketNotice = null;
+        NotifyMarketState();
+
+        try
+        {
+            var page = IsModelScopeSource
+                ? await _host.McpMarket.SearchAsync(MarketQuery)
+                : await _host.McpMarket.BrowseDirectoryAsync();
+
+            MarketItems.Clear();
+            foreach (var item in page.Items)
+            {
+                MarketItems.Add(new McpMarketItemViewModel(item, InstallMarketItemAsync));
+            }
+
+            if (page.Items.Count == 0)
+            {
+                MarketNotice = IsModelScopeSource
+                    ? $"ModelScope 上没有搜到「{MarketQuery.Trim()}」"
+                    : "mcp.so 这次没抓到条目，稍后再试";
+            }
+
+        }
+        catch (Exception exception)
+        {
+            MarketNotice = "搜不了：" + exception.Message;
+        }
+        finally
+        {
+            IsSearchingMarket = false;
+            NotifyMarketState();
+        }
+    }
+
+    private void NotifyMarketState()
+    {
+        OnPropertyChanged(nameof(IsMarketEmpty));
+        OnPropertyChanged(nameof(HasMarketNotice));
+    }
+
+    /// <summary>写进 mcp.json 后立刻重扫，服务端列表马上能看到新条目。</summary>
+    private async Task InstallMarketItemAsync(McpMarketItemViewModel item)
+    {
+        item.IsInstalling = true;
+        try
+        {
+            var result = await _host.McpMarket.InstallAsync(item.Info, _configPathRaw);
+            if (result.Success)
+            {
+                item.IsInstalled = true;
+                ShowNotice(result.Message + "，下一个会话启动时连接。", isError: false);
+                _host.Runtime.InvalidateSessions();
+                Refresh();
+            }
+            else
+            {
+                ShowNotice(result.Message, isError: true);
+            }
+        }
+        finally
+        {
+            item.IsInstalling = false;
+        }
+    }
+
     public string CountText => $"{Servers.Count} 个服务端";
 
     /// <summary>配置文件路径，用户目录缩成 ~。</summary>
     public string ConfigPathText => Ui.ShortenPath(_configPathRaw);
 
-    /// <summary>空状态只讲「怎么开第一步」。什么时候生效由页首那句统一交代，不在这里重复。</summary>
-    public string EmptyHint => "点右上角「导入 JSON」，把 mcp.json 的内容整段粘进来；"
+    /// <summary>空状态只讲「怎么开第一步」。什么时候生效由服务端卡片自己交代，不在这里重复。</summary>
+    public string EmptyHint => "点右上角「导入 JSON」粘一段 mcp.json，或者去「市场」挑一个现成的；"
                                + "只想加一个 stdio 服务端可以用「表单添加」。";
 
     /// <summary>导入面板开着的时候不再叠一个表单，两个都占地方。</summary>
