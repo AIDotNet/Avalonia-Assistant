@@ -135,6 +135,10 @@ internal static class Program
                 case "--plugin-check-updates":
                     AppLaunchOptions.PluginCheckUpdates = true;
                     break;
+                case "--wait" when index + 1 < args.Length && int.TryParse(args[index + 1], out var waitMs):
+                    AppLaunchOptions.WaitMs = waitMs;
+                    index++;
+                    break;
                 case "--composer-mention" when index + 1 < args.Length:
                     AppLaunchOptions.ComposerMention = args[++index];
                     break;

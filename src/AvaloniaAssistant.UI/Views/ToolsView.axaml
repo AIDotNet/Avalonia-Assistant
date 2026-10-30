@@ -238,6 +238,30 @@
                   Command="{Binding LoadPluginToolsCommand}" />
         </Grid>
 
+        <!-- 有插件加载失败：空清单必须解释原因，否则用户只能看到「没有工具」 -->
+        <Border IsVisible="{Binding HasLoadIssues}"
+                Background="{StaticResource WarningSubtleBrush}"
+                BorderBrush="#F2D8A8"
+                BorderThickness="1"
+                CornerRadius="9"
+                Padding="10,8"
+                Margin="0,2,12,10">
+          <StackPanel Spacing="4">
+            <TextBlock Text="有插件加载失败"
+                       FontSize="11.5"
+                       FontWeight="Medium"
+                       Foreground="{StaticResource WarningBrush}" />
+            <TextBlock Text="{Binding LoadIssuesText}"
+                       FontSize="10.5"
+                       LineHeight="16"
+                       TextWrapping="Wrap" />
+            <TextBlock Text="装是装上了，但扩展代码没跑起来（多半是 JS 宿主还没实现它用到的 node 模块）。可以换一个包，或等 pi.net 更新。"
+                       Classes="caption"
+                       FontSize="10"
+                       TextWrapping="Wrap" />
+          </StackPanel>
+        </Border>
+
         <ItemsControl ItemsSource="{Binding VisiblePluginTools}" Margin="0,2,-12,0">
           <ItemsControl.ItemsPanel>
             <ItemsPanelTemplate>

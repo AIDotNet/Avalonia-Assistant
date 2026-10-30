@@ -216,6 +216,18 @@ public sealed partial class ToolsViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(PluginToolsHint))]
     private string? pluginToolsError;
 
+    /// <summary>扩展加载失败的包。空清单要能解释清楚，否则用户只看到「没有工具」。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasLoadIssues))]
+    [NotifyPropertyChangedFor(nameof(LoadIssuesText))]
+    private IReadOnlyList<AgentPluginLoadIssue> loadIssues = [];
+
+    public bool HasLoadIssues => LoadIssues.Count > 0;
+
+    public string LoadIssuesText => string.Join(
+        "\n",
+        LoadIssues.Select(issue => $"{issue.Path}：{issue.Message}"));
+
     public bool HasPluginTools => PluginTools.Count > 0;
 
     public string PluginToolsHint => IsLoadingPluginTools
@@ -483,20 +495,23 @@ public sealed partial class ToolsViewModel : ObservableObject
         {
             // 加载扩展（Jint 转译 TypeScript）是纯 CPU 活，放在 UI 线程上会把首帧卡住 2 秒以上，
             // 页面看起来像没打开。丢到线程池，清单回来了再更新绑定。
-            var tools = await Task.Run(() => _host.Plugins.ListToolsAsync());
+            var result = await Task.Run(() => _host.Plugins.ListToolsAsync());
             var disabled = _host.Settings.DisabledTools;
 
             _pluginTools.Clear();
             PluginTools.Clear();
-            foreach (var info in tools)
+            foreach (var info in result.Tools)
             {
                 var item = new PluginToolItemViewModel(info, !disabled.Contains(info.Name), TogglePluginTool);
                 _pluginTools.Add(item);
                 PluginTools.Add(item);
             }
 
+            LoadIssues = result.Issues;
             Refresh();
             OnPropertyChanged(nameof(PluginToolsHint));
+            OnPropertyChanged(nameof(HasLoadIssues));
+            OnPropertyChanged(nameof(LoadIssuesText));
             OnPropertyChanged(nameof(SubtitleText));
         }
         catch (Exception ex)

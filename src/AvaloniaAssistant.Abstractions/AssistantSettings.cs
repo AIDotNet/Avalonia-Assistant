@@ -357,6 +357,12 @@ public sealed class AssistantSettings
     public List<string> DisabledTools { get; set; } = [];
 
     /// <summary>
+    /// 装插件时用的 npm 源。默认国内镜像：registry.npmjs.org 在大陆经常几十秒才握手，
+    /// npm 还会重试，看起来就像卡住了。想换回官方源或公司私服改这里。
+    /// </summary>
+    public string NpmRegistry { get; set; } = "https://registry.npmmirror.com";
+
+    /// <summary>
     /// 被关掉的技能名。技能本体是磁盘上的 SKILL.md，这里只决定要不要让它进系统提示，
     /// 不动文件——用户想彻底不要它，自己去目录删。
     /// </summary>
@@ -481,6 +487,7 @@ public sealed class AssistantSettings
         CollapsedWorkspaces = [.. CollapsedWorkspaces],
         DisabledTools = [.. DisabledTools],
         DisabledSkills = [.. DisabledSkills],
+        NpmRegistry = NpmRegistry,
         Mode = Mode,
         StartupPage = StartupPage,
         LastSessionId = LastSessionId,

@@ -65,6 +65,8 @@ Windows 桌面 AI 助理。Agent 循环用 [pi.net](https://github.com/AIDotNet/
   也一并列出。升级到 pi.net 1.4.5 之后，上游的 TypeScript 扩展由进程内 JS 宿主直接加载，不用先编译成程序集。
   插件注册的工具会进会话，并在「技能」页单独列出来、可以逐个关掉；它们没有本地元数据，按「会改本机」对待——
   只读模式不执行，其它模式逐次确认（和 MCP 工具同一套策略）。
+  安装走本机 npm，默认源是 `registry.npmmirror.com`（设置 → 系统设置里可改）；npm/git 子进程会隐藏控制台窗口，
+  并且不再继承指向本机的代理端口——从别的宿主进程继承来的临时代理经常已经关了，npm 会一直重试到看起来「卡死」。
 - **导出会话**：对话页右上角一键存成 Markdown，工具调用、失败轮次、引用文件都在里面。
 
 | 会话 | 设置 |
@@ -436,6 +438,9 @@ dotnet run --project src/AvaloniaAssistant.Desktop -- --run "用三句话介绍�
 - **插件工具的 JS 宿主还有两处毛边**（pi.net 1.4.5）：`fs` 读不存在的文件时抛的是 .NET 异常，JS 的
   `try/catch` 接不住（`pi-memory` 首次写入就会踩到，先建好 `~/.pi/agent/memory/MEMORY.md` 可绕开）；
   插件在 `session_start` 之后**动态注册**的工具不会被 allowlist 收进来。两处都要上游修。
+- **有插件装了但跑不起来是正常的**：JS 宿主只实现了一部分 `node:*` 模块，比如 `pi-web-access` 的
+  `dist/index.js` 一进来就 `require("node:async_hooks")`，宿主没有这个 shim，加载直接失败。
+  这种情况「技能」页会明确写「有插件加载失败」和原因，不会只剩一个空清单。
 - **停用插件的语义是「一条资源都不加载」**：`settings.json` 里那条记录会从字符串改成对象，四类资源写空数组；
   想只关扩展、保留技能，得自己改 `settings.json`。
 - **会话存档仍是本项目自己的 JSON**：CodingAgent 的会话跑在内存里，压缩结果不跨进程保存；

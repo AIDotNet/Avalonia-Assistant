@@ -489,7 +489,6 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
     }
 
     private string _maxTokensText = string.Empty;
-
     public string MaxTokensText
     {
         get => _maxTokensText;
@@ -502,6 +501,41 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
 
             ValidateMaxTokens(value);
         }
+    }
+
+    /// <summary>
+    /// 装插件用的 npm 源。留空 = npm 自己的默认（registry.npmjs.org）。
+    /// 改的是工作副本，点保存才落盘；插件页每次安装都会重新读，所以保存后就生效。
+    /// </summary>
+    public string NpmRegistryText
+    {
+        get => Settings.NpmRegistry;
+        set
+        {
+            var text = (value ?? string.Empty).Trim();
+            if (text.Length > 0
+                && !text.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+                && !text.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            {
+                // 只写域名也能用：补上 https://，省得因为少个前缀报错
+                text = "https://" + text;
+            }
+
+            if (string.Equals(Settings.NpmRegistry, text, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            Settings.NpmRegistry = text;
+            OnPropertyChanged();
+            Touch();
+        }
+    }
+
+    [RelayCommand]
+    private void ResetNpmRegistry()
+    {
+        NpmRegistryText = "https://registry.npmmirror.com";
     }
 
     [ObservableProperty]
@@ -574,6 +608,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IDisposable
         || Settings.MaxTokens != _baseline.MaxTokens
         || Math.Abs(Settings.Temperature - _baseline.Temperature) > 0.0001
         || !string.Equals(Settings.WorkspacePath, _baseline.WorkspacePath, StringComparison.OrdinalIgnoreCase)
+        || !string.Equals(Settings.NpmRegistry, _baseline.NpmRegistry, StringComparison.Ordinal)
         || ModelsChanged();
 
     /// <summary>

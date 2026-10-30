@@ -238,6 +238,21 @@ public sealed partial class PluginsViewModel : ObservableObject
 
     public string PackagesRootText => Ui.ShortenPath(_host.Plugins.PackagesRoot);
 
+    /// <summary>安装走本机 npm，源在设置页可改；把当前用的源写出来，省得装不动时不知道在等谁。</summary>
+    public string InstallHint
+    {
+        get
+        {
+            var registry = _host.Settings.NpmRegistry;
+            var source = string.IsNullOrWhiteSpace(registry)
+                ? "npm 默认源"
+                : registry.Replace("https://", string.Empty, StringComparison.OrdinalIgnoreCase)
+                    .TrimEnd('/');
+            return "裸包名按 npm 处理；也可以写 npm:（可带版本）、git:、https 地址或本地目录。"
+                   + $"执行的是本机的 npm / git，源：{source}。";
+        }
+    }
+
     public string ExtensionsRootText => Ui.ShortenPath(_host.Plugins.ExtensionsRoot);
 
     /// <summary>有来源任务时写清返回哪里：从对话页进来的，返回不该落在首页。</summary>

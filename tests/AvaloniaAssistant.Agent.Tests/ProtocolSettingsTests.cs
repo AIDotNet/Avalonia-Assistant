@@ -12,6 +12,18 @@ namespace AvaloniaAssistant.Agent.Tests;
 public sealed class ProtocolSettingsTests
 {
     [Fact]
+    public void CloneCopiesNpmRegistry()
+    {
+        var settings = new AssistantSettings { NpmRegistry = "https://registry.npmmirror.com" };
+
+        var clone = settings.Clone();
+
+        Assert.Equal("https://registry.npmmirror.com", clone.NpmRegistry);
+        clone.NpmRegistry = "https://registry.npmjs.org";
+        Assert.Equal("https://registry.npmmirror.com", settings.NpmRegistry);
+    }
+
+    [Fact]
     public void PresetsRecommendTheirOwnProtocol()
     {
         Assert.Equal(AgentProtocol.OpenAiCompatible, ProviderPreset.DeepSeek.Protocol);

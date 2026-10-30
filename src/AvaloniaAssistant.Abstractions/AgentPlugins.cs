@@ -46,6 +46,17 @@ public sealed record AgentPluginSearchPage(IReadOnlyList<AgentPluginMarketItem> 
 /// <summary>npm / git 上检测到的新版本。</summary>
 public sealed record AgentPluginUpdate(string Source, string Name, string Type, string Scope);
 
+/// <summary>插件加载失败。常见于扩展用到了 JS 宿主还没实现的 <c>node:*</c> 模块。</summary>
+public sealed record AgentPluginLoadIssue(string Path, string Message);
+
+/// <summary>技能页要的插件工具清单，连同加载失败的原因一起给——只给空清单等于让用户猜。</summary>
+public sealed record AgentPluginTools(
+    IReadOnlyList<AgentPluginToolInfo> Tools,
+    IReadOnlyList<AgentPluginLoadIssue> Issues)
+{
+    public static readonly AgentPluginTools Empty = new([], []);
+}
+
 /// <summary>插件带来的一个工具。技能页用它展示，也能单独关掉。</summary>
 public sealed record AgentPluginToolInfo(
     string Name,
@@ -83,7 +94,7 @@ public interface IPluginStore
     /// 插件注册的工具。会把扩展真的加载一遍（TypeScript 走进程内转译），
     /// 所以是异步，也只在需要看清单时调用。
     /// </summary>
-    Task<IReadOnlyList<AgentPluginToolInfo>> ListToolsAsync(CancellationToken cancellationToken = default);
+    Task<AgentPluginTools> ListToolsAsync(CancellationToken cancellationToken = default);
 
     /// <summary>安装并写进 settings.json。source 形如 <c>npm:pkg@1.0.0</c>、<c>git:github.com/a/b</c> 或本地路径。</summary>
     Task<AgentPluginInstallResult> InstallAsync(

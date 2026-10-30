@@ -118,7 +118,7 @@
                 <Button Classes="pill" Content="安装" Command="{Binding InstallManualCommand}" />
               </StackPanel>
             </Grid>
-            <TextBlock Text="裸包名按 npm 处理；也可以写 npm:（可带版本）、git:、https 地址或本地目录。执行的是本机的 npm / git。"
+            <TextBlock Text="{Binding InstallHint}"
                        Classes="caption"
                        FontSize="10.5"
                        TextWrapping="Wrap"

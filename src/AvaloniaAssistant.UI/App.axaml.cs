@@ -750,11 +750,11 @@ public partial class AssistantApp : Application
 
             // 技能页的「插件工具」要真加载一次扩展（TS 转译实测 ~7 秒），普通 1.6 秒截到的是「正在读…」。
             var waitingForPluginTools = string.Equals(AppLaunchOptions.Page, "tools", StringComparison.OrdinalIgnoreCase);
-            var wait = waitingForRun ? 4500
+            var wait = AppLaunchOptions.WaitMs ?? (waitingForRun ? 4500
                 : waitingForMcpProbe ? 9000
                 : waitingForPluginMarket ? 5000
                 : waitingForPluginTools ? 11000
-                : 1600;
+                : 1600);
             await Task.Delay(wait);
 
             // 市场结果是异步回来的，确认态要等它落地之后再翻，否则 FirstOrDefault 拿到空序列。

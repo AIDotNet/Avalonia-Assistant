@@ -33,7 +33,7 @@ public sealed class PiPluginStore : IPluginStore
     /// 每次打开技能页都重来一遍太贵；装 / 卸 / 启停 / 更新时由本类主动清掉。
     /// </summary>
     private readonly Lock _toolsLock = new();
-    private (string Key, IReadOnlyList<AgentPluginToolInfo> Tools)? _toolsCache;
+    private (string Key, AgentPluginTools Result)? _toolsCache;
 
     public PiPluginStore(ISettingsProvider settings)
     {
@@ -143,7 +143,7 @@ public sealed class PiPluginStore : IPluginStore
         }
     }
 
-    public async Task<IReadOnlyList<AgentPluginToolInfo>> ListToolsAsync(CancellationToken cancellationToken = default)
+    public async Task<AgentPluginTools> ListToolsAsync(CancellationToken cancellationToken = default)
     {
         var cwd = ResolveWorkspace();
         var agentDir = Config.GetAgentDir();
@@ -157,7 +157,7 @@ public sealed class PiPluginStore : IPluginStore
                           || (settingsManager.GetProjectSettings().Packages?.Count ?? 0) > 0;
         if (!hasPackages)
         {
-            return [];
+            return AgentPluginTools.Empty;
         }
 
         var key = ToolsCacheKey(agentDir, cwd);
@@ -165,7 +165,7 @@ public sealed class PiPluginStore : IPluginStore
         {
             if (_toolsCache is { } cached && cached.Key == key)
             {
-                return cached.Tools;
+                return cached.Result;
             }
         }
 
@@ -204,13 +204,40 @@ public sealed class PiPluginStore : IPluginStore
             .ThenBy(item => item.Name, StringComparer.Ordinal)
             .ToList();
 
+        // 加载失败的扩展不能吞掉：技能页要能说清「为什么一个工具都没有」。
+        // 内置扩展（builtin:）的失败与应用无关，过滤掉。
+        var issues = loader.GetExtensions().Errors
+            .Where(error => !error.Path.StartsWith(SourceInfos.BuiltinPathPrefix, StringComparison.Ordinal))
+            .Select(error => new AgentPluginLoadIssue(PluginLabelForPath(error.Path), ShortLoadError(error.Error)))
+            .ToList();
+
+        var result = new AgentPluginTools(ordered, issues);
         lock (_toolsLock)
         {
-            _toolsCache = (key, ordered);
+            _toolsCache = (key, result);
         }
 
-        return ordered;
+        return result;
     }
+
+    /// <summary>扩展文件 → 包名。与 <see cref="PluginLabel(SourceInfo)"/> 同一套规则，这里只有路径。</summary>
+    private static string PluginLabelForPath(string path)
+    {
+        var normalized = path.Replace('\\', '/');
+        const string marker = "/node_modules/";
+        var index = normalized.LastIndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        if (index >= 0)
+        {
+            var tail = normalized[(index + marker.Length)..];
+            var slash = tail.IndexOf('/');
+            return slash > 0 ? tail[..slash] : tail;
+        }
+
+        return normalized.Split('/').Last();
+    }
+
+    /// <summary>宿主会在错误后面附一大段说明，界面上只留第一行。</summary>
+    private static string ShortLoadError(string error) => FirstLine(error);
 
     /// <summary>settings 文件一改（含手工编辑）缓存就失效；装 / 卸 / 启停也会主动清。</summary>
     private static string ToolsCacheKey(string agentDir, string cwd)
@@ -584,7 +611,11 @@ public sealed class PiPluginStore : IPluginStore
             ProjectTrusted = _settings.Current.TrustWorkspace,
         });
 
-        return new DefaultPackageManager(settingsManager, cwd, agentDir);
+        return new DefaultPackageManager(
+            settingsManager,
+            cwd,
+            agentDir,
+            commandRunner: new PiPackageCommandRunner(_settings.Current.NpmRegistry));
     }
 
     private string ResolveWorkspace() => PlainWorkspace.Resolve(_settings.Current.WorkspacePath);

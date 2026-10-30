@@ -403,6 +403,28 @@
 
             <Border Classes="card" Padding="18,16">
               <StackPanel Spacing="8">
+                <TextBlock Text="插件安装" FontSize="13" FontWeight="SemiBold" />
+                <TextBlock Text="装 pi 插件走本机 npm。默认用国内镜像 registry.npmmirror.com——官方源在大陆经常几十秒才握手，npm 还会重试，看起来就像卡住了。留空则用 npm 自己的默认源。"
+                           Classes="caption"
+                           FontSize="10.5"
+                           TextWrapping="Wrap"
+                           LineHeight="17" />
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                  <arc:Input Text="{Binding NpmRegistryText, Mode=TwoWay}"
+                             Placeholder="https://registry.npmmirror.com" />
+                  <Button Grid.Column="1"
+                          Classes="ghost-action"
+                          Content="恢复默认"
+                          Command="{Binding ResetNpmRegistryCommand}" />
+                </Grid>
+                <TextBlock Text="保存后生效；插件页的安装、检查更新、升级都走这个源。"
+                           Classes="caption"
+                           FontSize="10.5" />
+              </StackPanel>
+            </Border>
+
+            <Border Classes="card" Padding="18,16">
+              <StackPanel Spacing="8">
                 <TextBlock Text="关于" FontSize="13" FontWeight="SemiBold" />
                 <Grid ColumnDefinitions="86,*" RowDefinitions="Auto,Auto,Auto,Auto">
                   <TextBlock Text="版本" FontSize="12" Margin="0,4" Foreground="{StaticResource TextSecondaryBrush}" />

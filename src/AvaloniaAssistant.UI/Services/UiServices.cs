@@ -329,6 +329,9 @@ public static class AppLaunchOptions
     /// <summary>开发用：插件页打开后立刻查一次更新，验收真实网络请求与提示条。</summary>
     public static bool PluginCheckUpdates { get; set; }
 
+    /// <summary>开发用：覆盖截图前的等待时间（毫秒）。加载大插件要几十秒，固定值不够用。</summary>
+    public static int? WaitMs { get; set; }
+
     /// <summary>开发用：启动后直接弹「完全访问」风险确认层，确认即切档，配合 --screenshot 看版式。</summary>
     public static bool ConfirmFullAccessDialog { get; set; }
 
