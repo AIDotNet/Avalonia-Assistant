@@ -55,7 +55,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
         ISessionStore sessions,
         IFilePicker picker,
         IVoiceInput voice,
-        WorkspaceFileSearch fileSearch)
+        WorkspaceFileSearch fileSearch,
+        IPluginStore plugins)
     {
         _sessions = sessions;
         Runtime = runtime;
@@ -63,6 +64,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         Picker = picker;
         Voice = voice;
         FileSearch = fileSearch;
+        Plugins = plugins;
         Home = new HomeViewModel(this);
 
         _relativeTimeTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(1) };
@@ -94,6 +96,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public IFilePicker Picker { get; }
 
     public IVoiceInput Voice { get; }
+
+    /// <summary>pi 包的安装与市场搜索。插件页用它，其它页面不碰。</summary>
+    public IPluginStore Plugins { get; }
 
     /// <summary>@ 时的工作区文件索引。带缓存，首页和对话页的输入框共用一个实例。</summary>
     public WorkspaceFileSearch FileSearch { get; }
@@ -206,6 +211,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public bool IsToolsSelected => CurrentPage is ToolsViewModel;
 
     public bool IsMcpSelected => CurrentPage is McpViewModel;
+
+    public bool IsPluginsSelected => CurrentPage is PluginsViewModel;
 
     public bool IsSettingsSelected => CurrentPage is SettingsViewModel;
 
@@ -590,6 +597,17 @@ public sealed partial class MainWindowViewModel : ObservableObject
     {
         RememberReturnPage();
         CurrentPage = new McpViewModel(this);
+    }
+
+    /// <summary>
+    /// 插件市场。和「技能」「MCP」平级：这两个是手工放文件 / 写配置，
+    /// 这里管的是 pi 自己的包（<c>settings.json</c> 的 packages），装完下一个会话生效。
+    /// </summary>
+    [RelayCommand]
+    public void OpenPlugins()
+    {
+        RememberReturnPage();
+        CurrentPage = new PluginsViewModel(this);
     }
 
     [RelayCommand]
@@ -1722,6 +1740,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(IsHomeSelected));
         OnPropertyChanged(nameof(IsToolsSelected));
         OnPropertyChanged(nameof(IsMcpSelected));
+        OnPropertyChanged(nameof(IsPluginsSelected));
         OnPropertyChanged(nameof(IsSettingsSelected));
         OnPropertyChanged(nameof(RunningChatCount));
         OnPropertyChanged(nameof(HasRunningChats));

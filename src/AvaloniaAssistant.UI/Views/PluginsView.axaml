@@ -1,0 +1,395 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:arc="https://github.com/AIDotNet/TKCode.Arc"
+             x:Class="AvaloniaAssistant.UI.Views.PluginsView">
+  <Grid RowDefinitions="Auto,*">
+    <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="18,10,20,10">
+      <Grid ColumnDefinitions="Auto,*,Auto">
+        <Button Classes="icon" Command="{Binding BackCommand}" ToolTip.Tip="{Binding BackHint}">
+          <arc:ArcGlyph Data="{x:Static arc:ArcIcons.ChevronLeft}" Size="16" />
+        </Button>
+        <StackPanel Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Center" Spacing="1">
+          <TextBlock Text="插件" FontSize="14" FontWeight="Medium" />
+          <TextBlock Text="{Binding InstalledCountText}" Classes="caption" FontSize="10.5" />
+          <Button Classes="ghost-action"
+                  Margin="-6,2,0,0"
+                  HorizontalAlignment="Left"
+                  IsVisible="{Binding HasReturnTarget}"
+                  Command="{Binding BackCommand}"
+                  ToolTip.Tip="{Binding BackHint}">
+            <StackPanel Orientation="Horizontal" Spacing="5">
+              <arc:ArcGlyph Data="{x:Static arc:ArcIcons.ChevronLeft}"
+                            Size="11"
+                            VerticalAlignment="Center"
+                            Foreground="{StaticResource TextMutedBrush}" />
+              <TextBlock Text="{Binding BackHint}"
+                         FontSize="11"
+                         VerticalAlignment="Center"
+                         Foreground="{StaticResource TextSecondaryBrush}" />
+              <TextBlock Text="改完回来接着看"
+                         FontSize="11"
+                         VerticalAlignment="Center"
+                         Foreground="{StaticResource TextMutedBrush}" />
+            </StackPanel>
+          </Button>
+        </StackPanel>
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6">
+          <Button Classes="pill"
+                  Command="{Binding RefreshCommand}"
+                  ToolTip.Tip="重新读 settings.json 与扩展目录">
+            <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+              <arc:ArcGlyph Data="{x:Static arc:ArcIcons.RefreshCw}" Size="12" />
+              <TextBlock Text="重新扫描" FontSize="11" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+          <Button Classes="pill"
+                  Command="{Binding OpenPackagesFolderCommand}"
+                  ToolTip.Tip="{Binding PackagesRootText}">
+            <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+              <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Folder}" Size="12" />
+              <TextBlock Text="安装目录" FontSize="11" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+          <Button Classes="pill"
+                  Command="{Binding ShowManualCommand}"
+                  ToolTip.Tip="包名、npm: 版本、git 地址或本地目录">
+            <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+              <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Plus}" Size="12" />
+              <TextBlock Text="手动安装" FontSize="11" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+      <StackPanel Margin="96,16,96,24" Spacing="12">
+        <TextBlock Text="插件就是 pi 的包：一个包里可以同时带扩展、技能、提示词和主题。扩展是能读文件、能起进程的代码，会和本应用同一个权限运行——只装你信得过的来源。装完写进 settings.json 的 packages，下一个会话才加载。"
+                   Classes="caption"
+                   TextWrapping="Wrap"
+                   LineHeight="19" />
+
+        <Border IsVisible="{Binding HasNotice}"
+                Background="{Binding NoticeBackground}"
+                CornerRadius="8"
+                Padding="12,8">
+          <TextBlock Text="{Binding Notice}"
+                     Foreground="{Binding NoticeForeground}"
+                     FontSize="11.5"
+                     TextWrapping="Wrap"
+                     LineHeight="17" />
+        </Border>
+
+        <!-- 手动安装：市场搜不到（私有包 / 内网 git / 本地在改的目录）时的主路径 -->
+        <Border Classes="tool-tile" IsVisible="{Binding IsManualOpen}" Padding="14,12">
+          <StackPanel Spacing="10">
+            <TextBlock Text="从一个源安装" FontSize="12.5" FontWeight="Medium" />
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+              <arc:Input Size="Small"
+                         Placeholder="pi-mcp-adapter / npm:包@版本 / git:… / D:\work\my-plugin"
+                         Text="{Binding ManualSource, Mode=TwoWay}" />
+              <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                <Button Classes="pill" Content="取消" Command="{Binding CancelManualCommand}" />
+                <Button Classes="pill" Content="安装" Command="{Binding InstallManualCommand}" />
+              </StackPanel>
+            </Grid>
+            <TextBlock Text="裸包名按 npm 处理；也可以写 npm:（可带版本）、git:、https 地址或本地目录。执行的是本机的 npm / git。"
+                       Classes="caption"
+                       FontSize="10.5"
+                       TextWrapping="Wrap"
+                       LineHeight="16" />
+          </StackPanel>
+        </Border>
+
+        <!-- 已安装 -->
+        <TextBlock Text="已安装" FontSize="12.5" FontWeight="Medium" Margin="0,4,0,0" />
+
+        <ItemsControl ItemsSource="{Binding Installed}" Margin="0,0,-12,0">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <UniformGrid Columns="2" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <Border Classes="tool-tile" Margin="0,0,12,12">
+                <Grid RowDefinitions="Auto,Auto,Auto,Auto">
+                  <Grid ColumnDefinitions="Auto,*,Auto">
+                    <Border Width="34"
+                            Height="34"
+                            CornerRadius="10"
+                            Background="#EFF1F4">
+                      <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Package}"
+                                    Size="17"
+                                    Foreground="#5B6472"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center" />
+                    </Border>
+
+                    <Grid Grid.Column="1" Margin="10,0,0,0" ColumnDefinitions="*,Auto">
+                      <TextBlock Text="{Binding Name}"
+                                 FontSize="13"
+                                 FontWeight="Medium"
+                                 VerticalAlignment="Center"
+                                 TextTrimming="CharacterEllipsis" />
+                      <Border Grid.Column="1"
+                              Background="{StaticResource SurfaceMutedBrush}"
+                              CornerRadius="5"
+                              Padding="5,1"
+                              VerticalAlignment="Center">
+                        <TextBlock Text="{Binding ScopeText}"
+                                   FontSize="9"
+                                   Foreground="{StaticResource TextMutedBrush}" />
+                      </Border>
+                    </Grid>
+
+                    <Button Grid.Column="2"
+                            Classes="icon"
+                            Width="22"
+                            Height="22"
+                            Command="{Binding StartRemoveCommand}"
+                            ToolTip.Tip="卸载这个包">
+                      <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Trash2}"
+                                    Size="13"
+                                    Foreground="{StaticResource TextMutedBrush}" />
+                    </Button>
+                  </Grid>
+
+                  <TextBlock Grid.Row="1"
+                             Margin="0,9,0,0"
+                             Text="{Binding Source}"
+                             FontFamily="{StaticResource MonoFontFamily}"
+                             FontSize="10.5"
+                             Foreground="{StaticResource TextMutedBrush}"
+                             TextTrimming="CharacterEllipsis"
+                             ToolTip.Tip="{Binding Source}" />
+
+                  <TextBlock Grid.Row="2"
+                             Margin="0,4,0,0"
+                             Text="{Binding ExtensionsText}"
+                             FontSize="10.5"
+                             Foreground="{StaticResource TextSecondaryBrush}"
+                             TextWrapping="Wrap"
+                             MaxLines="2"
+                             ToolTip.Tip="{Binding PathText}" />
+
+                  <Border Grid.Row="3"
+                          IsVisible="{Binding IsConfirmingRemove}"
+                          Background="{StaticResource DangerSubtleBrush}"
+                          BorderBrush="#F0CFCB"
+                          BorderThickness="1"
+                          CornerRadius="9"
+                          Padding="9,7"
+                          Margin="0,9,0,0">
+                    <StackPanel Spacing="7">
+                      <TextBlock Text="卸载这个包？settings.json 里的记录一起删掉，它带的技能 / 提示词 / 主题也会跟着消失。"
+                                 FontSize="11"
+                                 LineHeight="16"
+                                 TextWrapping="Wrap"
+                                 Foreground="{StaticResource DangerBrush}" />
+                      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                        <Button Classes="ghost-action" Content="取消" Command="{Binding CancelRemoveCommand}" />
+                        <Button Classes="danger"
+                                Content="卸载"
+                                Command="{Binding $parent[ItemsControl].DataContext.RemoveCommand}"
+                                CommandParameter="{Binding}" />
+                      </StackPanel>
+                    </StackPanel>
+                  </Border>
+                </Grid>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <Border IsVisible="{Binding !HasInstalled}" Classes="tool-tile" Padding="14,12">
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Package}"
+                          Size="16"
+                          Foreground="{StaticResource TextMutedBrush}"
+                          VerticalAlignment="Top"
+                          Margin="0,1,0,0" />
+            <StackPanel Spacing="3">
+              <TextBlock Text="还没有装任何插件" FontSize="12.5" FontWeight="Medium" />
+              <TextBlock Text="从下面的市场里挑一个，或者用右上角「手动安装」填包名 / git 地址 / 本地目录。"
+                         Classes="caption"
+                         FontSize="11"
+                         TextWrapping="Wrap"
+                         LineHeight="16" />
+              <TextBlock Text="{Binding PackagesRootText}"
+                         FontFamily="{StaticResource MonoFontFamily}"
+                         FontSize="10.5"
+                         Foreground="{StaticResource TextMutedBrush}" />
+            </StackPanel>
+          </StackPanel>
+        </Border>
+
+        <!-- 直接放在扩展目录里的扩展：不走包管理器，但 1.4.5 起同样能加载 .ts -->
+        <StackPanel IsVisible="{Binding HasManualExtensions}" Spacing="8" Margin="0,4,0,0">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Text="扩展目录里的扩展" FontSize="12.5" FontWeight="Medium" VerticalAlignment="Center" />
+            <Button Grid.Column="1"
+                    Classes="ghost-action"
+                    Content="打开目录"
+                    Command="{Binding OpenExtensionsFolderCommand}"
+                    ToolTip.Tip="{Binding ExtensionsRootText}" />
+          </Grid>
+          <ItemsControl ItemsSource="{Binding ManualExtensions}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Border Classes="tool-tile" Padding="10,8" Margin="0,0,0,6">
+                  <Grid ColumnDefinitions="Auto,*,Auto">
+                    <arc:ArcGlyph Data="{x:Static arc:ArcIcons.FileCode}"
+                                  Size="13"
+                                  Foreground="{StaticResource TextMutedBrush}"
+                                  VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1"
+                               Margin="8,0,0,0"
+                               Text="{Binding Name}"
+                               FontSize="11.5"
+                               VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="2"
+                               Text="{Binding Path}"
+                               FontFamily="{StaticResource MonoFontFamily}"
+                               FontSize="10"
+                               Foreground="{StaticResource TextMutedBrush}"
+                               VerticalAlignment="Center"
+                               MaxWidth="420"
+                               TextTrimming="CharacterEllipsis"
+                               ToolTip.Tip="{Binding Path}" />
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+
+        <!-- 市场 -->
+        <Grid ColumnDefinitions="*,Auto" Margin="0,10,0,0">
+          <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+            <TextBlock Text="市场" FontSize="12.5" FontWeight="Medium" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding MarketCountText}"
+                       Classes="caption"
+                       FontSize="10.5"
+                       VerticalAlignment="Center" />
+          </StackPanel>
+          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+            <arc:SearchField x:Name="MarketSearch"
+                             Width="240"
+                             Size="Small"
+                             Placeholder="搜 pi 插件（npm）"
+                             Text="{Binding SearchText, Mode=TwoWay}"
+                             SearchSubmitted="OnMarketSearchSubmitted" />
+            <Button Classes="pill" Content="搜索" Command="{Binding SearchCommand}" />
+          </StackPanel>
+        </Grid>
+
+        <TextBlock Text="数据来自 npm registry 的 pi-package 关键词，和 pi 官方 gallery 同一份来源。安装走本机 npm，包里的扩展下次会话加载；不是每个上游扩展都完整兼容（自定义渲染会降级成警告）。"
+                   Classes="caption"
+                   FontSize="10.5"
+                   TextWrapping="Wrap"
+                   LineHeight="16" />
+
+        <ItemsControl ItemsSource="{Binding Market}" Margin="0,0,-12,0">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <UniformGrid Columns="2" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <Border Classes="tool-tile" Margin="0,0,12,12">
+                <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto">
+                  <Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <TextBlock Text="{Binding Name}"
+                                 FontSize="13"
+                                 FontWeight="Medium"
+                                 VerticalAlignment="Center"
+                                 TextTrimming="CharacterEllipsis" />
+                      <Border Classes="tag" VerticalAlignment="Center" IsVisible="{Binding HasVersion}">
+                        <TextBlock Text="{Binding Version}"
+                                   FontSize="9"
+                                   Foreground="{StaticResource TextMutedBrush}" />
+                      </Border>
+                    </StackPanel>
+                    <Button Grid.Column="1"
+                            Classes="pill"
+                            Content="{Binding ActionText}"
+                            IsEnabled="{Binding CanInstall}"
+                            Command="{Binding $parent[ItemsControl].DataContext.InstallCommand}"
+                            CommandParameter="{Binding}" />
+                  </Grid>
+
+                  <TextBlock Grid.Row="1"
+                             Margin="0,7,0,0"
+                             Text="{Binding Description}"
+                             FontSize="11"
+                             Foreground="{StaticResource TextSecondaryBrush}"
+                             TextWrapping="Wrap"
+                             MaxLines="3"
+                             LineHeight="16" />
+
+                  <TextBlock Grid.Row="2"
+                             Margin="0,7,0,0"
+                             Text="{Binding Progress}"
+                             Classes="caption"
+                             FontSize="10.5"
+                             TextWrapping="Wrap"
+                             MaxLines="2" />
+
+                  <Grid Grid.Row="3" ColumnDefinitions="*,Auto" Margin="0,7,0,0">
+                    <TextBlock Text="{Binding Publisher}"
+                               Classes="caption"
+                               FontSize="10"
+                               VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1"
+                               Text="{Binding PublishedText}"
+                               Classes="caption"
+                               FontSize="10"
+                               VerticalAlignment="Center" />
+                  </Grid>
+
+                  <!-- 装上就能读文件、起进程：这一句必须在按钮旁边说清楚 -->
+                  <Border Grid.Row="4"
+                          IsVisible="{Binding IsConfirming}"
+                          Background="{StaticResource WarningSubtleBrush}"
+                          BorderBrush="#EBD3A8"
+                          BorderThickness="1"
+                          CornerRadius="9"
+                          Padding="9,7"
+                          Margin="0,9,0,0">
+                    <StackPanel Spacing="7">
+                      <TextBlock Text="装这个包？里面的扩展会以你的权限在本机运行，能读文件、能执行命令。"
+                                 FontSize="11"
+                                 LineHeight="16"
+                                 TextWrapping="Wrap"
+                                 Foreground="{StaticResource WarningBrush}" />
+                      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                        <Button Classes="ghost-action" Content="取消" Command="{Binding CancelInstallCommand}" />
+                        <Button Classes="pill"
+                                Content="确认安装"
+                                Command="{Binding $parent[ItemsControl].DataContext.InstallCommand}"
+                                CommandParameter="{Binding}" />
+                      </StackPanel>
+                    </StackPanel>
+                  </Border>
+                </Grid>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <Border IsVisible="{Binding ShowMarketEmpty}" Classes="tool-tile" Padding="14,12">
+          <StackPanel Spacing="3">
+            <TextBlock Text="没有搜到插件" FontSize="12.5" FontWeight="Medium" />
+            <TextBlock Text="换个关键词；内网包或本地在改的目录用「手动安装」。"
+                       Classes="caption"
+                       FontSize="11"
+                       TextWrapping="Wrap" />
+          </StackPanel>
+        </Border>
+      </StackPanel>
+    </ScrollViewer>
+  </Grid>
+</UserControl>

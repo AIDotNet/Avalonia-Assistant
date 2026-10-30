@@ -330,6 +330,35 @@ public partial class AssistantApp : Application
                         card.StartDeleteCommand.Execute(null);
                     }
                     break;
+                case "plugins":
+                    if (AppLaunchOptions.SettingsFromChat)
+                    {
+                        viewModel.LoadDemoSidebar();
+                        viewModel.LoadDemoChat();
+                    }
+
+                    viewModel.OpenPlugins();
+                    if (viewModel.CurrentPage is PluginsViewModel pluginsPage)
+                    {
+                        if (!string.IsNullOrWhiteSpace(AppLaunchOptions.PluginSearch))
+                        {
+                            pluginsPage.SearchText = AppLaunchOptions.PluginSearch;
+                            await pluginsPage.SearchCommand.ExecuteAsync(null);
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(AppLaunchOptions.PluginInstall))
+                        {
+                            // 真装：走的是和点「安装」完全同一条命令
+                            pluginsPage.ManualSource = AppLaunchOptions.PluginInstall;
+                            await pluginsPage.InstallManualCommand.ExecuteAsync(null);
+                        }
+
+                        if (AppLaunchOptions.PluginManual)
+                        {
+                            pluginsPage.ShowManual();
+                        }
+                    }
+                    break;
             }
 
             // 验收用：从对话进设置再「返回」，看落回哪里、那条任务还在不在。
@@ -710,7 +739,23 @@ public partial class AssistantApp : Application
             // MCP 页的探测是真实起进程（本机已缓存的 npx 约 6 秒），
             // 按普通页面等 1.6 秒只会截到「检测中…」。
             var waitingForMcpProbe = string.Equals(AppLaunchOptions.Page, "mcp", StringComparison.OrdinalIgnoreCase);
-            await Task.Delay(waitingForRun ? 4500 : waitingForMcpProbe ? 9000 : 1600);
+
+            // 插件页第一屏要等 npm 市场回来，否则截到的是「正在查 npm…」。
+            var waitingForPluginMarket = string.Equals(AppLaunchOptions.Page, "plugins", StringComparison.OrdinalIgnoreCase);
+            var wait = waitingForRun ? 4500
+                : waitingForMcpProbe ? 9000
+                : waitingForPluginMarket ? 5000
+                : 1600;
+            await Task.Delay(wait);
+
+            // 市场结果是异步回来的，确认态要等它落地之后再翻，否则 FirstOrDefault 拿到空序列。
+            if (AppLaunchOptions.PluginConfirm
+                && viewModel.CurrentPage is PluginsViewModel confirmPage
+                && confirmPage.Market.FirstOrDefault() is { } marketItem)
+            {
+                marketItem.StartInstallCommand.Execute(null);
+                await Task.Delay(200);
+            }
 
             // 拖放层要等页面真正进可视树之后再摆，否则 FindControl 还是空的
             if (AppLaunchOptions.ComposerDrop)

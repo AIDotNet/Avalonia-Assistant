@@ -37,6 +37,7 @@ internal static class Program
         services.AddSingleton<IPiStreamFactory, PiStreamFactory>();
         services.AddSingleton<AgentToolRegistry>();
         services.AddSingleton<IAssistantRuntime, PiAgentRuntime>();
+        services.AddSingleton<IPluginStore, PiPluginStore>();
         services.AddSingleton<MainWindowViewModel>();
         services.AddSingleton<MainWindow>();
 
@@ -118,6 +119,18 @@ internal static class Program
                     break;
                 case "--mcp-import":
                     AppLaunchOptions.OpenMcpImport = true;
+                    break;
+                case "--plugin-install" when index + 1 < args.Length:
+                    AppLaunchOptions.PluginInstall = args[++index];
+                    break;
+                case "--plugin-search" when index + 1 < args.Length:
+                    AppLaunchOptions.PluginSearch = args[++index];
+                    break;
+                case "--plugin-manual":
+                    AppLaunchOptions.PluginManual = true;
+                    break;
+                case "--plugin-confirm":
+                    AppLaunchOptions.PluginConfirm = true;
                     break;
                 case "--composer-mention" when index + 1 < args.Length:
                     AppLaunchOptions.ComposerMention = args[++index];

@@ -311,6 +311,21 @@ public static class AppLaunchOptions
     /// <summary>开发用：MCP 页直接展开 JSON 导入面板并填入示例，配合 --screenshot 检查版式。</summary>
     public static bool OpenMcpImport { get; set; }
 
+    /// <summary>
+    /// 开发用：插件页直接装一个源（包名 / npm: / git: / 本地目录），配合 --screenshot
+    /// 验收「装完清单里真的出现、市场卡片变已安装」。装的是真包，会写进 settings.json。
+    /// </summary>
+    public static string? PluginInstall { get; set; }
+
+    /// <summary>开发用：插件页搜索框预置关键词，检查搜索结果版式。</summary>
+    public static string? PluginSearch { get; set; }
+
+    /// <summary>开发用：插件页直接展开「手动安装」面板。</summary>
+    public static bool PluginManual { get; set; }
+
+    /// <summary>开发用：把市场第一张卡翻到安装确认态，检查风险提示的版式。</summary>
+    public static bool PluginConfirm { get; set; }
+
     /// <summary>开发用：启动后直接弹「完全访问」风险确认层，确认即切档，配合 --screenshot 看版式。</summary>
     public static bool ConfirmFullAccessDialog { get; set; }
 

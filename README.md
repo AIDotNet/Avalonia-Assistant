@@ -58,6 +58,11 @@ Windows 桌面 AI 助理。Agent 循环用 [pi.net](https://github.com/AIDotNet/
   起不来会给出原因（Windows 上 `npx` 少了 `cmd /c` 包装在这里就能看见），每张卡可重试。
   整段粘贴标准 JSON（`mcpServers` / VS Code 的 `servers` 写法）就能一次导入多个，也能从现成的
   `mcp.json` 文件读进来；只加一个 stdio 服务端时用表单。
+- **插件市场**：装的是 pi 自己的包——一个包可以同时带扩展、技能、提示词和主题。搜 npm 上的
+  `pi-package`（和 pi 官方 gallery 同一份来源），也可以手动填包名 / `npm:` 版本 / `git:` 地址 / 本地目录。
+  安装走本机 npm，写进 `settings.json` 的 `packages`，**下一个会话生效**；已装的能一键卸载，
+  扩展目录里手工放的 `.ts` / `.js` / `.dll` 也一并列出来。升级到 pi.net 1.4.5 之后，
+  上游的 TypeScript 扩展由进程内 JS 宿主直接加载，不用先编译成程序集。
 - **导出会话**：对话页右上角一键存成 Markdown，工具调用、失败轮次、引用文件都在里面。
 
 | 会话 | 设置 |
@@ -66,6 +71,8 @@ Windows 桌面 AI 助理。Agent 循环用 [pi.net](https://github.com/AIDotNet/
 
 ![技能](docs/images/tools.png)
 
+![插件](docs/images/plugins.png)
+
 ## 两个核心框架
 
 界面用 **TKCode.Arc**，Agent 循环用 **pi.net**，其余选型都是围着这两个补的。
@@ -73,7 +80,7 @@ Windows 桌面 AI 助理。Agent 循环用 [pi.net](https://github.com/AIDotNet/
 | 层 | 框架 | 引用包 | 版本 |
 | --- | --- | --- | --- |
 | UI 框架 | [TKCode.Arc](https://github.com/AIDotNet/TKCode.Arc)（AtomUI 生态） | `TKCode.Arc`、`TKCode.Arc.Fonts` | 0.3.1-preview.3 |
-| Agent 框架 | [pi.net](https://github.com/AIDotNet/pi.net)（Pi 的 .NET 移植） | `Pi.CodingAgent`（传递引入 `Pi.Agent` / `Pi.Ai` / `Pi.Mcp` 等） | 1.4.4 |
+| Agent 框架 | [pi.net](https://github.com/AIDotNet/pi.net)（Pi 的 .NET 移植） | `Pi.CodingAgent`（传递引入 `Pi.Agent` / `Pi.Ai` / `Pi.Mcp` 等） | 1.4.5 |
 
 - **TKCode.Arc 负责界面**：控件、主题、图标字体全部来自 Arc，入口在 `Program.BuildAvaloniaApp`
   里一次装好——`WithArcFonts()` 加 `UseAtomUI(b => b.UseDesktopControls().UseArc())`，

@@ -32,5 +32,8 @@
     <DataTemplate DataType="{x:Type vm:McpViewModel}">
       <views:McpView />
     </DataTemplate>
+    <DataTemplate DataType="{x:Type vm:PluginsViewModel}">
+      <views:PluginsView />
+    </DataTemplate>
   </Application.DataTemplates>
 </Application>
