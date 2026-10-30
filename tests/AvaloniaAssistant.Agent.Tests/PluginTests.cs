@@ -103,13 +103,56 @@ public sealed class PluginTests : IDisposable
     }
 
     [Fact]
-    public void FallsBackToIndexAtPackageRoot()
+    public void PackageRootIndexAloneIsNotAnExtension()
     {
+        // 上游只对手动放置的扩展目录认 index.ts；包必须有 pi 清单或 extensions/ 目录，
+        // 否则界面会报「扩展 1 个」，会话里一个都没加载。
         var package = Path.Combine(_root, "pkg-root");
         Directory.CreateDirectory(package);
         File.WriteAllText(Path.Combine(package, "index.js"), "module.exports = function () {}");
 
-        Assert.Equal(["index.js"], PluginDiscovery.FindExtensions(package));
+        Assert.Empty(PluginDiscovery.FindExtensions(package));
+    }
+
+    [Fact]
+    public void ManifestWithoutExtensionsIgnoresConventionalDirectory()
+    {
+        // 有 pi 清单就只认清单，extensions/ 目录不再自动收——和 ResourceLoader 一致。
+        var package = Path.Combine(_root, "pkg-manifest-empty");
+        Directory.CreateDirectory(Path.Combine(package, "extensions"));
+        File.WriteAllText(Path.Combine(package, "package.json"), """
+            { "name": "demo", "pi": { "skills": ["./skills"] } }
+            """);
+        File.WriteAllText(Path.Combine(package, "extensions", "hello.ts"), "export default function () {}");
+
+        Assert.Empty(PluginDiscovery.FindExtensions(package));
+    }
+
+    [Fact]
+    public void ManifestDirectoryEntryExpandsItsOwnIndex()
+    {
+        var package = Path.Combine(_root, "pkg-dir-entry");
+        Directory.CreateDirectory(Path.Combine(package, "tools", "review"));
+        File.WriteAllText(Path.Combine(package, "package.json"), """
+            { "name": "demo", "pi": { "extensions": ["./tools/review"] } }
+            """);
+        File.WriteAllText(Path.Combine(package, "tools", "review", "index.ts"), "export default function () {}");
+
+        Assert.Equal(["tools/review/index.ts"], PluginDiscovery.FindExtensions(package));
+    }
+
+    [Fact]
+    public void ManifestKeepsDotPrefixedDirectories()
+    {
+        // "./" 只去一层；不能把 ./.pi/... 变成 pi/...
+        var package = Path.Combine(_root, "pkg-dot");
+        Directory.CreateDirectory(Path.Combine(package, ".pi"));
+        File.WriteAllText(Path.Combine(package, "package.json"), """
+            { "name": "demo", "pi": { "extensions": ["./.pi/main.ts"] } }
+            """);
+        File.WriteAllText(Path.Combine(package, ".pi", "main.ts"), "export default function () {}");
+
+        Assert.Equal([".pi/main.ts"], PluginDiscovery.FindExtensions(package));
     }
 
     [Fact]

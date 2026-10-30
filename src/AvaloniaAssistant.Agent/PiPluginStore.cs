@@ -46,17 +46,32 @@ public sealed class PiPluginStore : IPluginStore
             var results = new List<AgentPluginInfo>();
             foreach (var package in manager.ListConfiguredPackages())
             {
-                var entries = package.InstalledPath is { Length: > 0 } path
-                    ? PluginDiscovery.FindExtensions(path)
-                    : [];
+                try
+                {
+                    var entries = package.InstalledPath is { Length: > 0 } path
+                        ? PluginDiscovery.FindExtensions(path)
+                        : [];
 
-                results.Add(new AgentPluginInfo(
-                    package.Source,
-                    PluginDiscovery.DisplayName(package.Source),
-                    package.Scope,
-                    package.Filtered,
-                    package.InstalledPath,
-                    entries));
+                    results.Add(new AgentPluginInfo(
+                        package.Source,
+                        PluginDiscovery.DisplayName(package.Source),
+                        package.Scope,
+                        package.Filtered,
+                        package.InstalledPath,
+                        entries));
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or ArgumentException)
+                {
+                    // 单条配置坏了（手改出来的空字符串、坏路径）不能让整页清单消失，
+                    // 仍然把它列出来，只是没有安装路径。
+                    results.Add(new AgentPluginInfo(
+                        package.Source,
+                        PluginDiscovery.DisplayName(package.Source),
+                        package.Scope,
+                        package.Filtered,
+                        package.InstalledPath,
+                        []));
+                }
             }
 
             return results;
@@ -154,6 +169,12 @@ public sealed class PiPluginStore : IPluginStore
         catch (OperationCanceledException)
         {
             throw;
+        }
+        catch (Exception ex) when (IsMissingNpm(ex))
+        {
+            return AgentPluginInstallResult.Failed(
+                normalized,
+                "找不到 npm。插件安装要用本机的 npm：先装 Node.js（含 npm），确认命令行里 npm -v 能跑。");
         }
         catch (Exception ex)
         {
@@ -284,7 +305,8 @@ public sealed class PiPluginStore : IPluginStore
     {
         if (!string.IsNullOrWhiteSpace(evt.Message))
         {
-            return evt.Message;
+            // npm 的 message 有时带整段多行输出，卡片只放两行，取第一行。
+            return FirstLine(evt.Message);
         }
 
         return evt.Action switch
@@ -340,6 +362,23 @@ public sealed class PiPluginStore : IPluginStore
         }
 
         return results;
+    }
+
+    /// <summary>npm 不在 PATH 上时，Win32Exception 的原话是英文而且只说「找不到文件」，得翻译成人话。</summary>
+    private static bool IsMissingNpm(Exception exception)
+    {
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            if (current.Message.Contains("npm", StringComparison.OrdinalIgnoreCase)
+                && (current.Message.Contains("cannot find", StringComparison.OrdinalIgnoreCase)
+                    || current.Message.Contains("找不到", StringComparison.Ordinal)
+                    || current.Message.Contains("No such file", StringComparison.OrdinalIgnoreCase)))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>异常消息常常是多行 npm 输出；页面一行放不下，取第一行有内容的。</summary>
@@ -475,8 +514,9 @@ internal static class PluginDiscovery
     }
 
     /// <summary>
-    /// 一个包会贡献哪些扩展入口。规则与 pi 的包发现一致：
-    /// <c>package.json</c> 的 <c>pi.extensions</c> 优先，否则看 <c>extensions/</c>，最后看根目录 <c>index.*</c>。
+    /// 一个包会贡献哪些扩展入口。规则必须和 pi 的包发现一模一样，否则界面会报「扩展 1 个」而会话里一个都没加载：
+    /// 有 <c>pi</c> 清单时**只认清单**（清单里没写 extensions 就是没有，不回落约定目录）；
+    /// 没有清单时只看 <c>extensions/</c> 目录；根目录的 <c>index.ts</c> 只对手动放置的扩展目录生效，对包不生效。
     /// </summary>
     public static IReadOnlyList<string> FindExtensions(string packageRoot)
     {
@@ -487,20 +527,17 @@ internal static class PluginDiscovery
 
         try
         {
-            var manifest = ReadManifestExtensions(packageRoot);
-            if (manifest.Count > 0)
+            if (ReadManifest(packageRoot) is { } manifest)
             {
-                return Expand(packageRoot, manifest);
+                return manifest["extensions"] is JsonArray entries
+                    ? ToRelative(packageRoot, ExpandEntries(packageRoot, entries))
+                    : [];
             }
 
             var conventional = Path.Combine(packageRoot, "extensions");
-            if (Directory.Exists(conventional))
-            {
-                return ScanDirectory(packageRoot, conventional);
-            }
-
-            var rootEntry = ResolveDirectoryEntry(packageRoot);
-            return rootEntry is null ? [] : [Relative(packageRoot, rootEntry)];
+            return Directory.Exists(conventional)
+                ? ToRelative(packageRoot, CollectExtensionDir(conventional))
+                : [];
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
@@ -508,76 +545,192 @@ internal static class PluginDiscovery
         }
     }
 
-    private static IReadOnlyList<string> ReadManifestExtensions(string packageRoot)
+    /// <summary>读 <c>pi</c> 清单；<c>pi</c> 不是对象就当没有。对应上游 <c>readPiManifest</c>。</summary>
+    private static JsonObject? ReadManifest(string directory)
     {
-        var manifestPath = Path.Combine(packageRoot, "package.json");
+        var manifestPath = Path.Combine(directory, "package.json");
         if (!File.Exists(manifestPath))
         {
-            return [];
+            return null;
         }
 
         var root = JsonNode.Parse(File.ReadAllText(manifestPath));
-        return root?["pi"]?["extensions"] is JsonArray array
-            ? array.Select(node => node?.GetValue<string>() ?? string.Empty).Where(text => text.Length > 0).ToList()
-            : [];
+        return root?["pi"] as JsonObject;
     }
 
-    private static IReadOnlyList<string> Expand(string packageRoot, IReadOnlyList<string> patterns)
+    /// <summary>
+    /// 清单条目展开成绝对路径。<c>+</c>/<c>-</c>/<c>!</c> 是启用 / 禁用覆盖，
+    /// 决定的是「这些扩展开没开」，不决定「有哪些扩展」，这里跳过。
+    /// </summary>
+    private static IReadOnlyList<string> ExpandEntries(string baseDir, JsonArray entries)
     {
         var results = new List<string>();
-        foreach (var pattern in patterns)
+        foreach (var node in entries)
         {
-            var normalized = pattern.Replace('\\', '/').TrimStart('.', '/');
-            if (!HasGlob(normalized))
+            if (node is not JsonValue value
+                || !value.TryGetValue<string>(out var raw)
+                || raw is null)
             {
-                var path = Path.Combine(packageRoot, normalized.Replace('/', Path.DirectorySeparatorChar));
-                if (File.Exists(path))
+                continue;
+            }
+
+            var pattern = StripDotSlash(raw.Trim());
+            if (pattern.Length == 0 || pattern[0] is '+' or '-' or '!')
+            {
+                continue;
+            }
+
+            pattern = pattern.Replace('\\', '/');
+            if (!HasGlob(pattern))
+            {
+                var full = Path.GetFullPath(Path.Combine(baseDir, pattern.Replace('/', Path.DirectorySeparatorChar)));
+                if (File.Exists(full))
                 {
-                    results.Add(normalized);
+                    if (IsExtensionFile(full))
+                    {
+                        results.Add(full);
+                    }
                 }
-                else if (Directory.Exists(path))
+                else if (Directory.Exists(full))
                 {
-                    results.AddRange(ScanDirectory(packageRoot, path));
+                    results.AddRange(CollectExtensionDir(full));
                 }
 
                 continue;
             }
 
-            var regex = GlobToRegex(normalized);
-            foreach (var file in Directory.EnumerateFiles(packageRoot, "*", SearchOption.AllDirectories))
+            var regex = GlobToRegex(pattern);
+            foreach (var item in EnumerateEntries(baseDir))
             {
-                var relative = Relative(packageRoot, file);
-                if (regex.IsMatch(relative))
+                if (!regex.IsMatch(Relative(baseDir, item)))
                 {
-                    results.Add(relative);
+                    continue;
                 }
-            }
-        }
 
-        return results.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-    }
-
-    private static IReadOnlyList<string> ScanDirectory(string packageRoot, string directory)
-    {
-        var results = new List<string>();
-        foreach (var file in Directory.EnumerateFiles(directory))
-        {
-            if (IsExtensionFile(file))
-            {
-                results.Add(Relative(packageRoot, file));
-            }
-        }
-
-        foreach (var child in Directory.EnumerateDirectories(directory))
-        {
-            if (ResolveDirectoryEntry(child) is { } entry)
-            {
-                results.Add(Relative(packageRoot, entry));
+                if (Directory.Exists(item))
+                {
+                    results.AddRange(CollectExtensionDir(item));
+                }
+                else if (IsExtensionFile(item))
+                {
+                    results.Add(item);
+                }
             }
         }
 
         return results;
     }
+
+    /// <summary>
+    /// 对应上游 <c>collectAutoExtensionEntries</c>：目录自己先当入口（清单或 index.*），
+    /// 否则只往下看一层——文件按扩展名收，子目录再各自找入口。
+    /// </summary>
+    private static IReadOnlyList<string> CollectExtensionDir(string directory)
+    {
+        if (ResolveDirectoryEntries(directory) is { } own)
+        {
+            return own;
+        }
+
+        var results = new List<string>();
+        foreach (var file in Directory.EnumerateFiles(directory))
+        {
+            if (IsExtensionFile(file))
+            {
+                results.Add(file);
+            }
+        }
+
+        foreach (var child in Directory.EnumerateDirectories(directory))
+        {
+            var name = Path.GetFileName(child);
+            if (IsSkippedDirectory(name))
+            {
+                continue;
+            }
+
+            if (ResolveDirectoryEntries(child) is { } entries)
+            {
+                results.AddRange(entries);
+            }
+        }
+
+        return results;
+    }
+
+    /// <summary>目录自己的入口：<c>package.json</c> 里的清单，或者 index.ts / index.js / index.dll。</summary>
+    private static IReadOnlyList<string>? ResolveDirectoryEntries(string directory)
+    {
+        if (ReadManifest(directory) is { } manifest && manifest["extensions"] is JsonArray entries)
+        {
+            var expanded = ExpandEntries(directory, entries);
+            if (expanded.Count > 0)
+            {
+                return expanded;
+            }
+        }
+
+        return ResolveDirectoryEntry(directory) is { } entry ? [entry] : null;
+    }
+
+    /// <summary>递归列出目录项，跳过点目录与 node_modules；上限防止一个包把整块磁盘拖进来。</summary>
+    private static IReadOnlyList<string> EnumerateEntries(string root)
+    {
+        var results = new List<string>();
+        var queue = new Queue<(string Directory, int Depth)>();
+        queue.Enqueue((root, 0));
+
+        while (queue.Count > 0 && results.Count < 4000)
+        {
+            var (directory, depth) = queue.Dequeue();
+            string[] entries;
+            try
+            {
+                entries = Directory.GetFileSystemEntries(directory);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                continue;
+            }
+
+            foreach (var entry in entries)
+            {
+                if (Directory.Exists(entry))
+                {
+                    if (IsSkippedDirectory(Path.GetFileName(entry)))
+                    {
+                        continue;
+                    }
+
+                    results.Add(entry);
+                    if (depth < 8)
+                    {
+                        queue.Enqueue((entry, depth + 1));
+                    }
+                }
+                else
+                {
+                    results.Add(entry);
+                }
+            }
+        }
+
+        return results;
+    }
+
+    private static bool IsSkippedDirectory(string name)
+        => name.StartsWith('.') || name.Equals("node_modules", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>只去掉开头的 <c>./</c>；不能 TrimStart('.')，那会把 <c>./.pi/x.ts</c> 变成 <c>pi/x.ts</c>。</summary>
+    private static string StripDotSlash(string value)
+        => value.StartsWith("./", StringComparison.Ordinal) || value.StartsWith(".\\", StringComparison.Ordinal)
+            ? value[2..]
+            : value;
+
+    private static IReadOnlyList<string> ToRelative(string root, IReadOnlyList<string> paths)
+        => paths.Select(path => Relative(root, path))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
 
     private static string Relative(string root, string path)
         => Path.GetRelativePath(root, path).Replace('\\', '/');

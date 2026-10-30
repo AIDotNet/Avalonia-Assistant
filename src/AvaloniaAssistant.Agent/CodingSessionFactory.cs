@@ -148,6 +148,18 @@ internal sealed class CodingSessionFactory
                 });
         await resourceLoader.ReloadAsync(null, cancellationToken).ConfigureAwait(false);
 
+        // 插件（pi 包）注册的工具：显式 allowlist 会按名字过滤掉不在名单里的工具，
+        // 所以装完插件、扩展加载成功，模型仍然看不到它的工具——必须在这里把名字补进名单。
+        // 内置扩展（mcp / codemode / tool_search / llama）不补：它们的能力由本应用自己决定要不要暴露，
+        // 补进来等于把 codemode、tool_search 一起塞给模型。
+        var pluginTools = resourceLoader.GetExtensions().Extensions
+            .Where(extension => !extension.SourceInfo.Path.StartsWith(
+                SourceInfos.BuiltinPathPrefix,
+                StringComparison.Ordinal))
+            .SelectMany(extension => extension.Tools.Keys)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
         var result = await Sdk.CreateAgentSessionAsync(
             new CreateAgentSessionOptions
             {
@@ -169,7 +181,14 @@ internal sealed class CodingSessionFactory
                 // allowlist 同时决定「哪些工具算激活」：自建工具虽然走 CustomTools 注册，
                 // 名字也必须出现在这里，否则模型看不到它们。
                 // mcp__* 不能省：显式 allowlist 会把 MCP 工具排除在激活集之外，只留给 codemode。
-                Tools = [.. BuiltinTools(settings.Permission), .. customTools.Select(tool => tool.Name), "mcp__*"],
+                // pluginTools 更不能省：插件带的工具同样被这份名单过滤。
+                Tools =
+                [
+                    .. BuiltinTools(settings.Permission),
+                    .. customTools.Select(tool => tool.Name),
+                    "mcp__*",
+                    .. pluginTools,
+                ],
                 CustomTools = customTools,
             },
             processCwd: cwd,

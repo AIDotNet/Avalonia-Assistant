@@ -64,7 +64,7 @@
 
     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
       <StackPanel Margin="96,16,96,24" Spacing="12">
-        <TextBlock Text="插件就是 pi 的包：一个包里可以同时带扩展、技能、提示词和主题。扩展是能读文件、能起进程的代码，会和本应用同一个权限运行——只装你信得过的来源。装完写进 settings.json 的 packages，下一个会话才加载。"
+        <TextBlock Text="插件就是 pi 的包：一个包里可以同时带扩展、技能、提示词和主题。扩展是能读文件、能起进程的代码，会和本应用同一个权限运行——只装你信得过的来源。装完写进 settings.json 的 packages，下一条消息生效（会重建会话上下文）。"
                    Classes="caption"
                    TextWrapping="Wrap"
                    LineHeight="19" />
@@ -168,9 +168,9 @@
                              Margin="0,4,0,0"
                              Text="{Binding ExtensionsText}"
                              FontSize="10.5"
-                             Foreground="{StaticResource TextSecondaryBrush}"
+                             Foreground="{Binding DetailBrush}"
                              TextWrapping="Wrap"
-                             MaxLines="2"
+                             MaxLines="3"
                              ToolTip.Tip="{Binding PathText}" />
 
                   <Border Grid.Row="3"
@@ -338,12 +338,21 @@
                              TextWrapping="Wrap"
                              MaxLines="2" />
 
-                  <Grid Grid.Row="3" ColumnDefinitions="*,Auto" Margin="0,7,0,0">
+                  <Grid Grid.Row="3" ColumnDefinitions="*,Auto,Auto" Margin="0,7,0,0">
                     <TextBlock Text="{Binding Publisher}"
                                Classes="caption"
                                FontSize="10"
                                VerticalAlignment="Center" />
-                    <TextBlock Grid.Column="1"
+                    <Button Grid.Column="1"
+                            Classes="ghost-action"
+                            Height="20"
+                            Padding="5,0"
+                            Margin="0,0,8,0"
+                            FontSize="10"
+                            Content="npm"
+                            Command="{Binding OpenPageCommand}"
+                            ToolTip.Tip="在浏览器里打开这个包的 npm 页面（README / 依赖 / 发布时间）" />
+                    <TextBlock Grid.Column="2"
                                Text="{Binding PublishedText}"
                                Classes="caption"
                                FontSize="10"

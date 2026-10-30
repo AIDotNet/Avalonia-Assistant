@@ -28,12 +28,17 @@ public sealed partial class InstalledPluginViewModel : ObservableObject
 
     public string PathText { get; }
 
-    /// <summary>扩展入口。没有扩展的包（只带技能/提示词/主题）也要说清楚，不然像装失败了。</summary>
-    public string ExtensionsText => Info.Extensions.Count == 0
-        ? "没有扩展入口（技能 / 提示词 / 主题类包）"
-        : $"扩展 {Info.Extensions.Count} 个 · {string.Join("、", Info.Extensions)}";
+    /// <summary>settings.json 里有记录、磁盘上没有包：下次启动会重试安装，别显示得像装好了。</summary>
+    public bool IsMissing => !Info.IsInstalled;
 
-    public bool HasExtensions => Info.Extensions.Count > 0;
+    /// <summary>扩展入口。没有扩展的包（只带技能/提示词/主题）也要说清楚，不然像装失败了。</summary>
+    public string ExtensionsText => IsMissing
+        ? "没装上：settings.json 有记录，磁盘上没有这个包（下次会话启动会重试）"
+        : Info.Extensions.Count == 0
+            ? "没有扩展入口（技能 / 提示词 / 主题类包）"
+            : $"扩展 {Info.Extensions.Count} 个 · {string.Join("、", Info.Extensions)}";
+
+    public IBrush DetailBrush => IsMissing ? Brush.Parse("#A15C07") : Brush.Parse("#6F6F69");
 
     [ObservableProperty]
     private bool isConfirmingRemove;
@@ -100,6 +105,16 @@ public sealed partial class MarketPluginViewModel : ObservableObject
 
     [RelayCommand]
     private void CancelInstall() => IsConfirming = false;
+
+    /// <summary>卡片上只有三行字，想看 README、依赖和更新时间得去 npm 页面。</summary>
+    [RelayCommand]
+    private void OpenPage()
+    {
+        if (!string.IsNullOrWhiteSpace(Item.Url))
+        {
+            Ui.OpenExternal(Item.Url);
+        }
+    }
 }
 
 /// <summary>
@@ -148,7 +163,22 @@ public sealed partial class PluginsViewModel : ObservableObject
     /// <summary>空结果提示：正在搜的时候不摆「没有搜到」，那会像搜索失败了。</summary>
     public bool ShowMarketEmpty => !IsSearchingMarket && !HasMarket;
 
-    public string InstalledCountText => Installed.Count == 0 ? "还没有装插件" : $"{Installed.Count} 个已安装";
+    /// <summary>标题下的计数。有没装上的要单独说出来，不然「1 个已安装」和卡片上的警告自相矛盾。</summary>
+    public string InstalledCountText
+    {
+        get
+        {
+            if (Installed.Count == 0)
+            {
+                return "还没有装插件";
+            }
+
+            var missing = Installed.Count(item => item.IsMissing);
+            return missing == 0
+                ? $"{Installed.Count} 个已安装"
+                : $"{Installed.Count} 个插件 · {missing} 个没装上";
+        }
+    }
 
     public string MarketCountText => IsSearchingMarket
         ? "正在查 npm…"
@@ -175,6 +205,18 @@ public sealed partial class PluginsViewModel : ObservableObject
     [ObservableProperty]
     private string searchText = string.Empty;
 
+    /// <summary>
+    /// 搜索框被清空（× 或全删）就回到热门列表。
+    /// 否则标题写着「热门 N 个」，下面还是上一次的筛选结果，两边对不上。
+    /// </summary>
+    partial void OnSearchTextChanged(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value) && !IsSearchingMarket)
+        {
+            _ = SearchAsync(string.Empty);
+        }
+    }
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(MarketCountText))]
     [NotifyPropertyChangedFor(nameof(ShowMarketEmpty))]
@@ -186,8 +228,14 @@ public sealed partial class PluginsViewModel : ObservableObject
     [RelayCommand]
     private void ClearSearch()
     {
+        if (SearchText.Length == 0)
+        {
+            // 本来就是空的：清空按钮不会触发变更事件，直接补一次热门搜索
+            _ = SearchAsync(string.Empty);
+            return;
+        }
+
         SearchText = string.Empty;
-        _ = SearchAsync(string.Empty);
     }
 
     private async Task SearchAsync(string query)
@@ -277,6 +325,9 @@ public sealed partial class PluginsViewModel : ObservableObject
     [ObservableProperty]
     private string manualSource = string.Empty;
 
+    /// <summary>手动安装进行中。进度回调只在为 true 时更新提示条，避免结束后又冒出一行旧进度。</summary>
+    private bool ManualInstalling { get; set; }
+
     [RelayCommand]
     public void ShowManual()
     {
@@ -301,10 +352,27 @@ public sealed partial class PluginsViewModel : ObservableObject
         }
 
         var source = ManualSource.Trim();
-        if (await InstallAsync(source, null))
+        ManualInstalling = true;
+        try
         {
-            IsManualOpen = false;
-            ManualSource = string.Empty;
+            // Progress 是异步投递的：安装结束后才到的消息不能把成功提示盖掉。
+            var progress = new Progress<string>(text =>
+            {
+                if (ManualInstalling)
+                {
+                    ShowNotice(text, isError: false);
+                }
+            });
+
+            if (await InstallAsync(source, progress))
+            {
+                IsManualOpen = false;
+                ManualSource = string.Empty;
+            }
+        }
+        finally
+        {
+            ManualInstalling = false;
         }
     }
 
@@ -319,7 +387,14 @@ public sealed partial class PluginsViewModel : ObservableObject
         }
 
         item.IsInstalling = true;
-        var progress = new Progress<string>(text => item.Progress = text);
+        var progress = new Progress<string>(text =>
+        {
+            // 结束之后才到的投递不再落到卡片上（否则「安装中…」会留着不走）
+            if (item.IsInstalling)
+            {
+                item.Progress = text;
+            }
+        });
         try
         {
             if (await InstallAsync("npm:" + item.Name, progress))
@@ -365,7 +440,7 @@ public sealed partial class PluginsViewModel : ObservableObject
 
             ShowNotice(
                 $"已安装 {installedName ?? result.Source}，写进 settings.json。"
-                + "下一个会话生效——当前这条会话仍用旧的扩展集。",
+                + "下一条消息生效——会重建会话上下文，长任务可能要重放一遍。",
                 isError: false);
             return true;
         }

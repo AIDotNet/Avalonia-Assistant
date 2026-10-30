@@ -17,6 +17,15 @@ internal static class ToolAccess
         "write",
     };
 
+    /// <summary>确定只读的内置工具。不在这些名字里、又没有元数据的工具一律按「会改本机」对待。</summary>
+    private static readonly HashSet<string> ReadOnlyBuiltins = new(StringComparer.Ordinal)
+    {
+        "read",
+        "grep",
+        "find",
+        "ls",
+    };
+
     private const string McpPrefix = "mcp__";
 
     public static bool IsMutating(string name, AgentToolInfo? info)
@@ -26,7 +35,14 @@ internal static class ToolAccess
             return info.IsMutating;
         }
 
-        return MutatingBuiltins.Contains(name) || name.StartsWith(McpPrefix, StringComparison.Ordinal);
+        if (MutatingBuiltins.Contains(name) || name.StartsWith(McpPrefix, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        // 插件带的工具（pi 包注册的）没有元数据，读文件、起进程都可能在内部发生；
+        // 不能因为「名字不认识」就当只读放行。
+        return !ReadOnlyBuiltins.Contains(name);
     }
 
     public static bool RequiresApproval(string name, AgentToolInfo? info)
@@ -36,7 +52,12 @@ internal static class ToolAccess
             return info.RequiresApproval;
         }
 
-        // 内置写工具与 MCP 工具都要逐次确认：MCP 服务端的实际行为无法在本地预判。
-        return MutatingBuiltins.Contains(name) || name.StartsWith(McpPrefix, StringComparison.Ordinal);
+        // 内置写工具、MCP 工具、插件工具都要逐次确认：实际行为无法在本地预判。
+        if (MutatingBuiltins.Contains(name) || name.StartsWith(McpPrefix, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        return !ReadOnlyBuiltins.Contains(name);
     }
 }
