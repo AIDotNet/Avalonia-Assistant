@@ -341,6 +341,8 @@
           </StackPanel>
         </Border>
 
+        <!-- Arc 0.4 起 Textarea 会用 FrameMinHeight 在代码里写 Frame.MinHeight（默认 110），
+             模板里那个 MinHeight="64" 会被覆盖掉；这里显式设回 64，保持输入框原高度。 -->
         <arc:Textarea Grid.Row="2"
                       x:Name="Input"
                       Classes="composer"
@@ -349,6 +351,7 @@
                       Placeholder="{Binding Placeholder}"
                       AcceptsReturn="True"
                       IsResizable="False"
+                      FrameMinHeight="64"
                       MinHeight="64"
                       MaxHeight="160"
                       FocusAdorner="{x:Null}" />

@@ -6,8 +6,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <InvariantGlobalization>false</InvariantGlobalization>
     <AvaloniaVersion>12.1.4</AvaloniaVersion>
-    <ArcVersion>0.3.1-preview.3</ArcVersion>
-    <PiVersion>1.4.5</PiVersion>
+    <ArcVersion>0.4.0-preview.1</ArcVersion>
+    <PiVersion>1.5.0</PiVersion>
 
     <!-- 应用版本的唯一来源：界面从程序集读，发版只改这一处 -->
     <Version>1.0.2</Version>

@@ -1,5 +1,3 @@
-using AtomUI;
-using AtomUI.Desktop.Controls;
 using Avalonia;
 using AvaloniaAssistant.Abstractions;
 using AvaloniaAssistant.Agent;
@@ -73,11 +71,7 @@ internal static class Program
                   .UsePlatformDetect()
                   .WithInterFont()
                   .WithArcFonts()
-                  .UseAtomUI(builder =>
-                  {
-                      builder.UseDesktopControls();
-                      builder.UseArc();
-                  })
+                  .UseArc(arc => arc.UseArcControls())
                   .LogToTrace();
 
         // LogToTrace 会装自己的 sink，要在它之后再覆盖，否则看不到绑定告警。
