@@ -48,6 +48,14 @@ public sealed record ProviderPreset(
         "claude-sonnet-5-5",
         AgentProtocol.AnthropicMessages);
 
+    public static readonly ProviderPreset CheaperInference = new(
+        AgentProviderKind.CheaperInference,
+        "Cheaper Inference",
+        "OpenAI 兼容网关，一个 Key 调用多家模型",
+        "https://api.cheaperinference.com/v1",
+        "gpt-5.4-mini",
+        AgentProtocol.OpenAiCompatible);
+
     public static readonly ProviderPreset Custom = new(
         AgentProviderKind.Custom,
         "自定义",
@@ -56,7 +64,7 @@ public sealed record ProviderPreset(
         "qwen3.8:27b",
         AgentProtocol.OpenAiCompatible);
 
-    public static readonly IReadOnlyList<ProviderPreset> All = [DeepSeek, OpenAI, Anthropic, Custom];
+    public static readonly IReadOnlyList<ProviderPreset> All = [DeepSeek, OpenAI, Anthropic, CheaperInference, Custom];
 
     public static ProviderPreset For(AgentProviderKind kind)
         => All.FirstOrDefault(preset => preset.Kind == kind) ?? DeepSeek;
@@ -67,6 +75,7 @@ public enum AgentProviderKind
     DeepSeek,
     OpenAI,
     Anthropic,
+    CheaperInference,
     Custom,
 }
 

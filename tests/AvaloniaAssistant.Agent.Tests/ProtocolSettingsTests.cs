@@ -29,6 +29,7 @@ public sealed class ProtocolSettingsTests
         Assert.Equal(AgentProtocol.OpenAiCompatible, ProviderPreset.DeepSeek.Protocol);
         Assert.Equal(AgentProtocol.OpenAiCompatible, ProviderPreset.OpenAI.Protocol);
         Assert.Equal(AgentProtocol.AnthropicMessages, ProviderPreset.Anthropic.Protocol);
+        Assert.Equal(AgentProtocol.OpenAiCompatible, ProviderPreset.CheaperInference.Protocol);
         Assert.Equal(AgentProtocol.OpenAiCompatible, ProviderPreset.Custom.Protocol);
     }
 

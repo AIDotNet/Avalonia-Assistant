@@ -125,7 +125,7 @@ dotnet run --project src/AvaloniaAssistant.Desktop
 首次启动进入首页，点右上角「设置」或提示条里的「去设置」：
 
 1. 进「模型设置」配一套：名称（可留空，留空就显示模型名）、Base URL、API Key、模型名；
-2. 服务商预设只负责带默认值（DeepSeek / OpenAI / Anthropic / 自定义），协议按端点选
+2. 服务商预设只负责带默认值（DeepSeek / OpenAI / Anthropic / Cheaper Inference / 自定义），协议按端点选
    Chat Completions / Responses / Anthropic Messages；
 3. 需要多个渠道就点左边「+ 添加模型」继续加：每套有各自的地址、Key 和协议，互不影响；
 4. 保存后，输入框下方那颗胶囊里随时切换当前模型。列表里只有你配过的那几套。
@@ -137,6 +137,7 @@ dotnet run --project src/AvaloniaAssistant.Desktop
 | DeepSeek | `https://api.deepseek.com/v1` | `deepseek-flash` | Chat Completions | `deepseek-v4-pro` |
 | OpenAI | `https://api.openai.com/v1` | `gpt-6.1-sol` | Chat Completions | `gpt-6-astra`（需申请）、`gpt-6-luna` |
 | Anthropic | `https://api.anthropic.com` | `claude-sonnet-5-5` | Anthropic Messages | `claude-opus-5-5`、`claude-haiku-5-5` |
+| Cheaper Inference | `https://api.cheaperinference.com/v1` | `gpt-5.4-mini` | Chat Completions | `gpt-5.4`、`claude-sonnet-5`、`deepseek-v4-flash` |
 | 自定义 | `http://localhost:11434/v1` | `qwen3.8:27b` | Chat Completions | `qwen3.8-flash`（云端 API 名） |
 
 > 默认走「够用且便宜」的那一档：DeepSeek 用 Flash、Anthropic 用 Sonnet、本地用 27B。要更强就换成
