@@ -5,9 +5,9 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <InvariantGlobalization>false</InvariantGlobalization>
-    <AvaloniaVersion>12.1.4</AvaloniaVersion>
-    <ArcVersion>1.0.0</ArcVersion>
-    <PiVersion>1.5.0</PiVersion>
+    <AvaloniaVersion>12.1.6</AvaloniaVersion>
+    <ArcVersion>1.1.0-preview.7</ArcVersion>
+    <PiVersion>1.5.2</PiVersion>
 
     <!-- 应用版本的唯一来源：界面从程序集读，发版只改这一处 -->
     <Version>1.0.2</Version>
