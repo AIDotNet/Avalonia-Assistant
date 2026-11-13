@@ -1485,8 +1485,13 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
                 assistant!.Resume();
             }
 
+            // 两个分支都保证条目已建好：收窄成非空别名，后面几百行事件处理不必逐个判空。
+            // catch / finally 可能在初始化完成前进入，那里仍用可为 null 的 assistantEntry。
+            ChatEntry entry = assistantEntry
+                ?? throw new InvalidOperationException("助手条目未初始化");
+
             // 记下这一轮的落点：关窗时用它把已经流出来的半截回复同步写进存档
-            _activeEntry = assistantEntry;
+            _activeEntry = entry;
             _activeAssistant = assistant;
 
             // addUserMessage=false（重试）时，最后一条也是这次要重发的 user，一并排除；
@@ -1534,7 +1539,7 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
 
                     case AgentStreamEvent.ToolStarted toolStarted:
                     {
-                        assistantEntry.ToolCalls.Add(new ToolCallRecord
+                        entry.ToolCalls.Add(new ToolCallRecord
                         {
                             Id = toolStarted.CallId,
                             Name = toolStarted.Name,
@@ -1545,7 +1550,7 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
                         // 计划不是一次工具调用，是给用户看的进度：不占一行工具卡，直接换成清单
                         if (string.Equals(toolStarted.Name, PlanToolName, StringComparison.Ordinal))
                         {
-                            ApplyPlan(assistant, assistantEntry, toolStarted.Arguments);
+                            ApplyPlan(assistant, entry, toolStarted.Arguments);
                             StatusText = "正在更新计划…";
                             break;
                         }
@@ -1568,7 +1573,7 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
                         var tool = assistant.Tools.FirstOrDefault(item => item.Id == toolFinished.CallId);
                         tool?.Finish(toolFinished.Result, toolFinished.IsError, toolFinished.DurationMs);
 
-                        var record = assistantEntry.ToolCalls.FirstOrDefault(item => item.Id == toolFinished.CallId);
+                        var record = entry.ToolCalls.FirstOrDefault(item => item.Id == toolFinished.CallId);
                         if (record is not null)
                         {
                             record.Result = toolFinished.Result;
@@ -1583,11 +1588,7 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
 
                     // 文件改动由运行时采集好送上来，界面只负责记下来给面板显示
                     case AgentStreamEvent.FileChanged fileChanged:
-                        if (assistantEntry is not null)
-                        {
-                            AddArtifact(fileChanged.Change, assistantEntry);
-                        }
-
+                        AddArtifact(fileChanged.Change, entry);
                         break;
 
                     case AgentStreamEvent.RunCompleted completed:
@@ -1597,13 +1598,13 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
                         assistant.InputTokens = completed.InputTokens;
                         assistant.OutputTokens = completed.OutputTokens;
                         ContextTokens = completed.InputTokens + completed.OutputTokens;
-                        assistantEntry.Model = assistant.Model;
-                        assistantEntry.InputTokens = completed.InputTokens;
-                        assistantEntry.OutputTokens = completed.OutputTokens;
+                        entry.Model = assistant.Model;
+                        entry.InputTokens = completed.InputTokens;
+                        entry.OutputTokens = completed.OutputTokens;
 
                         if (!string.IsNullOrWhiteSpace(completed.Error))
                         {
-                            SetError(assistant, assistantEntry, completed.Error);
+                            SetError(assistant, entry, completed.Error);
                             failed = true;
                         }
 
@@ -1611,18 +1612,18 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
                         {
                             // 用户按停不是故障：走中性提示，不套危险色。
                             assistant.IsStopped = true;
-                            assistantEntry.Stopped = true;
+                            entry.Stopped = true;
                         }
                         else if (completed.StopReason == AgentStopReason.Length)
                         {
-                            SetError(assistant, assistantEntry, "回复达到长度上限，已截断。");
+                            SetError(assistant, entry, "回复达到长度上限，已截断。");
                         }
 
                         break;
                     }
 
                     case AgentStreamEvent.RunFailed runFailed:
-                        SetError(assistant, assistantEntry, runFailed.Message);
+                        SetError(assistant, entry, runFailed.Message);
                         failed = true;
                         StatusText = "运行失败";
                         break;
