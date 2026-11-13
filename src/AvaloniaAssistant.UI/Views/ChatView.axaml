@@ -141,7 +141,7 @@
                             MinHeight="66"
                             MaxHeight="220"
                             FontSize="13"
-                            Watermark="改完按「保存并重发」" />
+                            Placeholder="改完按「保存并重发」" />
               <TextBlock Text="保存后，这句之后的对话会被删掉并重新回答。"
                          Classes="caption"
                          FontSize="10" />

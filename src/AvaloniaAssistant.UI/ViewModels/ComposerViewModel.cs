@@ -978,7 +978,7 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
 
             try
             {
-                stored.Save(path);
+                stored.Save(path, PngBitmapEncoderOptions.Default);
             }
             finally
             {
