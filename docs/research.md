@@ -1,8 +1,33 @@
 # 两个参考项目的调研结论
 
-调研对象是本机的两个仓库，同时也核对了它们发布到 NuGet 的包：
+## 0. 版本快照与当前状态（2026-11-14 补注）
 
-| 项目 | 本地路径 | 本次使用方式 | 版本 |
+本文写于 2026-10 首次集成时。下面的版本号、装配代码和部分选型结论已经随上游演进变化，
+保留原文是为了记下当时踩过的坑；**当前状态以 [README](../README.md) 和
+[架构文档](architecture.md) 为准**。
+
+| 项目 | 调研时 | 当前（2026-11-14） |
+| --- | --- | --- |
+| pi.net | 1.4.4，只取 `Pi.Agent` | **1.5.2**，改用 `Pi.CodingAgent` 的 `Sdk.CreateAgentSessionAsync` 装配完整 `AgentSession` |
+| TKCode.Arc | 0.3.1-preview.3（AtomUI 生态） | **1.1.0 正式版**，自带控件体系，不再引用 `AtomUI.Desktop.Controls` |
+| Avalonia | 12.1.4 | 12.1.6 |
+| CommunityToolkit.Mvvm | 8.4.0 | 8.4.2 |
+
+几处最容易误导的地方：
+
+- §1.3「为什么只选 `Pi.Agent`」**已被推翻**：现在技能、MCP、扩展、上下文压缩、自动重试
+  都由 CodingAgent 的 `AgentSession` 带着，本项目只在它外面串一层三档权限与授权卡。
+- §2.1 的依赖表、§2.2 的启动代码只对应 Arc 0.x；当前初始化是
+  `.WithArcFonts().UseArc(arc => arc.UseArcControls())`。
+- §2.3 的三个坑里，XAML 命名空间与图标数量差异仍值得看，标准控件无主题也仍成立
+  （输入框继续用 Arc 的 `Input` / `Textarea`）。
+- §3 末尾的项目引用关系以 README「分层与解耦」一节为准。
+
+## 调研对象
+
+调研对象是本机的两个仓库，同时也核对了它们发布到 NuGet 的包（**下表是调研当时的版本**）：
+
+| 项目 | 本地路径 | 本次使用方式 | 调研时版本 |
 | --- | --- | --- | --- |
 | pi.net | `D:\AI\参考项目\pi.net` | NuGet 包 `Pi.CodingAgent`（传递引入 `Pi.Agent`、`Pi.Ai`、`Pi.Mcp`） | 1.4.4 |
 | TKCode.Arc | `D:\AI\参考项目\TKCode.Arc` | NuGet 包 `TKCode.Arc`、`TKCode.Arc.Fonts` | 0.3.1-preview.3 |
@@ -82,7 +107,12 @@ new AgentTool(
 `agent.Prompt(text)` 在整轮（含工具调用轮次）跑完后才返回；`agent.Abort()` 可中止；
 `agent.Messages` 是完整 transcript。
 
-### 1.3 为什么只选 `Pi.Agent`
+### 1.3 为什么只选 `Pi.Agent`（历史结论，现已推翻）
+
+> **2026-11-14 补注**：现在用的是 `Pi.CodingAgent` 的 `Sdk.CreateAgentSessionAsync`，
+> 技能、MCP、扩展、上下文压缩、自动重试都由 `AgentSession` 带着；三档权限仍是本项目在
+> `BeforeToolCall` 外面自己串的一层（`PiAgentRuntime.InstallPermissionHook`），provider 配置也仍是自己的。
+> 下面只记录当时的选型理由。
 
 `Pi.CodingAgent` 自带 read/bash/edit/write、技能、扩展、会话存档、模型目录和 CLI。
 这些能力很强，但会把本项目的工具集、权限模型和会话格式绑死在它的实现上。
@@ -107,7 +137,7 @@ new AgentTool(
 
 ### 2.1 结构
 
-Arc 是 AtomUI 之上的 Arc 风格组件库，依赖版本是精确锁定的：
+Arc 0.x 是 AtomUI 之上的 Arc 风格组件库，依赖版本当时是精确锁定的（**下表只对 0.x 有效**）：
 
 | 依赖 | 版本 |
 | --- | --- |
@@ -141,6 +171,20 @@ AppBuilder.Configure<AssistantApp>()
 
 `UseArc()` 会把 Arc 的 ControlTheme 注册进 AtomUI 的主题系统；
 `UseAtomUI` 之后**不需要**再手动 `StyleInclude` Arc 的主题。
+
+> **2026-11-14 补注**：上面是 Arc 0.x 的写法。1.x 起 Arc 自带控件体系，
+> 「两个核心框架」不再经 `UseAtomUI`，当前 `Program.BuildAvaloniaApp()` 是：
+>
+> ```csharp
+> AppBuilder.Configure<AssistantApp>()
+>     .UsePlatformDetect()
+>     .WithInterFont()
+>     .WithArcFonts()
+>     .UseArc(arc => arc.UseArcControls())
+>     .LogToTrace();
+> ```
+>
+> `UseArcControls()` 一次装好控件与主题，同样不需要手动 `StyleInclude`。
 
 ### 2.3 包与本地源码的三个差异（踩过的坑）
 
@@ -199,6 +243,8 @@ Desktop ──► UI ───────┐
    └──► Speech ───────┘
 ```
 
-- `AvaloniaAssistant.UI` 只引用 `Abstractions`，**不引用** `Pi.Agent`；
-- `AvaloniaAssistant.Agent` 只引用 `Abstractions` + `Pi.Agent`，**不引用** Avalonia；
+- `AvaloniaAssistant.UI` 只引用 `Abstractions`（外加 `Storage`），**不引用** `Pi.*`；
+- `AvaloniaAssistant.Agent` 只引用 `Abstractions` + `Pi.*`，**不引用** Avalonia；
 - `AvaloniaAssistant.Desktop` 是唯一同时认识两边的项目，负责组装。
+
+> 上图是当时的简化版；当前以 README「分层与解耦」为准（`Storage` / `Speech` 也挂在 `Abstractions` 之下）。

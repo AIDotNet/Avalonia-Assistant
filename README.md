@@ -10,6 +10,9 @@ Windows 桌面 AI 助理。Agent 循环用 [pi.net](https://github.com/AIDotNet/
 
 - **流式对话**：DeepSeek / OpenAI / Anthropic / 任意 OpenAI 兼容端点（Ollama、LM Studio、vLLM、One-API）。
 - **真的会动手**：自建 8 个日常办公 / 编码工具 + CodingAgent 内置的 read / grep / find / ls / edit。
+- **三个市场**：技能页搜 [skills.sh](https://skills.sh) 一键装技能（交给官方 CLI 解析仓库里那层任意路径，
+  再把整目录拷进技能目录）、MCP 页搜 ModelScope 的服务列表（不可用时退回抓 mcp.so 目录）、
+  插件页搜 npm 上的 `pi-package`；三个管理页都改成选项卡，把「本机已有」和「市场里的」分开摆。
 - **技能与 MCP**：工作区 `.pi/skills` 的 `SKILL.md` 按需加载，技能页可从文件夹或 zip 导入；
   `.pi/mcp.json` 的 MCP 服务端启动时连接。
 - **@ 直接引用文件**：输入框打 `@` 按名字搜当前工作区的文件——文件名精确 > 前缀 > 包含 > 路径 > 字符子序列，
@@ -53,16 +56,20 @@ Windows 桌面 AI 助理。Agent 循环用 [pi.net](https://github.com/AIDotNet/
   审批卡支持 Ctrl+Enter 允许一次、Ctrl+Shift+Enter 本会话允许、Esc 拒绝。
 - **Markdown**：标题、列表、表格、行内代码、代码块高亮。
 - **语音输入**：NAudio 录音 + `/audio/transcriptions` 转写（端点需支持）。
-- **技能页**：卡片式浏览，按分类筛选、关键词搜索，开关与导入都持久化。
-- **MCP 页**：列出 `mcp.json` 里的服务端，并**真的起一次进程握手**——已连接会给出工具数，
-  起不来会给出原因（Windows 上 `npx` 少了 `cmd /c` 包装在这里就能看见），每张卡可重试。
+- **技能页**：分「技能 / 技能市场」两栏——已装的卡片式浏览、按分类筛选、关键词搜索，
+  开关与文件夹 / zip 导入都持久化；市场搜 skills.sh（列表没有描述，逐条从详情页的
+  `<meta name="description">` 补）；插件注册的工具在技能页下方单独列一段，可逐个关掉。
+- **MCP 页**：分「服务端 / 市场」两栏。服务端列出 `mcp.json` 里的配置，并**真的起一次进程握手**——
+  已连接会给出工具数，起不来会给出原因（Windows 上 `npx` 少了 `cmd /c` 包装在这里就能看见），每张卡可重试。
   整段粘贴标准 JSON（`mcpServers` / VS Code 的 `servers` 写法）就能一次导入多个，也能从现成的
-  `mcp.json` 文件读进来；只加一个 stdio 服务端时用表单。
+  `mcp.json` 文件读进来；只加一个 stdio 服务端时用表单。市场走 ModelScope 的 MCP 服务接口，
+  接口不可用时退回抓 mcp.so 的目录页。
 - **插件市场**：装的是 pi 自己的包——一个包可以同时带扩展、技能、提示词和主题。搜 npm 上的
   `pi-package`（和 pi 官方 gallery 同一份来源，分页加载），也可以手动填包名 / `npm:` 版本 / `git:` 地址 /
   本地目录；装用户级还是当前工作区（项目级）由页面上的开关决定。已装的能**停用**（包留在 `settings.json`，
   pi 不再加载它的资源）、能**检查更新并升级**、能一键卸载；扩展目录里手工放的 `.ts` / `.js` / `.dll`
-  也一并列出。升级到 pi.net 1.4.5 之后，上游的 TypeScript 扩展由进程内 JS 宿主直接加载，不用先编译成程序集。
+  也一并列出。pi.net 的进程内 JS 宿主（1.4.5 引入，当前依赖 1.5.2）直接加载 TypeScript 扩展，
+  不用先编译成程序集。
   插件注册的工具会进会话，并在「技能」页单独列出来、可以逐个关掉；它们没有本地元数据，按「会改本机」对待——
   只读模式不执行，其它模式逐次确认（和 MCP 工具同一套策略）。
   安装走本机 npm，默认源是 `registry.npmmirror.com`（设置 → 系统设置里可改）；npm/git 子进程会隐藏控制台窗口，
@@ -85,12 +92,13 @@ Windows 桌面 AI 助理。Agent 循环用 [pi.net](https://github.com/AIDotNet/
 
 | 层 | 框架 | 引用包 | 版本 |
 | --- | --- | --- | --- |
-| UI 框架 | [TKCode.Arc](https://github.com/AIDotNet/TKCode.Arc)（AtomUI 生态） | `TKCode.Arc`、`TKCode.Arc.Fonts` | 0.3.1-preview.3 |
-| Agent 框架 | [pi.net](https://github.com/AIDotNet/pi.net)（Pi 的 .NET 移植） | `Pi.CodingAgent`（传递引入 `Pi.Agent` / `Pi.Ai` / `Pi.Mcp` 等） | 1.4.5 |
+| UI 框架 | [TKCode.Arc](https://github.com/AIDotNet/TKCode.Arc)（Arc 控件库） | `TKCode.Arc`、`TKCode.Arc.Fonts` | 1.1.0 |
+| Agent 框架 | [pi.net](https://github.com/AIDotNet/pi.net)（Pi 的 .NET 移植） | `Pi.CodingAgent`（传递引入 `Pi.Agent` / `Pi.Ai` / `Pi.Mcp` 等） | 1.5.2 |
 
 - **TKCode.Arc 负责界面**：控件、主题、图标字体全部来自 Arc，入口在 `Program.BuildAvaloniaApp`
-  里一次装好——`WithArcFonts()` 加 `UseAtomUI(b => b.UseDesktopControls().UseArc())`，
-  页面、样式、VM 都在 `AvaloniaAssistant.UI`。
+  里一次装好——`WithArcFonts()` 加 `UseArc(arc => arc.UseArcControls())`，
+  页面、样式、VM 都在 `AvaloniaAssistant.UI`。Arc 1.x 起自带控件体系，
+  不再单独引用 `AtomUI.Desktop.Controls`。
 - **pi.net 负责 Agent**：`Sdk.CreateAgentSessionAsync` 装配出 `AgentSession`，技能、MCP、
   上下文压缩、自动重试都由它带着；模型出入仍由本项目自己的 provider 设置决定，
   通过 `ProviderConfigInput.StreamSimple` 直连 `Pi.Ai` 的流式实现，不读 `~/.pi/agent/auth.json`。
@@ -100,18 +108,21 @@ Windows 桌面 AI 助理。Agent 循环用 [pi.net](https://github.com/AIDotNet/
 - **两边只在一个地方碰面**：`AvaloniaAssistant.Desktop` 这个组合根。`UI` 不引用 `Pi.*`，
   `Agent` 不引用 Avalonia，换掉其中任何一个都不用动另一边。
 
-两个包都直接走 NuGet，不依赖本机参考仓库路径。Arc 包与本地源码的命名空间差异
-（`AtomUICommunity` vs `AIDotNet`）及踩坑记录见 [docs/research.md](docs/research.md)。
+两个包都直接走 NuGet，不依赖本机参考仓库路径。早期集成时 Arc 包与本地源码的命名空间差异
+（`AtomUICommunity` vs `AIDotNet`）及踩坑记录见 [docs/research.md](docs/research.md)——
+那段记录对应 Arc 0.x，当前 1.x 统一用 `TKCode.Arc` 命名空间与 `UseArcControls()`。
 
 ## 其余技术栈
 
 | 层 | 选型 | 版本 |
 | --- | --- | --- |
-| 运行时 | .NET | 10.0（`net10.0`） |
-| 基础 UI | Avalonia | 12.1.4 |
-| 控件库 | AtomUI.Desktop.Controls（Arc 依赖） | 6.2.8 |
-| MVVM | CommunityToolkit.Mvvm | 8.4.0 |
+| 运行时 | .NET | 10.0（`net10.0`，SDK 10.0.401 验证） |
+| 基础 UI | Avalonia | 12.1.6 |
+| 控件库 | Arc `UseArcControls()`（随 `TKCode.Arc`，不再单独引用 AtomUI） | 1.1.0 |
+| MVVM | CommunityToolkit.Mvvm | 8.4.2 |
 | 语音 | NAudio | 2.2.1 |
+| 办公文档 | DocumentFormat.OpenXml / PdfPig | 3.5.1 / 0.1.16 |
+| 测试 | xunit / Microsoft.NET.Test.Sdk | 2.9.3 / 18.11.0 |
 
 ## 快速开始
 
@@ -162,7 +173,7 @@ dotnet run --project src/AvaloniaAssistant.Desktop
 dotnet publish src/AvaloniaAssistant.Desktop -c Release -r win-x64 --self-contained false
 ```
 
-自包含单文件（一个 exe，双击就跑，约 82 MB）：
+自包含单文件（一个 exe，双击就跑，80 MB 量级，具体随依赖版本浮动）：
 
 ```bash
 dotnet publish src/AvaloniaAssistant.Desktop -c Release -r win-x64 --self-contained true \
@@ -178,7 +189,7 @@ dotnet publish src/AvaloniaAssistant.Desktop -c Release -r win-x64 --self-contai
 - `IncludeNativeLibrariesForSelfExtract` —— Avalonia / SkiaSharp / HarfBuzz 的 native 库得一起塞进去
 - `IncludeAllContentForSelfExtract` —— `Pi.CodingAgent` 带了一批内容文件（导出模板、schema、主题），
   不加这个它们会散落在 exe 旁边，变成「exe + Assets 目录」
-- `EnableCompressionInSingleFile` —— 压到 82 MB，不压约 150 MB
+- `EnableCompressionInSingleFile` —— 压到 80 MB 量级，不压约 150 MB
 
 产物目录里只有一个 `AvaloniaAssistant.exe`：native 库的 pdb（`libSkiaSharp.pdb` 就有 96 MB）
 在 `Desktop.csproj` 里被 `DropPdbsFromPublish` 排掉了。
@@ -197,28 +208,36 @@ Avalonia-Assistant/
 │   │   ├── IAssistantRuntime.cs          # 运行时、授权、会话、设置、语音接口
 │   │   ├── AgentContracts.cs             # 事件、模型、工具描述、运行请求
 │   │   ├── ChatSession.cs                # 会话 / 消息 / 工具调用 DTO
-│   │   └── AssistantSettings.cs          # 设置、provider 预设、权限
+│   │   ├── AssistantSettings.cs          # 设置、provider 预设、权限、npm 镜像
+│   │   ├── AgentPlugins.cs               # 插件 / 市场 DTO 与 IPluginStore 契约
+│   │   ├── AgentSkills.cs                # 技能市场 DTO 与 ISkillMarket 契约
+│   │   └── McpMarket.cs                  # MCP 市场 DTO 与 IMcpMarket 契约
 │   ├── AvaloniaAssistant.Agent/          # 唯一认识 pi.net 的项目
 │   │   ├── PiAgentRuntime.cs             # 会话缓存、事件映射、权限钩子、abort
 │   │   ├── CodingSessionFactory.cs       # ModelRuntime + Sdk 装配（技能 / MCP / 内置扩展）
 │   │   ├── CapabilityScanner.cs          # 扫 .pi/skills 与 mcp.json，供界面展示
-│   │   ├── ToolAccess.cs                 # 内置 / MCP 工具的安全属性判定
+│   │   ├── PiPluginStore.cs              # pi 包安装 / 停用 / 升级 / 卸载 + npm 市场搜索
+│   │   ├── PiPackageCommandRunner.cs     # npm / git 子进程（镜像、干净环境、隐藏窗口）
+│   │   ├── SkillMarketStore.cs           # skills.sh 搜索与安装
+│   │   ├── McpMarketStore.cs             # ModelScope 接口 + mcp.so 目录兜底
+│   │   ├── ToolAccess.cs                 # 内置 / MCP / 插件工具的安全属性判定
 │   │   ├── PiStreamFactory.cs            # 测试可替换的 OpenAI / Anthropic 流式入口
 │   │   ├── AgentToolRegistry.cs          # 自建工具清单 → ToolDefinition
-│   │   └── Tools/                        # 5 个自建工具（读 / 列 / 搜走 CodingAgent 内置）
+│   │   └── Tools/                        # 8 个自建工具（读 / 列 / 搜走 CodingAgent 内置）
 │   ├── AvaloniaAssistant.Storage/        # settings.json / sessions/*.json / 技能导入
 │   ├── AvaloniaAssistant.Speech/         # NAudio 录音 + 转写
 │   ├── AvaloniaAssistant.UI/             # 窗口、页面、VM、样式
-│   │   ├── Views/                        # MainWindow / Sidebar / Home / Chat / Tools / Mcp / Settings
-│   │   ├── ViewModels/                   # 命令、会话状态、消息 VM
+│   │   ├── Views/                        # MainWindow / Sidebar / Home / Chat / Tools / Mcp / Plugins / Settings
+│   │   ├── ViewModels/                   # 命令、会话状态、消息 VM、三个市场的 VM
 │   │   └── Styles/                       # Tokens.axaml / AppStyles.axaml
 │   └── AvaloniaAssistant.Desktop/        # 入口、DI、Arc 初始化
-├── tests/AvaloniaAssistant.Agent.Tests/  # 171 个测试
+├── tests/AvaloniaAssistant.Agent.Tests/  # 228 个测试
 └── docs/
     ├── research.md               # 两个参考项目的结构与集成方式
     ├── migration.md              # 旧功能逐项盘点与取舍
     ├── architecture.md           # 分层、时序、权限、扩展点
-    └── images/                   # README 截图
+    ├── ux-review-*.md            # 三轮交互评审记录
+    └── images/                   # README 截图（含 plugins.png / plugin-tools.png）
 ```
 
 ## 分层与解耦
@@ -236,9 +255,9 @@ UI ──► Abstractions ◄── Agent ──► Pi.CodingAgent ──► Pi.
 想换 Agent 框架：实现 `IAssistantRuntime` 并在 `Program.cs` 替换注册。
 想换 UI：`Agent` / `Storage` 不变。详见 [docs/architecture.md](docs/architecture.md)。
 
-## 技能与 MCP
+## 技能、MCP 与插件
 
-两者都按 CodingAgent 的目录约定发现，不需要写代码：
+技能与 MCP 都按 CodingAgent 的目录约定发现，不需要写代码：
 
 ```
 <工作区>/.pi/
@@ -283,6 +302,12 @@ macOS / Linux 直接写 `npx`。
   `url` / `cwd` 都不动），只做三件事：缺 `exposure` 补 `direct`、`npx` 这类命令补 Windows 启动层、
   校验能起得来；同名默认跳过，勾「覆盖同名」才替换。JSON 里的尾逗号和注释会被容忍。
 
+三个市场的安装结果也落回同一套目录：技能市场把官方 CLI 拉下来的整目录拷进技能目录；
+插件市场把源写进 `settings.json` 的 `packages`（用户级 `~/.pi/agent/settings.json`，
+项目级 `<工作区>/.pi/settings.json`），包本身装到 `~/.pi/agent/npm`；
+MCP 市场把服务端配置写进 `mcp.json`。手工放进 `extensions/` 的 `.ts` / `.js` / `.dll`
+不走包管理器，也会出现在插件页的清单里。新装的资源在下一次会话加载。
+
 ## 内置工具
 
 工具分两拨，但同一件事只留一个实现：读文件、列目录、搜内容交给 CodingAgent 的内置工具，
@@ -322,10 +347,10 @@ CodingAgent 提供的内置工具（`tools` allowlist 里固定启用）：
 ## 测试
 
 ```bash
-dotnet test tests/AvaloniaAssistant.Agent.Tests
+dotnet test Avalonia.Assistant.slnx
 ```
 
-覆盖：
+228 个测试，覆盖：
 
 - Faux 模型驱动的完整 agent 循环与工具调用；
 - 只读模式拦截、授权拒绝、缺 API Key；
@@ -337,7 +362,10 @@ dotnet test tests/AvaloniaAssistant.Agent.Tests
 - 技能导入：文件夹与 zip（外层目录、根级 `SKILL.md`、缺清单、多技能、重名）各走一遍；
 - settings / session 的 JSON 往返；
 - 文档往返：Markdown 写成 docx / xlsx 再读回来，标题层级、表格、项目符号、代码块都得对得上；
-- 行级 diff 与计划文本解析：新增 / 删除行数、上下文折叠、大文件降级、三种步骤状态。
+- 行级 diff 与计划文本解析：新增 / 删除行数、上下文折叠、大文件降级、三种步骤状态；
+- 插件市场：npm 镜像与干净进程环境、用户级 / 项目级安装、TypeScript 扩展由进程内 JS 宿主加载、
+  插件工具进 allowlist，以及一遍真实的「安装 → 注册工具 → 分发 → 审批 → JS 执行」端到端链路；
+- 设置项往返：`NpmRegistry` 等新字段的克隆与持久化。
 
 ## 截图模式
 
@@ -348,9 +376,13 @@ dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --pag
 dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --page chat
 dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --page settings
 dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --page tools
+dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --page mcp
+dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --page plugins
 ```
 
 `--page chat` 会加载一份内存里的示例会话（不写入 `sessions/`），用来检查消息、工具卡、表格渲染。
+`mcp` / `plugins` / `tools` 三页的默认等待时间不同（9s / 5s / 11s）——MCP 要真起进程握手、
+插件市场要等 npm 回来、技能页要真加载一次扩展，太早截会拍到「检测中…」；可以用 `--wait <毫秒>` 覆盖。
 
 界面绑定错误不会让编译失败，只会在运行期静默失效。排查时加上环境变量，把 Warning 以上的
 Avalonia 日志（含 `[Warning/Binding]`）打到控制台：
@@ -411,6 +443,21 @@ dotnet run --project src/AvaloniaAssistant.Desktop -- --drop-probe "D:/some/文�
 dotnet run --project src/AvaloniaAssistant.Desktop -- --data-dir .tmp/verify
 ```
 
+插件页自己也有一组验收参数，和界面上点的是同一条命令：
+
+```bash
+# 搜索 npm 市场（pi-package 关键词）
+dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --page plugins --plugin-search memory
+
+# 展开「手动安装」表单 / 翻到安装确认态 / 检查已装包的更新
+dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --page plugins --plugin-manual
+dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --page plugins --plugin-confirm
+dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --page plugins --plugin-check-updates
+```
+
+`--plugin-install <包名 / git: 地址 / 本地目录>` 会**真的执行一次安装**（和点「安装」完全同一条命令），
+只配合 `--data-dir` 的隔离目录用；加 `--plugin-confirm` 只是把市场第一条摆成确认态，不会真装。
+
 还提供一个开发用的自动发送参数，用来跑真实的端到端链路：
 
 ```bash
@@ -423,20 +470,30 @@ dotnet run --project src/AvaloniaAssistant.Desktop -- --run "用三句话介绍�
 
 ```
 %APPDATA%\AvaloniaAssistant\
-├── settings.json
+├── settings.json               # 本应用设置（模型、权限、npm 镜像…）
 ├── sessions\<session-id>.json
+├── images\                     # 粘贴的图片
 └── Workspace\                  # 默认工作区
+
+~/.pi/agent/
+├── settings.json               # pi 的包清单 packages / 禁用工具（插件市场写这里）
+├── npm\                        # 插件包装到这儿
+├── extensions\                 # 手工放置的 .ts / .js / .dll 扩展
+├── skills\<名称>\SKILL.md      # 全局技能
+└── mcp.json                    # 全局 MCP 服务端
 ```
 
-删除 `sessions\` 下的文件即可清空对应会话。设置页有「打开数据目录」。
+删除 `sessions\` 下的文件即可清空对应会话。设置页有「打开数据目录」；
+插件页的「用户级 / 项目级」开关决定写 `~/.pi/agent/settings.json` 还是当前工作区的 `.pi/settings.json`。
 
 ## 已知边界
 
 - **API Key 明文保存**在 `settings.json`，目前没有接 DPAPI；不要在共享机器上使用生产密钥。
 - **语音转写依赖端点**支持 `/audio/transcriptions`；DeepSeek 官方端点不支持，会给出错误提示。
 - **MCP 工具要写 `exposure: "direct"`**：不写就只有 codemode / tool_search 能碰到，模型直接调不到。
-- **插件工具的 JS 宿主还有两处毛边**（pi.net 1.4.5）：`fs` 读不存在的文件时抛的是 .NET 异常，JS 的
-  `try/catch` 接不住（`pi-memory` 首次写入就会踩到，先建好 `~/.pi/agent/memory/MEMORY.md` 可绕开）；
+- **插件工具的 JS 宿主还有两处毛边**（pi.net 的进程内 JS 宿主，1.4.5 引入，当前依赖 1.5.2）：
+  `fs` 读不存在的文件时抛的是 .NET 异常，JS 的 `try/catch` 接不住
+  （`pi-memory` 首次写入就会踩到，先建好 `~/.pi/agent/memory/MEMORY.md` 可绕开）；
   插件在 `session_start` 之后**动态注册**的工具不会被 allowlist 收进来。两处都要上游修。
 - **有插件装了但跑不起来是正常的**：JS 宿主只实现了一部分 `node:*` 模块，比如 `pi-web-access` 的
   `dist/index.js` 一进来就 `require("node:async_hooks")`，宿主没有这个 shim，加载直接失败。
@@ -456,7 +513,11 @@ dotnet run --project src/AvaloniaAssistant.Desktop -- --run "用三句话介绍�
   所以宁可报错让人先出 docx 大纲。旧版 .doc / .xls / .ppt 是二进制格式，读不了。
 - **提示只有任务栏闪烁和提示音**：没做托盘图标和系统通知，那需要注册 AUMID，
   为一个提醒引入这套东西不划算；应用完全退出后也不会有任何提醒。
-- **没有定时任务 / 专家市场**：导航里暂未提供入口，避免假按钮；扩展点见架构文档。
+- **三个市场都依赖外部来源**：技能市场读 skills.sh、MCP 市场读 ModelScope（兜底 mcp.so）、
+  插件市场读 npm registry；断网或对方改接口时只会得到空列表或失败提示，不做本地缓存。
+  装进来的上游包按「别人写的代码」对待，兼容性不保证（技能页会明确写出加载失败的原因）。
+- **没有定时任务 / 专家市场**：导航里暂未提供入口，避免假按钮；插件、技能、MCP 三个市场已有入口，
+  扩展点见架构文档。
 - **Windows 优先**：代码里对 macOS/Linux 的路径和 shell 做了分支，但只在 Windows 上验证过。
 
 ## 文档
@@ -464,6 +525,7 @@ dotnet run --project src/AvaloniaAssistant.Desktop -- --run "用三句话介绍�
 - [两个参考项目的调研与集成结论](docs/research.md)
 - [旧项目功能盘点与迁移决定](docs/migration.md)
 - [架构、时序、权限与扩展点](docs/architecture.md)
+- [交互评审记录](docs/ux-review-interaction.md)、[细节篇](docs/ux-review-detail-interactions.md)、[第三轮](docs/ux-review-round3.md)
 
 ## 许可证
 
