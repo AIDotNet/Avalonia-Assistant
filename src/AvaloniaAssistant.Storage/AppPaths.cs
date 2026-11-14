@@ -1,6 +1,7 @@
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using AvaloniaAssistant.Abstractions;
 
 namespace AvaloniaAssistant.Storage;
 
@@ -46,10 +47,15 @@ public static class AppPaths
 
 public static class AssistantJson
 {
-    public static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web)
-    {
-        WriteIndented = true,
-        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-        Converters = { new JsonStringEnumConverter() },
-    };
+    /// <summary>
+    /// AOT 下由 <see cref="AssistantAotJson.Configure"/> 把 source-gen 上下文放到解析器链首；
+    /// JIT 下这层是空操作，options 与改造前逐项一致。
+    /// </summary>
+    public static readonly JsonSerializerOptions Options = AssistantAotJson.Configure(
+        new JsonSerializerOptions(JsonSerializerDefaults.Web)
+        {
+            WriteIndented = true,
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+            Converters = { new JsonStringEnumConverter() },
+        });
 }

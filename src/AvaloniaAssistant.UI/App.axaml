@@ -35,5 +35,8 @@
     <DataTemplate DataType="{x:Type vm:PluginsViewModel}">
       <views:PluginsView />
     </DataTemplate>
+    <DataTemplate DataType="{x:Type vm:WorkbenchViewModel}">
+      <views:WorkbenchView />
+    </DataTemplate>
   </Application.DataTemplates>
 </Application>

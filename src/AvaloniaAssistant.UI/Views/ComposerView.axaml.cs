@@ -678,6 +678,158 @@ public partial class ComposerView : UserControl
         await ViewModel.SetPermissionAsync(mode);
     }
 
+    /// <summary>
+    /// WorkBuddy 的「工作模式」入口：执行 / 计划 / 仅问答。沿用权限浮层那套自绘卡片——
+    /// 原生 MenuFlyout 在这套主题里量出来是 0×0，塞不下说明文字。
+    /// </summary>
+    private void OnWorkStyleClick(object? sender, RoutedEventArgs e)
+    {
+        var viewModel = ViewModel;
+        if (viewModel is null || sender is not Control target)
+        {
+            return;
+        }
+
+        if (_workStyleFlyout is { IsOpen: true })
+        {
+            _workStyleFlyout.Hide();
+            return;
+        }
+
+        _workStyleFlyout?.Hide();
+        _workStyleFlyout = BuildWorkStyleFlyout(viewModel);
+        FlyoutDismiss.Show(_workStyleFlyout, target);
+    }
+
+    private Flyout? _workStyleFlyout;
+
+    /// <summary>开发用：真的打开工作模式浮层，供 --screenshot 验收版式。</summary>
+    public Flyout? ShowWorkStyleFlyout()
+    {
+        if (ViewModel is null || this.FindControl<Button>("WorkStyleButton") is not { } target)
+        {
+            return null;
+        }
+
+        _workStyleFlyout?.Hide();
+        _workStyleFlyout = BuildWorkStyleFlyout(ViewModel);
+        FlyoutDismiss.Show(_workStyleFlyout, target);
+        return _workStyleFlyout;
+    }
+
+    private Flyout BuildWorkStyleFlyout(ComposerViewModel viewModel)
+    {
+        var stack = new StackPanel { Width = 292, Spacing = 9 };
+
+        stack.Children.Add(new TextBlock
+        {
+            Text = "工作模式",
+            FontSize = 12.5,
+            FontWeight = FontWeight.SemiBold,
+            Foreground = ThemeBrush("TextPrimaryBrush", Brushes.Black),
+        });
+
+        stack.Children.Add(new TextBlock
+        {
+            Text = "决定这一轮怎么干：直接执行、先出计划、还是只回答不动手。切换后下一轮生效。",
+            FontSize = 11.5,
+            LineHeight = 17,
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = ThemeBrush("TextSecondaryBrush", Brushes.Gray),
+        });
+
+        stack.Children.Add(new Border
+        {
+            Height = 1,
+            Margin = new Thickness(0, 2),
+            Background = ThemeBrush("BorderBrush", Brushes.Gainsboro),
+        });
+
+        stack.Children.Add(BuildWorkStyleOption(viewModel, WorkStyleText.Craft, "执行", "直接干活，边做边给结果"));
+        stack.Children.Add(BuildWorkStyleOption(viewModel, WorkStyleText.Plan, "计划", "先出分步计划，等你确认再执行"));
+        stack.Children.Add(BuildWorkStyleOption(viewModel, WorkStyleText.Ask, "仅问答", "只回答、读文件、做分析，不动手"));
+
+        return new Flyout
+        {
+            Placement = PlacementMode.TopEdgeAlignedLeft,
+            Content = new Border
+            {
+                Padding = new Thickness(14, 12),
+                CornerRadius = new CornerRadius(14),
+                Background = ThemeBrush("SurfaceBrush", Brushes.White),
+                BorderBrush = ThemeBrush("BorderStrongBrush", Brushes.Gainsboro),
+                BorderThickness = new Thickness(1),
+                BoxShadow = ThemeShadow("ComposerShadow"),
+                Child = stack,
+            },
+        };
+    }
+
+    private Button BuildWorkStyleOption(
+        ComposerViewModel viewModel,
+        string style,
+        string title,
+        string description)
+    {
+        var selected = string.Equals(viewModel.WorkStyle, style, StringComparison.Ordinal);
+        var grid = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("16,*,Auto"),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
+        grid.Children.Add(new TextBlock
+        {
+            Text = "✓",
+            FontSize = 12,
+            IsVisible = selected,
+            Foreground = ThemeBrush("TextPrimaryBrush", Brushes.Black),
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+
+        var texts = new StackPanel { Spacing = 1 };
+        texts.Children.Add(new TextBlock
+        {
+            Text = title,
+            FontSize = 12.5,
+            Foreground = ThemeBrush("TextPrimaryBrush", Brushes.Black),
+        });
+        texts.Children.Add(new TextBlock
+        {
+            Text = description,
+            FontSize = 11,
+            Foreground = ThemeBrush("TextMutedBrush", Brushes.Gray),
+        });
+        Grid.SetColumn(texts, 1);
+        grid.Children.Add(texts);
+
+        var button = new Button
+        {
+            Classes = { "permission-option" },
+            Content = grid,
+            Tag = style,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+        };
+        if (selected)
+        {
+            button.Classes.Add("active");
+        }
+
+        button.Click += OnWorkStyleOptionClick;
+        return button;
+    }
+
+    private async void OnWorkStyleOptionClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string style } || ViewModel is null)
+        {
+            return;
+        }
+
+        _workStyleFlyout?.Hide();
+        await ViewModel.SetWorkStyleAsync(style);
+    }
+
     private static IBrush ThemeBrush(string key, IBrush fallback)
         => Application.Current?.FindResource(key) as IBrush ?? fallback;
 

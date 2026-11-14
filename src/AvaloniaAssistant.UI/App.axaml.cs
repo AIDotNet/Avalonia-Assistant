@@ -61,6 +61,145 @@ public partial class AssistantApp : Application
         {
             await viewModel.InitializeAsync();
 
+            // 验收用：真跑一遍调度链路（到点判定 → 发起任务 → 写运行记录 → 落盘），
+            // 用隔离的临时存档和假的发起回调，不碰真实数据、不需要 API Key。
+            if (AppLaunchOptions.VerifyScheduler)
+            {
+                var directory = Path.Combine(Path.GetTempPath(), "ava-scheduler-verify", Guid.NewGuid().ToString("n"));
+                Directory.CreateDirectory(directory);
+                var store = new JsonWorkbenchStore(directory);
+                await store.LoadAsync();
+
+                var now = DateTimeOffset.Now;
+                store.Data.ScheduledTasks.Add(new ScheduledTask
+                {
+                    Name = "验证用每日任务",
+                    Prompt = "汇总一下今天的文件",
+                    Frequency = ScheduleFrequency.Daily,
+                    Hour = now.Hour,
+                    Minute = now.Minute,
+                });
+
+                var fired = 0;
+                var runner = new ScheduledTaskRunner(store, _ =>
+                {
+                    fired++;
+                    return Task.FromResult<string?>("verify-session");
+                });
+                runner.PrimeWindow(now.AddMinutes(-2));
+                await runner.CheckNowAsync();
+
+                var persisted = new JsonWorkbenchStore(directory);
+                await persisted.LoadAsync();
+                var record = persisted.Data.RunRecords.FirstOrDefault();
+                // ASCII 标签：Windows 控制台默认 GBK，中文在重定向到日志里会变成乱码，
+                // 验收输出就用可读的英文键，值照旧来自真实链路。
+                Console.WriteLine(
+                    $"[verify-scheduler] fired={fired}"
+                    + $" / runRecords={persisted.Data.RunRecords.Count}"
+                    + $" / status={(record?.Status ?? "none")}"
+                    + $" / session={(record?.SessionId ?? "none")}"
+                    + $" / stillEnabled={persisted.Data.ScheduledTasks[0].Enabled}"
+                    + $" / storedOnDisk={File.Exists(persisted.FilePath)}");
+
+                Directory.Delete(directory, recursive: true);
+                desktop.Shutdown();
+                return;
+            }
+
+            // 验收用：把「按任务绑定模型/专家/权限/项目」「专家包」「开机自启」「结果文件」
+            // 全部走一遍真实代码路径，结果用 ASCII 键打到控制台（GBK 控制台不会乱码）。
+            if (AppLaunchOptions.VerifyWorkbench)
+            {
+                var directory = Path.Combine(Path.GetTempPath(), "ava-workbench-verify", Guid.NewGuid().ToString("n"));
+                var startup = Path.Combine(directory, "startup");
+                var workspace = Path.Combine(directory, "workspace");
+                Directory.CreateDirectory(workspace);
+
+                var data = new WorkbenchData();
+                data.Projects.Add(new Project { Id = "p1", Name = "Q4", WorkspacePath = workspace });
+                data.Experts.Add(new ExpertPreset
+                {
+                    Id = "e1", Name = "weekly", Directive = "three-part-report", Enabled = true,
+                });
+                var task = new ScheduledTask
+                {
+                    Name = "verify",
+                    ProjectId = "p1",
+                    ModelProfileId = "m2",
+                    ExpertId = "e1",
+                    Permission = TaskPermissionText.FullAccess,
+                    NotifyChannel = TaskNotificationText.File,
+                    Hour = 9,
+                };
+
+                var config = TaskRunConfig.From(task, data);
+                Console.WriteLine(
+                    $"[verify-workbench] project={config.ProjectName} / workspace={config.WorkspacePath == workspace}"
+                    + $" / expertDirective={(config.ExpertDirective ?? "none")}"
+                    + $" / permission={config.Permission} / notify={config.NotifyChannel}");
+
+                // 专用模型 + 权限：派生副本，不动全局设置
+                var settings = new AssistantSettings();
+                settings.Models.Add(ModelProfile.Create(AgentProviderKind.DeepSeek, "A", usePresetDefaults: true));
+                settings.Models.Add(ModelProfile.Create(AgentProviderKind.OpenAI, "B", usePresetDefaults: true));
+                settings.NormalizeModels();
+                settings.ActivateModel(settings.Models[0].Id);
+                settings.Permission = PermissionMode.Workspace;
+                var originalId = settings.ActiveModelId;
+                var originalPermission = settings.Permission;
+
+                var overridden = RunSettingsOverride.Apply(
+                    settings, settings.Models[1].Id, PermissionMode.FullAccess);
+                Console.WriteLine(
+                    $"[verify-workbench] override modelChanged={overridden.Model != settings.Model}"
+                    + $" / permission={overridden.Permission}"
+                    + $" / globalUnchanged={settings.ActiveModelId == originalId && settings.Permission == originalPermission}"
+                    + $" / isClone={!ReferenceEquals(overridden, settings)}");
+
+                // 专家包：只收自定义、坏包不给任何东西
+                data.Experts.Add(new ExpertPreset
+                {
+                    Id = "e2", Name = "mine", Directive = "my-directive", BuiltIn = false,
+                });
+                var pack = ExpertPack.Create(data.Experts);
+                var restored = ExpertPack.Normalize(pack);
+                Console.WriteLine(
+                    $"[verify-workbench] expertPack exported={pack.Experts.Count}"
+                    + $" / restored={restored.Count} / badPack={ExpertPack.Normalize(new ExpertPack.Pack { Kind = "wrong" }).Count}");
+
+                // 开机自启：临时目录里放 / 删启动器，不碰用户真实的启动项
+                var autoStart = new AutoStartService(startup, @"C:/app/AvaloniaAssistant.exe");
+                autoStart.SetEnabled(true);
+                var launcher = File.Exists(autoStart.LauncherPath)
+                    ? File.ReadAllText(autoStart.LauncherPath)
+                    : string.Empty;
+                Console.WriteLine(
+                    $"[verify-workbench] autostart enabled={autoStart.IsEnabled}"
+                    + $" / hiddenWindow={launcher.Contains(", 0, False")}"
+                    + $" / containsExe={launcher.Contains("AvaloniaAssistant.exe")}");
+                autoStart.SetEnabled(false);
+                Console.WriteLine($"[verify-workbench] autostart disabled={!autoStart.IsEnabled}");
+
+                // 结果文件：调度器真跑一次，文件应落在项目工作目录里
+                var store = new JsonWorkbenchStore(directory);
+                await store.LoadAsync();
+                store.Data.Projects.AddRange(data.Projects);
+                store.Data.Experts.AddRange(data.Experts);
+                store.Data.ScheduledTasks.Add(task);
+                var runner = new ScheduledTaskRunner(store, _ => Task.FromResult<string?>("verify-session"));
+                await runner.TriggerAsync(task);
+                var resultFile = Path.Combine(workspace, "定时任务结果.md");
+                Console.WriteLine(
+                    $"[verify-workbench] resultFile={File.Exists(resultFile)}"
+                    + $" / runRecords={store.Data.RunRecords.Count}"
+                    + $" / detail={(store.Data.RunRecords.FirstOrDefault()?.Detail ?? "none")}");
+
+                Directory.Delete(directory, recursive: true);
+                desktop.Shutdown();
+                return;
+            }
+
             if (!string.IsNullOrWhiteSpace(AppLaunchOptions.SessionQuery))
             {
                 viewModel.SessionQuery = AppLaunchOptions.SessionQuery;
@@ -364,6 +503,74 @@ public partial class AssistantApp : Application
                         }
                     }
                     break;
+                case "projects":
+                case "experts":
+                case "scheduled":
+                case "library":
+                case "more":
+                    viewModel.LoadDemoSidebar();
+                    switch (AppLaunchOptions.Page)
+                    {
+                        case "projects": viewModel.OpenWorkbenchSection(WorkbenchSection.Projects); break;
+                        case "experts": viewModel.OpenWorkbenchSection(WorkbenchSection.Experts); break;
+                        case "scheduled": viewModel.OpenWorkbenchSection(WorkbenchSection.Scheduled); break;
+                        case "library": viewModel.OpenWorkbenchSection(WorkbenchSection.Library); break;
+                        default: viewModel.OpenWorkbenchSection(WorkbenchSection.More); break;
+                    }
+
+                    // 存档是构造函数里异步读的，截图要等它落地；顺便摆一个真实表单/模板态。
+                    await viewModel.WorkbenchReady;
+                    if (AppLaunchOptions.WorkbenchDemo && viewModel.CurrentPage is WorkbenchViewModel page)
+                    {
+                        page.ShowTaskForm = true;
+                        page.TaskName = "每日简报";
+                        page.TaskPrompt = "帮我汇总工作区里最近一天新增或改动的文件，列成一份简短的日报。";
+                        page.ShowProjectForm = true;
+                        page.NewProjectName = "Q4 预算";
+                        page.NewProjectDescription = "季度预算与归档";
+                    }
+                    break;
+            }
+
+            // 验收用：首页的类别切换与模板灰字预览（不需要真实鼠标悬停）。
+            if (viewModel.CurrentPage is HomeViewModel home
+                && (AppLaunchOptions.HomePreview || !string.IsNullOrWhiteSpace(AppLaunchOptions.HomeCategory)))
+            {
+                if (!string.IsNullOrWhiteSpace(AppLaunchOptions.HomeCategory))
+                {
+                    var category = home.Categories.FirstOrDefault(
+                        item => item.Key == AppLaunchOptions.HomeCategory);
+                    if (category is not null)
+                    {
+                        home.SelectCategoryCommand.Execute(category);
+                    }
+                }
+
+                if (AppLaunchOptions.HomePreview && home.Cards.FirstOrDefault() is { } card)
+                {
+                    home.PreviewCard(card);
+                }
+            }
+
+            // 验收用：单独打开结果区的「全部文件」页（没有产物时也能打开）
+            if (AppLaunchOptions.ResultsFilesTab
+                && viewModel.CurrentPage is ChatViewModel resultsChat
+                && !resultsChat.ShowArtifactPanel)
+            {
+                resultsChat.ToggleArtifactPanelCommand.Execute(null);
+                resultsChat.ShowResultsTabCommand.Execute("files");
+            }
+
+            // 验收用：结果区四页任意一页（overview / artifacts / files / changes）
+            if (!string.IsNullOrWhiteSpace(AppLaunchOptions.ResultsTab)
+                && viewModel.CurrentPage is ChatViewModel tabChat)
+            {
+                if (!tabChat.ShowArtifactPanel)
+                {
+                    tabChat.ToggleArtifactPanelCommand.Execute(null);
+                }
+
+                tabChat.ShowResultsTabCommand.Execute(AppLaunchOptions.ResultsTab);
             }
 
             // 验收用：从对话进设置再「返回」，看落回哪里、那条任务还在不在。
@@ -719,6 +926,23 @@ public partial class AssistantApp : Application
                 await Task.Delay(400);
                 var composer = window.GetVisualDescendants().OfType<ComposerView>().FirstOrDefault();
                 var flyout = composer?.ShowModelFlyout();
+
+                await Task.Delay(700);
+                if (flyout?.Content is Visual content && TopLevel.GetTopLevel(content) is Visual root)
+                {
+                    CaptureVisual(root, AppLaunchOptions.ScreenshotPath);
+                }
+
+                desktop.Shutdown();
+                return;
+            }
+
+            // 验收用：工作模式浮层也是独立的 TopLevel，截主窗口看不到
+            if (AppLaunchOptions.WorkStyleFlyout)
+            {
+                await Task.Delay(400);
+                var composer = window.GetVisualDescendants().OfType<ComposerView>().FirstOrDefault();
+                var flyout = composer?.ShowWorkStyleFlyout();
 
                 await Task.Delay(700);
                 if (flyout?.Content is Visual content && TopLevel.GetTopLevel(content) is Visual root)

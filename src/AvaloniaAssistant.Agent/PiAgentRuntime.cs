@@ -79,6 +79,10 @@ public sealed class PiAgentRuntime : IAssistantRuntime
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var settings = _settings.Current;
+
+        // 定时任务可以带「本轮专用模型 / 权限」。派生一份副本，绝不碰全局对象。
+        settings = RunSettingsOverride.Apply(settings, request.ModelProfileId, request.Permission);
+
         if (string.IsNullOrWhiteSpace(settings.ApiKey))
         {
             yield return new AgentStreamEvent.RunFailed("还没有配置模型服务。打开「设置」填入 API Key 后再试。");
@@ -553,7 +557,7 @@ public sealed class PiAgentRuntime : IAssistantRuntime
 
         try
         {
-            return JsonSerializer.Serialize(args, new JsonSerializerOptions { WriteIndented = true });
+            return JsonSerializer.Serialize(args, AgentJson.Indented);
         }
         catch
         {

@@ -8,7 +8,7 @@
 
 | 项目 | 调研时 | 当前（2026-11-14） |
 | --- | --- | --- |
-| pi.net | 1.4.4，只取 `Pi.Agent` | **1.5.2**，改用 `Pi.CodingAgent` 的 `Sdk.CreateAgentSessionAsync` 装配完整 `AgentSession` |
+| pi.net | 1.4.4，只取 `Pi.Agent` | **1.5.2.1**（Native AOT 补丁版），改用 `Pi.CodingAgent` 的 `Sdk.CreateAgentSessionAsync` 装配完整 `AgentSession` |
 | TKCode.Arc | 0.3.1-preview.3（AtomUI 生态） | **1.1.0 正式版**，自带控件体系，不再引用 `AtomUI.Desktop.Controls` |
 | Avalonia | 12.1.4 | 12.1.6 |
 | CommunityToolkit.Mvvm | 8.4.0 | 8.4.2 |

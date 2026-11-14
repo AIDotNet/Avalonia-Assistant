@@ -51,7 +51,11 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
     /// <summary>关窗时抢救过半截正文。收尾不能再把「已停止」改回「完成」。</summary>
     private bool _flushedForShutdown;
 
-    public ChatViewModel(MainWindowViewModel host, ChatSession? session, bool consumePendingDraft = true)
+    public ChatViewModel(
+        MainWindowViewModel host,
+        ChatSession? session,
+        bool consumePendingDraft = true,
+        string? workspacePathOverride = null)
     {
         _host = host;
         _runtime = host.Runtime;
@@ -59,7 +63,7 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
 
         Session = session ?? new ChatSession
         {
-            WorkspacePath = host.Settings.WorkspacePath,
+            WorkspacePath = workspacePathOverride ?? host.Settings.WorkspacePath,
             Mode = host.Settings.Mode,
         };
 
@@ -99,6 +103,14 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
     }
 
     public ChatSession Session { get; }
+
+    /// <summary>
+    /// 定时任务带进来的本轮配置（专用模型 / 专家 / 权限 / 项目 / 推送渠道）。
+    /// 只有定时触发的新任务才有值；普通对话为 null，行为完全不变。
+    /// </summary>
+    public TaskRunConfig? RunConfig { get; set; }
+
+    private PermissionMode EffectivePermission => RunConfig?.Permission ?? _settings.Current.Permission;
 
     /// <summary>
     /// 一轮跑完（正常 / 失败 / 被停都算）时触发。
@@ -248,9 +260,186 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
     /// <summary>用户自己收起过面板。之后再出产物只更新计数，不抢他的视线。</summary>
     private bool _artifactPanelDismissed;
 
-    public bool ShowArtifactPanel => HasArtifacts && IsArtifactPanelOpen;
+    /// <summary>
+    /// WorkBuddy 的三区布局：右侧「结果区」是常驻入口，不管这次有没有改过文件都能打开
+    /// （没产物时落在「全部文件」）。以前只有改过文件才出现，结果区时有时无。
+    /// </summary>
+    public bool ShowArtifactPanel => IsArtifactPanelOpen;
 
-    public string ArtifactToggleHint => IsArtifactPanelOpen ? "收起产物" : "查看产物";
+    public string ArtifactToggleHint => IsArtifactPanelOpen ? "收起结果区" : "打开结果区";
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsOverviewTab))]
+    [NotifyPropertyChangedFor(nameof(IsArtifactsTab))]
+    [NotifyPropertyChangedFor(nameof(IsFilesTab))]
+    [NotifyPropertyChangedFor(nameof(IsChangesTab))]
+    private string resultsTab = "artifacts";
+
+    public bool IsOverviewTab => ResultsTab == "overview";
+
+    public bool IsArtifactsTab => ResultsTab == "artifacts";
+
+    public bool IsFilesTab => ResultsTab == "files";
+
+    public bool IsChangesTab => ResultsTab == "changes";
+
+    [RelayCommand]
+    private void ShowResultsTab(string tab) => ResultsTab = tab;
+
+    // ── 概览：WorkBuddy 结果区的第一屏，一眼看清「这个任务在哪、动了什么」 ──
+
+    public string OverviewWorkspacePath => PlainWorkspace.Resolve(Session.WorkspacePath);
+
+    public string OverviewWorkspaceShort => Ui.ShortenPath(OverviewWorkspacePath);
+
+    public int OverviewFileCount => WorkspaceFiles.Count(item => !item.IsDirectory);
+
+    public int OverviewFolderCount => WorkspaceFiles.Count(item => item.IsDirectory);
+
+    public int OverviewChangedCount => Artifacts.Count;
+
+    public string OverviewModel => _settings.Current.ActiveModel?.DisplayName ?? _settings.Current.Model;
+
+    public string OverviewChangesText => Artifacts.Count == 0
+        ? "这一轮还没有改动文件"
+        : $"新建 / 修改 / 删除 {Artifacts.Count} 个文件";
+
+    public bool HasOverviewChanges => Artifacts.Count > 0;
+
+    /// <summary>
+    /// 概览里的「应用内预览」：工作区里能读成文字 / 表格的文件（含 .html / .htm）。
+    /// WorkBuddy 在概览放内置浏览器；本项目用同一个应用内文档预览窗口，不引 WebView。
+    /// </summary>
+    public IEnumerable<WorkspaceFileViewModel> OverviewPreviewFiles
+        => WorkspaceFiles.Where(item => item.CanPreview).Take(6);
+
+    public bool HasOverviewPreviewFiles => OverviewPreviewFiles.Any();
+
+    /// <summary>「变更」页有没有内容：只有带逐行差异的产物才会进去。</summary>
+    public bool HasChangeGroups => Artifacts.Any(item => item.HasDiff);
+
+    public IEnumerable<ArtifactViewModel> ChangeGroups => Artifacts.Where(item => item.HasDiff);
+
+    [RelayCommand]
+    private void OpenWorkspaceFolder()
+    {
+        if (!Ui.OpenExternal(OverviewWorkspacePath))
+        {
+            ShowToast("打不开工作区目录：" + OverviewWorkspacePath, null);
+        }
+    }
+
+    private void RaiseOverviewChanged()
+    {
+        OnPropertyChanged(nameof(OverviewWorkspacePath));
+        OnPropertyChanged(nameof(OverviewWorkspaceShort));
+        OnPropertyChanged(nameof(OverviewFileCount));
+        OnPropertyChanged(nameof(OverviewFolderCount));
+        OnPropertyChanged(nameof(OverviewChangedCount));
+        OnPropertyChanged(nameof(OverviewModel));
+        OnPropertyChanged(nameof(OverviewChangesText));
+        OnPropertyChanged(nameof(HasOverviewChanges));
+        OnPropertyChanged(nameof(OverviewPreviewFiles));
+        OnPropertyChanged(nameof(HasOverviewPreviewFiles));
+        OnPropertyChanged(nameof(HasChangeGroups));
+        OnPropertyChanged(nameof(ChangeGroups));
+    }
+
+    /// <summary>结果区「全部文件」：工作区目录树（顶层 + 一层），只读列举。</summary>
+    public ObservableCollection<WorkspaceFileViewModel> WorkspaceFiles { get; } = [];
+
+    public bool HasWorkspaceFiles => WorkspaceFiles.Count > 0;
+
+    public string WorkspaceFilesHint { get; private set; } = string.Empty;
+
+    private const int MaxWorkspaceFiles = 120;
+
+    private static readonly string[] SkippedFolders =
+        [".git", ".pi", ".vs", "node_modules", "bin", "obj", "__pycache__"];
+
+    /// <summary>列出工作区文件。目录读不动、路径失效都给一句原因，不抛到界面外。</summary>
+    public void LoadWorkspaceFiles()
+    {
+        WorkspaceFiles.Clear();
+
+        var root = string.IsNullOrWhiteSpace(Session.WorkspacePath) || !Directory.Exists(Session.WorkspacePath)
+            ? PlainWorkspace.Root
+            : Path.GetFullPath(Session.WorkspacePath);
+
+        if (!Directory.Exists(root))
+        {
+            WorkspaceFilesHint = "这个任务还没有工作区文件。选一个工作区，或让模型先写出第一份。";
+            RaiseWorkspaceFilesChanged();
+            return;
+        }
+
+        var entries = new List<(string Path, bool IsDirectory, string Folder)>();
+        try
+        {
+            foreach (var path in Directory.EnumerateFileSystemEntries(root))
+            {
+                var name = Path.GetFileName(path);
+                if (name.StartsWith('.') || SkippedFolders.Contains(name, StringComparer.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var isDir = Directory.Exists(path);
+                entries.Add((path, isDir, string.Empty));
+                if (entries.Count >= MaxWorkspaceFiles)
+                {
+                    break;
+                }
+
+                if (!isDir)
+                {
+                    continue;
+                }
+
+                foreach (var child in Directory.EnumerateFiles(path))
+                {
+                    entries.Add((child, false, name));
+                    if (entries.Count >= MaxWorkspaceFiles)
+                    {
+                        break;
+                    }
+                }
+
+                if (entries.Count >= MaxWorkspaceFiles)
+                {
+                    break;
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            WorkspaceFilesHint = "目录读不出来：" + ex.Message;
+            RaiseWorkspaceFilesChanged();
+            return;
+        }
+
+        foreach (var (path, isDir, folder) in entries
+                     .OrderBy(item => item.IsDirectory ? 0 : 1)
+                     .ThenBy(item => item.Path, StringComparer.OrdinalIgnoreCase))
+        {
+            WorkspaceFiles.Add(new WorkspaceFileViewModel(path, isDir, message => ShowToast(message, null))
+            {
+                Folder = folder,
+            });
+        }
+
+        WorkspaceFilesHint = WorkspaceFiles.Count == 0
+            ? "工作区里还没有文件。"
+            : $"{root} · {WorkspaceFiles.Count} 项";
+        RaiseWorkspaceFilesChanged();
+    }
+
+    private void RaiseWorkspaceFilesChanged()
+    {
+        OnPropertyChanged(nameof(WorkspaceFilesHint));
+        OnPropertyChanged(nameof(HasWorkspaceFiles));
+        RaiseOverviewChanged();
+    }
 
     /// <summary>面板标题右边那行统计：几个文件、加了多少行、删了多少行。</summary>
     public string ArtifactSummary
@@ -283,15 +472,20 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void ToggleArtifactPanel()
     {
-        if (!HasArtifacts)
-        {
-            return;
-        }
-
         IsArtifactPanelOpen = !IsArtifactPanelOpen;
 
         // 手动收起算一次明确表态，后面就别再自动弹了
         _artifactPanelDismissed = !IsArtifactPanelOpen;
+
+        if (IsArtifactPanelOpen)
+        {
+            LoadWorkspaceFiles();
+            // 没改过文件就直接落在「全部文件」，别对着一个空产物列表发呆
+            if (!HasArtifacts)
+            {
+                ResultsTab = "files";
+            }
+        }
     }
 
     /// <summary>模型用来报进度的工具名。它不在对话里显示成工具行，直接换成清单。</summary>
@@ -370,7 +564,16 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
 
         if (!_artifactPanelDismissed)
         {
+            var wasOpen = IsArtifactPanelOpen;
             IsArtifactPanelOpen = true;
+            // 刚写出了文件：自动弹出时默认看「产物」，同时把「全部文件」刷到最新。
+            // 面板本来就开着、且用户自己选了「全部文件」时别把标签抢回去。
+            if (!wasOpen)
+            {
+                ResultsTab = "artifacts";
+            }
+
+            LoadWorkspaceFiles();
         }
     }
 
@@ -380,6 +583,7 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(ArtifactCount));
         OnPropertyChanged(nameof(ArtifactSummary));
         OnPropertyChanged(nameof(ShowArtifactPanel));
+        RaiseOverviewChanged();
     }
 
     /// <summary>打开旧会话时把产物接回来，别让面板看起来像是这条任务什么都没改过。</summary>
@@ -408,7 +612,18 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
             var workspace = string.IsNullOrWhiteSpace(Session.WorkspacePath)
                 ? "普通任务"
                 : Path.GetFileName(Session.WorkspacePath.TrimEnd(Path.DirectorySeparatorChar));
-            var line = $"{workspace} · {_settings.Current.Model} · {WorkModeText.Describe(Session.Mode)}";
+            var model = RunConfig?.ModelProfileId is { Length: > 0 } id
+                ? _settings.Current.Models.FirstOrDefault(item => item.Id == id)?.DisplayName
+                  ?? _settings.Current.Model
+                : _settings.Current.Model;
+            var line = $"{workspace} · {model} · {WorkModeText.Describe(Session.Mode)}";
+            if (RunConfig is { } config)
+            {
+                line = config.ProjectName is { Length: > 0 } project
+                    ? $"定时任务 · {project} · {line}"
+                    : $"定时任务 · {line}";
+            }
+
             return UsageText.Length > 0 ? $"{line} · {UsageText}" : line;
         }
     }
@@ -1414,8 +1629,8 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
         // 上一轮留下的「改后自动放行」不跨轮生效
         _pendingCorrectedArguments = null;
 
-        // 这一轮用开始时的权限快照。生成中再切档位，要等到下一轮。
-        _runStartPermission = _settings.Current.Permission;
+        // 这一轮用开始时的权限快照（定时任务可以带专用档位）。生成中再切档位，要等到下一轮。
+        _runStartPermission = EffectivePermission;
         _pendingPermission = null;
         Composer.PermissionPendingNextRun = false;
 
@@ -1505,10 +1720,11 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
                 BuildModelPrompt(input.Text, input.Attachments),
                 BuildHistory(historyEntries),
                 Session.Mode,
-                _settings.Current.Permission,
+                EffectivePermission,
                 Session.WorkspacePath,
                 new ChatApprovalGate(this),
-                input.Images);
+                input.Images,
+                RunConfig?.ModelProfileId);
 
             _cts?.Dispose();
             _cts = new CancellationTokenSource();
@@ -1804,6 +2020,13 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
 
         _artifactPanelDismissed = false;
         IsArtifactPanelOpen = true;
+        ResultsTab = "artifacts";
+        LoadWorkspaceFiles();
+
+        if (AppLaunchOptions.ResultsFilesTab)
+        {
+            ResultsTab = "files";
+        }
 
         if (Artifacts.FirstOrDefault() is { } first)
         {
@@ -1976,7 +2199,12 @@ public sealed partial class ChatViewModel : ObservableObject, IDisposable
     /// 几千字的文档塞进用户消息，界面就没法看了。
     /// </summary>
     private string BuildModelPrompt(string text, IReadOnlyList<ChatAttachment> attachments)
-        => PromptComposer.Compose(text, attachments, mode: Session.Mode);
+        => PromptComposer.Compose(
+            text,
+            attachments,
+            mode: Session.Mode,
+            style: WorkStyleText.Normalize(_settings.Current.WorkStyle),
+            expertDirective: RunConfig?.ExpertDirective ?? _host.ActiveExpertDirective);
 
     private void RequestScroll(bool force) => ScrollToEndRequested?.Invoke(this, force);
 

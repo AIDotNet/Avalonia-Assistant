@@ -116,7 +116,10 @@ public sealed record PromptRequest(
     public bool HasImages => Images is { Count: > 0 };
 }
 
-/// <summary>一次 agent 运行的输入。运行时无状态：历史由调用方携带。</summary>
+/// <summary>
+/// 一次 agent 运行的输入。运行时无状态：历史由调用方携带。
+/// <c>ModelProfileId</c> 非空时（定时任务）本轮用指定模型配置，不改动全局设置。
+/// </summary>
 public sealed record AgentRunRequest(    string SessionId,
     string Prompt,
     IReadOnlyList<HistoryTurn> History,
@@ -124,7 +127,8 @@ public sealed record AgentRunRequest(    string SessionId,
     PermissionMode Permission,
     string? WorkspacePath,
     IToolApprovalGate? ApprovalGate,
-    IReadOnlyList<ChatImage>? Images = null);
+    IReadOnlyList<ChatImage>? Images = null,
+    string? ModelProfileId = null);
 
 public sealed record ToolApprovalRequest(
     string SessionId,

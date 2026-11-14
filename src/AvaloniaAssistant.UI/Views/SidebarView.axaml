@@ -223,7 +223,7 @@
                     VerticalScrollBarVisibility="Auto"
                     HorizontalScrollBarVisibility="Disabled">
         <StackPanel Spacing="2">
-          <Button Classes="nav" Classes.active="{Binding IsHomeSelected}" Command="{Binding OpenHomeCommand}">
+          <Button Classes="nav main" Classes.active="{Binding IsHomeSelected}" Command="{Binding OpenHomeCommand}">
             <Grid ColumnDefinitions="Auto,*,Auto">
               <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Sparkles}"
                             Size="16"
@@ -239,7 +239,19 @@
             </Grid>
           </Button>
 
-          <Button Classes="nav" Classes.active="{Binding IsToolsSelected}" Command="{Binding OpenToolsCommand}">
+          <!-- 「项目 / 专家 / 定时任务 / 资料库 / 设置与关于」是同一个工作台页面的五个分区，
+               由页内 tab 切换；侧栏只留这一个入口，不再把五个分区平铺一遍造成双重导航。
+               技能 / MCP / 插件是各自独立的页面，仍单独列出，不做点进去没内容的空壳。 -->
+          <Button Classes="nav main" Classes.active="{Binding IsWorkbenchSelected}" Command="{Binding OpenWorkbenchCommand}">
+            <StackPanel Orientation="Horizontal" Spacing="9">
+              <arc:ArcGlyph Data="{x:Static arc:ArcIcons.FolderOpen}"
+                            Size="16"
+                            Foreground="{Binding $parent[Button].Foreground}" />
+              <TextBlock Text="工作台" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+
+          <Button Classes="nav main" Classes.active="{Binding IsToolsSelected}" Command="{Binding OpenToolsCommand}">
             <StackPanel Orientation="Horizontal" Spacing="9">
               <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Zap}"
                             Size="16"
@@ -248,7 +260,7 @@
             </StackPanel>
           </Button>
 
-          <Button Classes="nav" Classes.active="{Binding IsMcpSelected}" Command="{Binding OpenMcpCommand}">
+          <Button Classes="nav main" Classes.active="{Binding IsMcpSelected}" Command="{Binding OpenMcpCommand}">
             <StackPanel Orientation="Horizontal" Spacing="9">
               <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Server}"
                             Size="16"
@@ -257,7 +269,7 @@
             </StackPanel>
           </Button>
 
-          <Button Classes="nav" Classes.active="{Binding IsPluginsSelected}" Command="{Binding OpenPluginsCommand}">
+          <Button Classes="nav main" Classes.active="{Binding IsPluginsSelected}" Command="{Binding OpenPluginsCommand}">
             <StackPanel Orientation="Horizontal" Spacing="9">
               <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Package}"
                             Size="16"

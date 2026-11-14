@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using AvaloniaAssistant.Abstractions;
 
 namespace AvaloniaAssistant.Agent;
@@ -115,35 +116,43 @@ internal static class ConnectionProbe
             case AgentProtocol.AnthropicMessages:
             {
                 var path = baseUrl.EndsWith("/v1", StringComparison.OrdinalIgnoreCase) ? "/messages" : "/v1/messages";
-                var payload = JsonSerializer.Serialize(new
+                // 用 JsonNode 直接拼，不走反射式 JsonSerializer：匿名类型在 Native AOT 下
+                // 没有可生成的 JsonTypeInfo，请求体会直接抛 missing native code。
+                var payload = new JsonObject
                 {
-                    model,
-                    max_tokens = 8,
-                    messages = new[] { new { role = "user", content = "ping" } },
-                });
+                    ["model"] = model,
+                    ["max_tokens"] = 8,
+                    ["messages"] = new JsonArray
+                    {
+                        new JsonObject { ["role"] = "user", ["content"] = "ping" },
+                    },
+                }.ToJsonString();
                 return (path, payload, true);
             }
 
             case AgentProtocol.OpenAiResponses:
             {
-                var payload = JsonSerializer.Serialize(new
+                var payload = new JsonObject
                 {
-                    model,
-                    input = "ping",
-                    max_output_tokens = 16,
-                });
+                    ["model"] = model,
+                    ["input"] = "ping",
+                    ["max_output_tokens"] = 16,
+                }.ToJsonString();
                 return ("/responses", payload, false);
             }
 
             default:
             {
-                var payload = JsonSerializer.Serialize(new
+                var payload = new JsonObject
                 {
-                    model,
-                    messages = new[] { new { role = "user", content = "ping" } },
-                    max_tokens = 8,
-                    stream = false,
-                });
+                    ["model"] = model,
+                    ["messages"] = new JsonArray
+                    {
+                        new JsonObject { ["role"] = "user", ["content"] = "ping" },
+                    },
+                    ["max_tokens"] = 8,
+                    ["stream"] = false,
+                }.ToJsonString();
                 return ("/chat/completions", payload, false);
             }
         }

@@ -71,6 +71,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
         McpMarket = mcpMarket;
         Home = new HomeViewModel(this);
 
+        // 定时任务 / 资料库 / 专家共用一份存档。构造函数里就起加载，页面第一次打开时
+        // await WorkbenchReady，不用自己再去读一次盘。
+        Workbench = new JsonWorkbenchStore();
+        WorkbenchReady = InitializeWorkbenchAsync();
+
         _relativeTimeTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(1) };
         _relativeTimeTimer.Tick += (_, _) => RefreshRelativeTimes();
         _relativeTimeTimer.Start();
@@ -94,6 +99,57 @@ public sealed partial class MainWindowViewModel : ObservableObject
     }
 
     public IAssistantRuntime Runtime { get; }
+
+    /// <summary>定时任务 / 资料库 / 专家的共享存档。</summary>
+    public JsonWorkbenchStore Workbench { get; }
+
+    /// <summary>存档加载 + 调度器启动完成的信号；工作台页 await 它再读数据。</summary>
+    public Task WorkbenchReady { get; }
+
+    public ScheduledTaskRunner? ScheduledRunner { get; private set; }
+
+    /// <summary>当前启用的专家指令，由工作台「专家」页设置；每轮提问注入模型。</summary>
+    public string? ActiveExpertDirective { get; private set; }
+
+    public void SetActiveExpert(ExpertPreset? expert)
+        => ActiveExpertDirective = string.IsNullOrWhiteSpace(expert?.Directive) ? null : expert!.Directive;
+
+    private async Task InitializeWorkbenchAsync()
+    {
+        // 工作台存档坏掉 / 磁盘只读都不能拖垮启动：这几项配置是可有可无的。
+        try
+        {
+            await Workbench.LoadAsync();
+            ExpertCatalog.EnsureBuiltIns(Workbench.Data);
+
+            var active = Workbench.Data.Experts.FirstOrDefault(
+                item => item.Enabled && item.Id == Workbench.Data.ActiveExpertId);
+            SetActiveExpert(active);
+
+            ScheduledRunner = new ScheduledTaskRunner(Workbench, RunScheduledTaskAsync);
+            ScheduledRunner.Start();
+
+            await Workbench.SaveAsync();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Workbench.Data.Experts.Clear();
+            ExpertCatalog.EnsureBuiltIns(Workbench.Data);
+            ScheduledRunner = new ScheduledTaskRunner(Workbench, RunScheduledTaskAsync);
+            ScheduledRunner.Start();
+        }
+    }
+
+    /// <summary>调度器到点调用：把任务配置解析成本轮配置，再新建任务并立即发送。</summary>
+    private async Task<string?> RunScheduledTaskAsync(ScheduledTask task)
+    {
+        var config = TaskRunConfig.From(task, Workbench.Data);
+        var session = await OpenNewChatAsync(
+            PromptRequest.Plain(task.Prompt),
+            workspaceOverride: config.WorkspacePath,
+            runConfig: config);
+        return session?.Session.Id;
+    }
 
     public ISettingsProvider SettingsProvider { get; }
 
@@ -226,6 +282,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     public bool IsSettingsSelected => CurrentPage is SettingsViewModel;
 
+    /// <summary>工作台的五个分区由页内 tab 切换，侧栏这一项在任意分区都保持选中。</summary>
+    public bool IsWorkbenchSelected => CurrentPage is WorkbenchViewModel;
+
     /// <summary>Ctrl+K 让侧栏的搜索框拿焦点。宿主窗口发信号，侧栏自己接。</summary>
     public event EventHandler? SearchRequested;
 
@@ -340,9 +399,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// 建一个对话页，并盯着它的运行状态：侧栏的小圆点靠这个，
     /// 后台跑完之后的释放也靠这个。
     /// </summary>
-    private ChatViewModel CreateChat(ChatSession? session, bool consumePendingDraft = true)
+    private ChatViewModel CreateChat(
+        ChatSession? session,
+        bool consumePendingDraft = true,
+        string? workspacePathOverride = null)
     {
-        var chat = new ChatViewModel(this, session, consumePendingDraft);
+        var chat = new ChatViewModel(this, session, consumePendingDraft, workspacePathOverride);
         chat.PropertyChanged += OnChatPropertyChanged;
 
         // 窗口在后台时要不要闪任务栏，是窗口的事；这里只把「跑完了」送上去
@@ -628,6 +690,19 @@ public sealed partial class MainWindowViewModel : ObservableObject
         await Task.CompletedTask;
     }
 
+    // ── 工作台：项目 / 专家 / 定时任务 / 资料库 / 设置与关于共用一个页面，按 Section 切内容 ──
+    // 侧栏只留这一个入口，分区交给页内 tab，避免同一批页面在两处各有一套导航。
+
+    [RelayCommand]
+    private void OpenWorkbench() => OpenWorkbenchSection(WorkbenchSection.Projects);
+
+    /// <summary>仅 --screenshot 用：直接落到工作台的某个分区。</summary>
+    public void OpenWorkbenchSection(WorkbenchSection section)
+    {
+        RememberReturnPage();
+        CurrentPage = new WorkbenchViewModel(this, section);
+    }
+
     [RelayCommand]
     private async Task ToggleSidebarAsync()
     {
@@ -723,11 +798,41 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// <summary>带着资料引用开新任务：首页里 @ 了资料也能直接发，不用先进对话再引用一遍。</summary>
     public Task StartNewChatAsync(PromptRequest request) => OpenNewChatAsync(request);
 
-    private async Task OpenNewChatAsync(PromptRequest? request)
+    public Task StartProjectTaskAsync(Project project)
+        => OpenNewChatAsync(null, workspaceOverride: project.WorkspacePath);
+
+    /// <summary>在指定空间新建任务（项目页 / 资料库用）。</summary>
+    public Task StartNewChatInWorkspaceAsync(string workspacePath)
+        => OpenNewChatAsync(null, workspacePath);
+
+    /// <summary>「从任务新建定时任务」：回首页并在输入框预填一句话（WorkBuddy 的做法）。</summary>
+    public void GoHomeAndPrefill(string text)
+    {
+        CurrentPage = Home;
+        Home.Composer.Text = text;
+        Home.Composer.RequestFocus();
+    }
+
+    /// <summary>把资料库里的文件引用到进入工作台之前的那个任务；没有来源就挂到首页输入框。</summary>
+    public bool AddReferenceToReturnChat(string path)
+    {
+        if (_returnChat is { } chat)
+        {
+            return chat.Composer.AddFileReference(path);
+        }
+
+        return Home.Composer.AddFileReference(path);
+    }
+
+    private async Task<ChatViewModel?> OpenNewChatAsync(
+        PromptRequest? request,
+        string? workspaceOverride = null,
+        TaskRunConfig? runConfig = null)
     {
         ClearReturnChat();
 
-        var chat = CreateChat(null, consumePendingDraft: request is null);
+        var chat = CreateChat(null, consumePendingDraft: request is null, workspacePathOverride: workspaceOverride);
+        chat.RunConfig = runConfig;
         CurrentPage = chat;
         await SetActiveSessionAsync(null);
 
@@ -735,6 +840,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
         {
             await chat.SendPromptAsync(request);
         }
+
+        return chat;
     }
 
     public async Task OpenSessionAsync(string sessionId)
@@ -1713,6 +1820,13 @@ public sealed partial class MainWindowViewModel : ObservableObject
             return;
         }
 
+        // 工作台页订了调度器的运行记录事件，换页时退订。
+        if (oldValue is WorkbenchViewModel workbench)
+        {
+            workbench.Dispose();
+            return;
+        }
+
         if (oldValue is not ChatViewModel chat)
         {
             return;
@@ -1752,6 +1866,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(IsMcpSelected));
         OnPropertyChanged(nameof(IsPluginsSelected));
         OnPropertyChanged(nameof(IsSettingsSelected));
+        OnPropertyChanged(nameof(IsWorkbenchSelected));
         OnPropertyChanged(nameof(RunningChatCount));
         OnPropertyChanged(nameof(HasRunningChats));
         OnPropertyChanged(nameof(PendingApprovalCount));

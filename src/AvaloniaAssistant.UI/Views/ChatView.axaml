@@ -829,16 +829,20 @@
                 ToolTip.Tip="导出为 Markdown">
           <arc:ArcGlyph Data="{x:Static arc:ArcIcons.FileText}" Size="14" />
         </Button>
-        <!-- 产物入口：没有改动过文件时整颗按钮不出现，不留一个点不动的空位 -->
+        <!-- 结果区入口：WorkBuddy 的右侧结果区是三区布局里的常驻一区，
+             没有改动过文件也能打开看「全部文件」，不再时有时无。 -->
         <Button Grid.Column="4"
                 Classes="icon artifact-toggle"
+                Classes.active="{Binding ShowArtifactPanel}"
                 Margin="0,0,6,0"
-                IsVisible="{Binding HasArtifacts}"
                 Command="{Binding ToggleArtifactPanelCommand}"
                 ToolTip.Tip="{Binding ArtifactToggleHint}">
           <StackPanel Orientation="Horizontal" Spacing="1" VerticalAlignment="Center">
             <arc:ArcGlyph Data="{x:Static arc:ArcIcons.FolderOpen}" Size="14" VerticalAlignment="Center" />
-            <TextBlock Text="{Binding ArtifactCount}" FontSize="10" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding ArtifactCount}"
+                       FontSize="10"
+                       IsVisible="{Binding HasArtifacts}"
+                       VerticalAlignment="Center" />
           </StackPanel>
         </Button>
         <Border Grid.Column="5"
@@ -1034,8 +1038,8 @@
       </Button>
     </Panel>
 
-    <!-- 产物：这次任务到底动了哪些文件。工具卡说的是过程，这里说的是结果。
-         没有产物时整栏不出现，消息区回到原来那一整片。 -->
+    <!-- 结果区（WorkBuddy 三区布局的右侧）：「产物」说这次改了什么，「全部文件」说工作区里有什么。
+         顶栏入口常驻，没改过文件也能打开看目录。工具卡说的是过程，这里说的是结果。 -->
     <Border Grid.Column="1"
             Width="304"
             IsVisible="{Binding ShowArtifactPanel}"
@@ -1044,22 +1048,153 @@
             BorderThickness="1,0,0,0">
       <Grid RowDefinitions="Auto,*">
         <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="14,12,8,8">
-          <StackPanel Spacing="2">
-            <TextBlock Text="产物" FontSize="12.5" FontWeight="Medium" />
+          <StackPanel Spacing="7">
+            <TextBlock Text="结果" FontSize="12.5" FontWeight="Medium" />
+            <Border Classes="tabbar" Padding="2">
+              <StackPanel Orientation="Horizontal" Spacing="1">
+                <Button Classes="tab"
+                        Classes.active="{Binding IsOverviewTab}"
+                        Height="26" Padding="8,0" FontSize="11"
+                        Content="概览"
+                        Command="{Binding ShowResultsTabCommand}"
+                        CommandParameter="overview" />
+                <Button Classes="tab"
+                        Classes.active="{Binding IsArtifactsTab}"
+                        Height="26" Padding="8,0" FontSize="11"
+                        Content="产物"
+                        Command="{Binding ShowResultsTabCommand}"
+                        CommandParameter="artifacts" />
+                <Button Classes="tab"
+                        Classes.active="{Binding IsFilesTab}"
+                        Height="26" Padding="8,0" FontSize="11"
+                        Content="全部文件"
+                        Command="{Binding ShowResultsTabCommand}"
+                        CommandParameter="files" />
+                <Button Classes="tab"
+                        Classes.active="{Binding IsChangesTab}"
+                        Height="26" Padding="8,0" FontSize="11"
+                        Content="变更"
+                        Command="{Binding ShowResultsTabCommand}"
+                        CommandParameter="changes" />
+              </StackPanel>
+            </Border>
             <TextBlock Text="{Binding ArtifactSummary}"
                        FontSize="10"
+                       IsVisible="{Binding IsArtifactsTab}"
                        Foreground="{StaticResource TextMutedBrush}" />
           </StackPanel>
           <Button Grid.Column="1"
                   Classes="msg-action"
                   Command="{Binding ToggleArtifactPanelCommand}"
-                  ToolTip.Tip="收起产物面板"
+                  ToolTip.Tip="收起结果区"
                   VerticalAlignment="Top">
             <arc:ArcGlyph Data="{x:Static arc:ArcIcons.ChevronRight}" Size="12" />
           </Button>
         </Grid>
 
-        <ScrollViewer Grid.Row="1"
+        <Panel Grid.Row="1">
+        <!-- 概览：这个任务在哪、工作区里有什么、这一轮动了什么 -->
+        <ScrollViewer IsVisible="{Binding IsOverviewTab}"
+                      VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled"
+                      Margin="8,0,8,10">
+          <StackPanel Spacing="8">
+            <Border Background="{StaticResource SurfaceBrush}"
+                    BorderBrush="{StaticResource BorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="10"
+                    Padding="12,11">
+              <StackPanel Spacing="9">
+                <TextBlock Text="工作空间" Classes="section-title" FontSize="10" />
+                <TextBlock Text="{Binding OverviewWorkspaceShort}"
+                           FontSize="11.5"
+                           TextWrapping="Wrap"
+                           ToolTip.Tip="{Binding OverviewWorkspacePath}" />
+                <Button Classes="msg-action"
+                        HorizontalAlignment="Left"
+                        Command="{Binding OpenWorkspaceFolderCommand}"
+                        ToolTip.Tip="在资源管理器中打开工作区">
+                  <TextBlock Text="打开目录" FontSize="10.5" />
+                </Button>
+              </StackPanel>
+            </Border>
+
+            <Border Background="{StaticResource SurfaceBrush}"
+                    BorderBrush="{StaticResource BorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="10"
+                    Padding="12,11">
+              <StackPanel Spacing="8">
+                <TextBlock Text="工作区内容" Classes="section-title" FontSize="10" />
+                <Grid ColumnDefinitions="*,*">
+                  <StackPanel Spacing="2">
+                    <TextBlock Text="{Binding OverviewFileCount}" FontSize="18" FontWeight="SemiBold" />
+                    <TextBlock Text="文件" Classes="caption" FontSize="10" Foreground="{StaticResource TextMutedBrush}" />
+                  </StackPanel>
+                  <StackPanel Grid.Column="1" Spacing="2">
+                    <TextBlock Text="{Binding OverviewFolderCount}" FontSize="18" FontWeight="SemiBold" />
+                    <TextBlock Text="文件夹" Classes="caption" FontSize="10" Foreground="{StaticResource TextMutedBrush}" />
+                  </StackPanel>
+                </Grid>
+              </StackPanel>
+            </Border>
+
+            <Border Background="{StaticResource SurfaceBrush}"
+                    BorderBrush="{StaticResource BorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="10"
+                    Padding="12,11">
+              <StackPanel Spacing="7">
+                <TextBlock Text="本次任务" Classes="section-title" FontSize="10" />
+                <TextBlock Text="{Binding OverviewModel}" FontSize="11.5" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding OverviewChangesText}"
+                           Classes="caption"
+                           FontSize="10.5"
+                           TextWrapping="Wrap"
+                           Foreground="{StaticResource TextSecondaryBrush}" />
+                <TextBlock Text="「变更」页可看逐行差异，点文件卡右上角可收起这一栏。"
+                           IsVisible="{Binding HasOverviewChanges}"
+                           Classes="caption"
+                           FontSize="10"
+                           TextWrapping="Wrap"
+                           Foreground="{StaticResource TextMutedBrush}" />
+              </StackPanel>
+            </Border>
+
+            <!-- 应用内预览：WorkBuddy 在概览放内置浏览器，这里用同一个应用内文档预览窗口，
+                 支持 docx / xlsx / pptx / pdf / 文本 / html 源码，不引 WebView。 -->
+            <Border Background="{StaticResource SurfaceBrush}"
+                    BorderBrush="{StaticResource BorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="10"
+                    Padding="12,11">
+              <StackPanel Spacing="7">
+                <TextBlock Text="应用内预览" Classes="section-title" FontSize="10" />
+                <TextBlock Text="工作区里暂时没有可预览的文档。"
+                           Classes="caption" FontSize="10.5"
+                           IsVisible="{Binding !HasOverviewPreviewFiles}" />
+                <ItemsControl ItemsSource="{Binding OverviewPreviewFiles}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,2">
+                        <TextBlock Text="{Binding Name}" FontSize="11"
+                                   TextTrimming="CharacterEllipsis"
+                                   ToolTip.Tip="{Binding Detail}"
+                                   VerticalAlignment="Center" />
+                        <Button Grid.Column="1" Classes="msg-action" Content="预览"
+                                Command="{Binding PreviewCommand}" />
+                        <Button Grid.Column="2" Classes="msg-action" Content="打开"
+                                Command="{Binding OpenCommand}" />
+                      </Grid>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+            </Border>
+          </StackPanel>
+        </ScrollViewer>
+
+        <ScrollViewer IsVisible="{Binding IsArtifactsTab}"
                       VerticalScrollBarVisibility="Auto"
                       HorizontalScrollBarVisibility="Disabled"
                       Margin="8,0,8,10">
@@ -1164,12 +1299,149 @@
             </ItemsControl.ItemTemplate>
           </ItemsControl>
         </ScrollViewer>
+
+        <!-- 全部文件：工作区目录树（顶层 + 一层）。只读列举，点一下打开 / 预览 / 定位。 -->
+        <ScrollViewer IsVisible="{Binding IsFilesTab}"
+                      VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled"
+                      Margin="8,0,8,10">
+          <StackPanel Spacing="7">
+            <TextBlock Text="{Binding WorkspaceFilesHint}"
+                       Classes="caption"
+                       FontSize="10"
+                       Foreground="{StaticResource TextMutedBrush}"
+                       TextWrapping="Wrap" />
+            <TextBlock Text="这个目录里还没有文件。"
+                       IsVisible="{Binding !HasWorkspaceFiles}"
+                       Classes="caption"
+                       FontSize="11"
+                       Margin="0,8" />
+            <ItemsControl ItemsSource="{Binding WorkspaceFiles}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Border Background="{StaticResource SurfaceBrush}"
+                          BorderBrush="{StaticResource BorderBrush}"
+                          BorderThickness="1"
+                          CornerRadius="9"
+                          Padding="9,7"
+                          Margin="0,0,0,5">
+                    <Grid ColumnDefinitions="Auto,*,Auto" VerticalAlignment="Center">
+                      <arc:ArcGlyph Data="{Binding Icon}"
+                                    Size="13"
+                                    Margin="0,1,7,0"
+                                    VerticalAlignment="Top"
+                                    Foreground="{StaticResource TextSecondaryBrush}" />
+                      <StackPanel Grid.Column="1" Spacing="1" Margin="0,0,6,0">
+                        <TextBlock Text="{Binding Name}"
+                                   FontSize="11.5"
+                                   FontWeight="Medium"
+                                   TextTrimming="CharacterEllipsis"
+                                   ToolTip.Tip="{Binding Detail}" />
+                        <TextBlock Text="{Binding Folder}"
+                                   FontSize="9.5"
+                                   IsVisible="{Binding HasFolder}"
+                                   Foreground="{StaticResource TextMutedBrush}"
+                                   TextTrimming="CharacterEllipsis" />
+                      </StackPanel>
+                      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding SizeText}"
+                                   FontSize="9.5"
+                                   IsVisible="{Binding !IsDirectory}"
+                                   Foreground="{StaticResource TextMutedBrush}"
+                                   VerticalAlignment="Center" />
+                        <Button Classes="msg-action"
+                                IsVisible="{Binding CanPreview}"
+                                Command="{Binding PreviewCommand}"
+                                ToolTip.Tip="在应用内预览内容（文字与表格，非版式）">
+                          <TextBlock Text="预览" FontSize="10" />
+                        </Button>
+                        <Button Classes="msg-action" Command="{Binding OpenCommand}" ToolTip.Tip="用默认程序打开">
+                          <TextBlock Text="打开" FontSize="10" />
+                        </Button>
+                        <Button Classes="msg-action" Command="{Binding RevealCommand}" ToolTip.Tip="在资源管理器中定位">
+                          <TextBlock Text="定位" FontSize="10" />
+                        </Button>
+                      </StackPanel>
+                    </Grid>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </ScrollViewer>
+
+        <!-- 变更：把所有带差异的产物摊成一条连续的逐行 diff，不用来回展开卡片 -->
+        <ScrollViewer IsVisible="{Binding IsChangesTab}"
+                      VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled"
+                      Margin="8,0,8,10">
+          <StackPanel Spacing="8">
+            <TextBlock Text="这一轮的文件改动，+ 新增 / − 删除。"
+                       Classes="caption"
+                       FontSize="10"
+                       TextWrapping="Wrap"
+                       IsVisible="{Binding HasChangeGroups}"
+                       Foreground="{StaticResource TextMutedBrush}" />
+            <TextBlock Text="这一轮没有可展示的逐行差异（二进制文件或没改过文件）。"
+                       Classes="caption"
+                       FontSize="11"
+                       TextWrapping="Wrap"
+                       Margin="0,8"
+                       IsVisible="{Binding !HasChangeGroups}" />
+            <ItemsControl ItemsSource="{Binding ChangeGroups}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Border Background="{StaticResource SurfaceBrush}"
+                          BorderBrush="{StaticResource BorderBrush}"
+                          BorderThickness="1"
+                          CornerRadius="10"
+                          Margin="0,0,0,8"
+                          ClipToBounds="True">
+                    <StackPanel>
+                      <Grid ColumnDefinitions="*,Auto" Margin="10,8,8,7">
+                        <TextBlock Text="{Binding FileName}"
+                                   FontSize="11.5"
+                                   FontWeight="Medium"
+                                   TextTrimming="CharacterEllipsis"
+                                   ToolTip.Tip="{Binding Detail}" />
+                        <TextBlock Grid.Column="1"
+                                   Text="{Binding ChangeText}"
+                                   FontSize="9.5"
+                                   Foreground="{Binding KindBrush}" />
+                      </Grid>
+                      <Border Background="{StaticResource CodeBackgroundBrush}" Padding="0,4">
+                        <ItemsControl ItemsSource="{Binding Lines}">
+                          <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                              <Border Background="{Binding Background}" Padding="8,0">
+                                <TextBlock Text="{Binding Text}"
+                                           FontFamily="{StaticResource MonoFontFamily}"
+                                           FontSize="10.5"
+                                           LineHeight="16"
+                                           TextWrapping="Wrap"
+                                           Foreground="{Binding Foreground}" />
+                              </Border>
+                            </DataTemplate>
+                          </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                      </Border>
+                    </StackPanel>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </ScrollViewer>
+        </Panel>
       </Grid>
     </Border>
     </Grid>
 
     <Border Grid.Row="3" Padding="26,8,26,14" Background="{StaticResource SurfaceBrush}">
-      <StackPanel MaxWidth="840" HorizontalAlignment="Center">
+      <!-- 结果区展开时，输入框也要收进中间那一栏，不能横跨到结果区下面（WorkBuddy 三区布局）。
+           收起时第二列宽度归零，版式和原来一模一样。 -->
+      <Grid ColumnDefinitions="*,Auto">
+      <StackPanel Grid.Column="0" MaxWidth="840" HorizontalAlignment="Center">
         <!-- 上下文水位：低于 40% 不出现；超过 70% 提示会开始压缩早期内容。
              分母跟着当前模型的窗口走，查不到时数字后面带 * -->
         <StackPanel IsVisible="{Binding ShowContextMeter}"
@@ -1276,6 +1548,8 @@
 
         <views:ComposerView DataContext="{Binding Composer}" MaxWidth="840" />
       </StackPanel>
+      <Border Grid.Column="1" Width="304" IsVisible="{Binding ShowArtifactPanel}" />
+      </Grid>
     </Border>
 
     <!-- 点开大图：平时 IsVisible=False，不占布局也不吃事件 -->

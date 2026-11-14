@@ -19,11 +19,16 @@ public static class PromptComposer
         string text,
         IReadOnlyList<ChatAttachment>? attachments,
         int maxTotalChars = DefaultMaxAttachmentChars,
-        string? mode = null)
+        string? mode = null,
+        string? style = null,
+        string? expertDirective = null)
     {
         var hasAttachments = attachments is { Count: > 0 };
         var hasMode = !string.IsNullOrWhiteSpace(mode);
-        if (!hasAttachments && !hasMode)
+        // 执行（craft）是默认态，不给模型加任何约束；只有计划 / 仅问答才需要注入指令。
+        var hasStyle = WorkStyleText.IsActive(style);
+        var hasExpert = !string.IsNullOrWhiteSpace(expertDirective);
+        if (!hasAttachments && !hasMode && !hasStyle && !hasExpert)
         {
             return text;
         }
@@ -37,6 +42,25 @@ public static class PromptComposer
             // 和引用文件走同一种「应用已经替你准备好了」的表达方式。
             builder.AppendLine(ReminderOpen);
             builder.AppendLine($"当前工作模式：{WorkModeText.Describe(mode)}。{WorkModeText.Directive(mode)}");
+            builder.AppendLine(ReminderClose);
+            builder.AppendLine();
+        }
+
+        if (hasStyle)
+        {
+            // WorkBuddy 的「执行 / 计划 / 仅问答」三态：和场景 directive 同一套注入方式，
+            // 让模式真正影响这一轮的行为，而不是输入框里一颗只换高亮的假开关。
+            builder.AppendLine(ReminderOpen);
+            builder.AppendLine($"本次工作模式：{WorkStyleText.Describe(style)}。{WorkStyleText.Directive(style)}");
+            builder.AppendLine(ReminderClose);
+            builder.AppendLine();
+        }
+
+        if (hasExpert)
+        {
+            // 专家 = 一套角色指令。和场景、模式并列注入，只作用于这一轮。
+            builder.AppendLine(ReminderOpen);
+            builder.AppendLine("本次启用的专家设定：" + expertDirective);
             builder.AppendLine(ReminderClose);
             builder.AppendLine();
         }
@@ -143,5 +167,48 @@ public static class WorkModeText
         Development => "先读现有代码再动手；改动尽量小、贴合项目已有写法；改完自己跑一遍构建或测试再回话。",
         Design => "先对齐信息层级和视觉规范再给方案；给到具体的间距、字号、颜色，不要泛泛而谈。",
         _ => "以文档、表格、汇报材料为主要产出；先给结论再给细节；尽量少用命令行，改文件前说清会改什么。",
+    };
+}
+
+/// <summary>
+/// WorkBuddy 的三种「工作模式」：执行（Craft，默认直接干活）/ 计划（Plan，先出计划再执行）/
+/// 仅问答（Ask，只回答不动手）。和上面的「场景」是两件事：场景是长期偏好，模式是本轮怎么干。
+/// 只对这一轮提问注入指令，历史轮次不重复塞（见 <see cref="PromptComposer"/> 的调用方）。
+/// </summary>
+public static class WorkStyleText
+{
+    public const string Craft = "craft";
+    public const string Plan = "plan";
+    public const string Ask = "ask";
+
+    public static string Normalize(string? style) => style switch
+    {
+        Plan => Plan,
+        Ask => Ask,
+        _ => Craft,
+    };
+
+    /// <summary>执行是默认态，不需要给模型注入任何约束。</summary>
+    public static bool IsActive(string? style) => style is Plan or Ask;
+
+    public static string Describe(string? style) => style switch
+    {
+        Plan => "计划",
+        Ask => "仅问答",
+        _ => "执行",
+    };
+
+    public static string Detail(string? style) => style switch
+    {
+        Plan => "先出分步计划，等你确认后再执行；重要或步骤多的任务用它。",
+        Ask => "只回答、读文件、做分析，不写入、不执行命令，消耗最少。",
+        _ => "直接干活，边做边给结果，适合简单明确的任务。",
+    };
+
+    public static string Directive(string? style) => style switch
+    {
+        Plan => "先给出一份分步计划并等我确认，本轮不要写入文件、不要执行命令、不要调用会改本机的工具。",
+        Ask => "只回答和分析，不要写入任何文件、不要执行命令、不要修改任何内容；需要动手时先说明并等我同意。",
+        _ => string.Empty,
     };
 }

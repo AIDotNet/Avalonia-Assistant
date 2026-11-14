@@ -15,6 +15,9 @@ public sealed record SuggestionCardViewModel(
 
 public sealed record QuickPromptViewModel(string Label, string Prompt);
 
+/// <summary>首页「类别胶囊」。选中项决定下面四张模板卡，照 WorkBuddy 的「选类别 → 换模板」。</summary>
+public sealed record SuggestionCategoryViewModel(string Key, string Label, bool IsSelected);
+
 public sealed partial class HomeViewModel : ObservableObject
 {
     private readonly MainWindowViewModel _host;
@@ -47,21 +50,45 @@ public sealed partial class HomeViewModel : ObservableObject
 
     public ObservableCollection<QuickPromptViewModel> QuickPrompts { get; } = [];
 
-    /// <summary>模式下面那句话：让「办公 / 开发 / 设计」点完有可见的解释，而不是只换个高亮。</summary>
+    public ObservableCollection<SuggestionCategoryViewModel> Categories { get; } = [];
+
+    /// <summary>模式（场景）下面那句话：让「日常办公 / 代码开发 / 设计创意」点完有可见的解释。</summary>
     public string ModeHint => _modeHint;
 
     private string _modeHint = string.Empty;
 
+    private const string CategoryAll = "all";
+
+    /// <summary>
+    /// 类别胶囊。顺序照 WorkBuddy 首页：先「全部」回到当前场景那一套，再按办公场景分。
+    /// 每个类别都是真实能用现有工具跑的模板，不做点进去没有下文的假入口。
+    /// </summary>
+    private static readonly (string Key, string Label)[] CategoryDefs =
+    [
+        (CategoryAll, "全部"),
+        ("documents", "文档处理"),
+        ("data", "数据分析"),
+        ("slides", "幻灯片"),
+        ("research", "深度研究"),
+        ("files", "文件整理"),
+    ];
+
+    [ObservableProperty]
+    private string selectedCategory = CategoryAll;
+
+    /// <summary>个别类别有边界要说清（比如不生成 pptx），选到它才显示，不占常驻版面。</summary>
+    public string CategoryHint => SelectedCategory switch
+    {
+        "slides" => "生成汇报大纲与逐页讲稿（docx），不直接生成 pptx",
+        "research" => "联网抓取走 fetch_url；端点不可达时会给出提示",
+        _ => string.Empty,
+    };
+
+    public bool HasCategoryHint => !string.IsNullOrEmpty(CategoryHint);
+
     private void ApplyMode(string mode)
     {
-        Cards.Clear();
         QuickPrompts.Clear();
-
-        foreach (var card in CardsFor(mode))
-        {
-            Cards.Add(card);
-        }
-
         foreach (var prompt in PromptsFor(mode))
         {
             QuickPrompts.Add(prompt);
@@ -69,9 +96,61 @@ public sealed partial class HomeViewModel : ObservableObject
 
         _modeHint = HintFor(mode);
         OnPropertyChanged(nameof(ModeHint));
+
+        // 换场景回到「全部」，让它和这一场景的默认模板对齐。
+        SelectedCategory = CategoryAll;
+        RebuildCategories();
+        RebuildCards();
+        Composer.SetPreview(null);
     }
 
-    private static SuggestionCardViewModel[] CardsFor(string mode) => mode switch
+    private void RebuildCategories()
+    {
+        Categories.Clear();
+        foreach (var (key, label) in CategoryDefs)
+        {
+            Categories.Add(new SuggestionCategoryViewModel(key, label, key == SelectedCategory));
+        }
+
+        OnPropertyChanged(nameof(CategoryHint));
+        OnPropertyChanged(nameof(HasCategoryHint));
+    }
+
+    private void RebuildCards()
+    {
+        Cards.Clear();
+        foreach (var card in CardsFor(Mode, SelectedCategory))
+        {
+            Cards.Add(card);
+        }
+    }
+
+    [RelayCommand]
+    private void SelectCategory(SuggestionCategoryViewModel category)
+    {
+        if (string.Equals(SelectedCategory, category.Key, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        SelectedCategory = category.Key;
+        RebuildCategories();
+        RebuildCards();
+        Composer.SetPreview(null);
+    }
+
+    /// <summary>「全部」= 当前场景那一套；其余六个类别各自带四张模板。</summary>
+    private static SuggestionCardViewModel[] CardsFor(string mode, string category) => category switch
+    {
+        "documents" => DocumentCards(),
+        "data" => DataCards(),
+        "slides" => SlideCards(),
+        "research" => ResearchCards(),
+        "files" => FileCards(),
+        _ => SceneCards(mode),
+    };
+
+    private static SuggestionCardViewModel[] SceneCards(string mode) => mode switch
     {
         WorkModeText.Development =>
         [
@@ -108,6 +187,66 @@ public sealed partial class HomeViewModel : ObservableObject
         ],
     };
 
+    private static SuggestionCardViewModel[] DocumentCards() =>
+    [
+        new("整理一份会议纪要", "把零散记录收成要点和待办",
+            "帮我把手上的会议记录整理成一份纪要：分议题、结论、待办（标负责人），写成 docx 放到工作区。", ArcIcons.FileText),
+        new("写一份项目周报", "把进展收成三段，不写空话",
+            "帮我写一份这周的项目周报：进展、风险、下周计划各一段，写成 docx。", ArcIcons.Pencil),
+        new("总结一篇文档", "长文压成要点和待办",
+            "帮我总结工作区里最重要的一份文档，给出要点和接下来要做的事。", ArcIcons.Sparkles),
+        new("把 Markdown 转成 Word", "标题、列表、表格落成样式",
+            "把工作区里这份 Markdown 转成 docx，标题、项目符号和表格要落成真正的样式。", ArcIcons.FileText),
+    ];
+
+    private static SuggestionCardViewModel[] DataCards() =>
+    [
+        new("汇总一份表格", "按维度合计，给一张新表",
+            "帮我把工作区里这份表格按指定维度汇总，生成一张带合计行的 xlsx。", ArcIcons.Monitor),
+        new("核对两版数据", "找出对不上的行",
+            "帮我对比工作区里两份表格，列出对不上的行和具体差异，写成 Markdown。", ArcIcons.Search),
+        new("挑出异常值", "标出明显偏离的记录",
+            "帮我扫一遍这份数据，标出明显偏离的记录，说明可能的原因。", ArcIcons.Sparkles),
+        new("做一份对比表", "把几份材料摆成一张表",
+            "把工作区里这几份材料的关键信息汇总成一张对比表，写成 xlsx。", ArcIcons.Check),
+    ];
+
+    private static SuggestionCardViewModel[] SlideCards() =>
+    [
+        new("列一份汇报大纲", "先定结构，再谈内容",
+            "帮我为这个主题列一份 10 页左右的汇报大纲，每页给标题和三个要点，写成 docx。", ArcIcons.Pencil),
+        new("写逐页讲稿", "照大纲补每页要说的话",
+            "照这份大纲给每一页写一段讲稿，口语化、每页控制在 150 字内，写成 docx。", ArcIcons.FileText),
+        new("把长文压成要点", "一页只留一句话",
+            "把这份长文压缩成汇报要点，一页只留一个结论加两条依据，写成 Markdown。", ArcIcons.Sparkles),
+        new("整理成汇报材料", "结论先行，数据跟上",
+            "把工作区里的材料整理成一份汇报稿：结论先行、数据跟上、最后给建议，写成 docx。", ArcIcons.Check),
+    ];
+
+    private static SuggestionCardViewModel[] ResearchCards() =>
+    [
+        new("查一份资料并汇总", "抓正文，去重整理",
+            "帮我查这个主题的资料，抓回正文后去重整理成一份要点清单，写成 Markdown。", ArcIcons.Search),
+        new("对比几个方案", "列差异、优劣和适用",
+            "帮我对比这几个方案，列清差异、各自优劣和适用场景，写成一张表。", ArcIcons.Check),
+        new("写一份调研报告", "背景、现状、结论三段",
+            "帮我写一份这个主题的调研报告：背景、现状、结论和建议，写成 docx。", ArcIcons.FileText),
+        new("核对一个说法", "找依据，标不确定处",
+            "帮我核对这个说法，给出支持与反对的依据，并标出哪些地方还不确定。", ArcIcons.Sparkles),
+    ];
+
+    private static SuggestionCardViewModel[] FileCards() =>
+    [
+        new("整理这个文件夹", "先看清结构，再决定归档",
+            "帮我梳理一下工作区里的文件结构，告诉我哪些可以归档、哪些该删。", ArcIcons.FolderOpen),
+        new("找大文件", "按大小列出来",
+            "列一下工作区里超过 100MB 的文件，按大小排，标出修改时间。", ArcIcons.Search),
+        new("按类型归类", "先给方案，不要直接搬",
+            "帮我按类型给工作区里的文件设计一个归档方案，先给目录结构和规则，等我确认再动手。", ArcIcons.Pencil),
+        new("看看本机配置", "系统、CPU、内存、磁盘一次看清",
+            "帮我看下这台电脑的配置，整理成一份 Markdown 放到工作区。", ArcIcons.Monitor),
+    ];
+
     /// <summary>快捷词只负责填进输入框，所以内容和上面的卡片不重复：一个是直接开跑，一个是先改再发。</summary>
     private static QuickPromptViewModel[] PromptsFor(string mode) => mode switch
     {
@@ -137,10 +276,18 @@ public sealed partial class HomeViewModel : ObservableObject
     /// </summary>
     private static string HintFor(string mode) => mode switch
     {
-        WorkModeText.Development => "开发：先读代码再动手，改完自己跑一遍构建再回话。之后新建的任务默认用它。",
-        WorkModeText.Design => "设计：先对齐信息层级和规范，给到具体间距、字号和颜色。之后新建的任务默认用它。",
-        _ => "办公：先给结论再给细节，少用命令行，改文件前说清会改什么。之后新建的任务默认用它。",
+        WorkModeText.Development => "代码开发：先读代码再动手，改完自己跑一遍构建再回话。之后新建的任务默认用它。",
+        WorkModeText.Design => "设计创意：先对齐信息层级和规范，给到具体间距、字号和颜色。之后新建的任务默认用它。",
+        _ => "日常办公：先给结论再给细节，少用命令行，改文件前说清会改什么。之后新建的任务默认用它。",
     };
+
+    /// <summary>
+    /// WorkBuddy 首页的标志性交互：悬停模板，输入框里用灰字预览整段提示词。
+    /// 只是预览，不会进草稿、更不会被发出去；点一下才填入。
+    /// </summary>
+    public void PreviewCard(SuggestionCardViewModel card) => Composer.SetPreview(card.Prompt);
+
+    public void ClearPreview() => Composer.SetPreview(null);
 
     public string Greeting
     {
@@ -202,6 +349,7 @@ public sealed partial class HomeViewModel : ObservableObject
     [RelayCommand]
     private void FillCard(SuggestionCardViewModel card)
     {
+        Composer.SetPreview(null);
         Composer.Text = card.Prompt;
         Composer.RequestFocus();
     }
@@ -214,6 +362,7 @@ public sealed partial class HomeViewModel : ObservableObject
     [RelayCommand]
     private void UseQuickPrompt(QuickPromptViewModel prompt)
     {
+        Composer.SetPreview(null);
         Composer.Text = prompt.Prompt;
         Composer.RequestFocus();
     }

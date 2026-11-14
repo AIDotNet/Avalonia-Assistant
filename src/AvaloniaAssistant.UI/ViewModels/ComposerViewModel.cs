@@ -118,7 +118,26 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SendCommand))]
+    [NotifyPropertyChangedFor(nameof(ShowPreview))]
+    [NotifyPropertyChangedFor(nameof(EffectivePlaceholder))]
+    [NotifyPropertyChangedFor(nameof(InputHint))]
     private string? text;
+
+    /// <summary>
+    /// 首页悬停模板卡时，把整段提示词用灰字预览在输入框里（WorkBuddy 的做法）。
+    /// 只是预览：不进草稿、不会被发出去，输入了字或移开鼠标就消失。
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowPreview))]
+    [NotifyPropertyChangedFor(nameof(EffectivePlaceholder))]
+    [NotifyPropertyChangedFor(nameof(InputHint))]
+    private string? previewText;
+
+    public bool ShowPreview => !string.IsNullOrWhiteSpace(PreviewText) && string.IsNullOrWhiteSpace(Text);
+
+    public string EffectivePlaceholder => ShowPreview ? PreviewText! : Placeholder;
+
+    public void SetPreview(string? text) => PreviewText = text;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SendCommand))]
@@ -153,7 +172,9 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
             ? "正在读取引用，按 Enter 会在读完后再发"
             : IsBusy
                 ? "Enter 排队，本轮结束后自动发送"
-                : "Enter 发送 · Shift+Enter 换行 · @ 引用文件";
+                : ShowPreview
+                    ? "模板预览（不会发送）· 点卡片填入输入框"
+                    : "Enter 发送 · Shift+Enter 换行 · @ 引用文件";
 
     /// <summary>正在读引用文件的正文，读完才真正发出。</summary>
     [ObservableProperty]
@@ -295,6 +316,18 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
 
     /// <summary>权限说明，展示在权限浮层顶部。</summary>
     public string PermissionDetail => PermissionModeText.Detail(_settings.Current.Permission);
+
+    /// <summary>
+    /// WorkBuddy 的三态工作模式（执行 / 计划 / 仅问答）。和「场景」是两件事：
+    /// 场景是长期偏好，模式决定本轮怎么干；切了会作为一条 system-reminder 注入这一轮提问。
+    /// </summary>
+    public string WorkStyle => WorkStyleText.Normalize(_settings.Current.WorkStyle);
+
+    public string WorkStyleLabel => WorkStyleText.Describe(WorkStyle);
+
+    public string WorkStyleDetail => WorkStyleText.Detail(WorkStyle);
+
+    public string WorkStyleTooltip => $"工作模式：{WorkStyleLabel}\n{WorkStyleDetail}\n点击切换";
 
     public string PermissionTooltip
     {
@@ -1295,6 +1328,35 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
         }
     }
 
+    /// <summary>切「执行 / 计划 / 仅问答」。写盘失败要退回旧值，别让界面和磁盘各说一套。</summary>
+    public async Task SetWorkStyleAsync(string style)
+    {
+        var next = WorkStyleText.Normalize(style);
+        if (string.Equals(_settings.Current.WorkStyle, next, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        var previous = _settings.Current.WorkStyle;
+        _settings.Current.WorkStyle = next;
+        Refresh();
+
+        try
+        {
+            await _settings.SaveAsync(_settings.Current);
+        }
+        catch (Exception ex)
+        {
+            _settings.Current.WorkStyle = previous;
+            Refresh();
+            SettingsWriteFailed?.Invoke(this, "工作模式没保存成功：" + ex.Message);
+        }
+        finally
+        {
+            RequestFocus();
+        }
+    }
+
     /// <summary>浮层里的「只用只读」快捷入口。</summary>
     [RelayCommand]
     private async Task UseReadOnlyAsync() => await SetPermissionAsync(PermissionMode.ReadOnly);
@@ -1433,6 +1495,10 @@ public sealed partial class ComposerViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(IsReadOnlyMode));
         OnPropertyChanged(nameof(PermissionForeground));
         OnPropertyChanged(nameof(ShowFullAccessNotice));
+        OnPropertyChanged(nameof(WorkStyle));
+        OnPropertyChanged(nameof(WorkStyleLabel));
+        OnPropertyChanged(nameof(WorkStyleDetail));
+        OnPropertyChanged(nameof(WorkStyleTooltip));
         OnPropertyChanged(nameof(WorkspaceLabel));
         OnPropertyChanged(nameof(WorkspacePath));
         OnPropertyChanged(nameof(WorkspacePathHint));

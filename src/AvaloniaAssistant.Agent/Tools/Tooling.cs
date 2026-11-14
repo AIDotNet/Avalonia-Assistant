@@ -24,7 +24,7 @@ internal static class JsonArgs
         null => default,
         JsonElement element => element,
         JsonNode node => JsonSerializer.SerializeToElement(node),
-        _ => JsonSerializer.SerializeToElement(args),
+        _ => JsonSerializer.SerializeToElement(args, AgentJson.Plain),
     };
 
     public static string? OptionalString(JsonElement json, string name)

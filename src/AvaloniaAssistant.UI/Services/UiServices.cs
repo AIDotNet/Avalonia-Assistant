@@ -502,4 +502,28 @@ public static class AppLaunchOptions
 
     /// <summary>是否用了隔离数据目录（--data-dir）。隔离时截图可以放心读写设置，不碰真实数据。</summary>
     public static bool IsolatedData { get; set; }
+
+    /// <summary>开发用：首页把模板提示词摆成输入框里的灰字预览，验收「只是预览、不发草稿」。</summary>
+    public static bool HomePreview { get; set; }
+
+    /// <summary>开发用：首页预选一个类别胶囊（键名），验收模板切换。</summary>
+    public static string? HomeCategory { get; set; }
+
+    /// <summary>开发用：真的打开「工作模式」浮层，单独截弹层版式。</summary>
+    public static bool WorkStyleFlyout { get; set; }
+
+    /// <summary>开发用：结果区默认停在「全部文件」页，验收工作区目录树。</summary>
+    public static bool ResultsFilesTab { get; set; }
+
+    /// <summary>开发用：工作台页摆出「新建定时任务」表单态。</summary>
+    public static bool WorkbenchDemo { get; set; }
+
+    /// <summary>开发用：结果区默认停在指定页（overview / artifacts / files / changes）。</summary>
+    public static string? ResultsTab { get; set; }
+
+    /// <summary>开发用：跑一遍真实的定时调度链路并把结果打到控制台（不需要 API Key）。</summary>
+    public static bool VerifyScheduler { get; set; }
+
+    /// <summary>开发用：验证任务配置解析 / 模型权限覆盖 / 专家包 / 开机自启 / 结果文件。</summary>
+    public static bool VerifyWorkbench { get; set; }
 }

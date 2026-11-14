@@ -370,6 +370,9 @@ public sealed class AssistantSettings
 
     public string Mode { get; set; } = "office";
 
+    /// <summary>本轮怎么干：craft 执行 / plan 计划 / ask 仅问答（WorkBuddy 的三态）。</summary>
+    public string WorkStyle { get; set; } = WorkStyleText.Craft;
+
     /// <summary>启动时打开哪一页：<c>home</c> 首页，<c>last</c> 上次那条任务。</summary>
     public string StartupPage { get; set; } = "home";
 
@@ -489,6 +492,7 @@ public sealed class AssistantSettings
         DisabledSkills = [.. DisabledSkills],
         NpmRegistry = NpmRegistry,
         Mode = Mode,
+        WorkStyle = WorkStyle,
         StartupPage = StartupPage,
         LastSessionId = LastSessionId,
         IsSidebarVisible = IsSidebarVisible,

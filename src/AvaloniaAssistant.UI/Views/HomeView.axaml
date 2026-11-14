@@ -43,20 +43,23 @@
           <Button Classes="chip mode-chip"
                   Classes.active="{Binding IsOffice}"
                   Command="{Binding SetModeCommand}"
-                  CommandParameter="office">
-            <TextBlock Text="办公" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                  CommandParameter="office"
+                  ToolTip.Tip="日常办公：之后新建的任务默认用它">
+            <TextBlock Text="日常办公" HorizontalAlignment="Center" VerticalAlignment="Center" />
           </Button>
           <Button Classes="chip mode-chip"
                   Classes.active="{Binding IsDevelopment}"
                   Command="{Binding SetModeCommand}"
-                  CommandParameter="development">
-            <TextBlock Text="开发" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                  CommandParameter="development"
+                  ToolTip.Tip="代码开发：之后新建的任务默认用它">
+            <TextBlock Text="代码开发" HorizontalAlignment="Center" VerticalAlignment="Center" />
           </Button>
           <Button Classes="chip mode-chip"
                   Classes.active="{Binding IsDesign}"
                   Command="{Binding SetModeCommand}"
-                  CommandParameter="design">
-            <TextBlock Text="设计" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                  CommandParameter="design"
+                  ToolTip.Tip="设计创意：之后新建的任务默认用它">
+            <TextBlock Text="设计创意" HorizontalAlignment="Center" VerticalAlignment="Center" />
           </Button>
         </StackPanel>
 
@@ -120,6 +123,32 @@
                    Classes="section-title"
                    Margin="2,16,0,8" />
 
+        <!-- WorkBuddy 首页的类别胶囊：选一个类别，下面四张模板卡跟着换。
+             悬停模板会在输入框里用灰字预览整段提示词，点一下才真正填入。 -->
+        <ItemsControl ItemsSource="{Binding Categories}" Margin="0,0,0,8">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <WrapPanel ItemSpacing="7" LineSpacing="7" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <Button Classes="chip category-chip"
+                      Classes.active="{Binding IsSelected}"
+                      Content="{Binding Label}"
+                      Command="{Binding $parent[ItemsControl].DataContext.SelectCategoryCommand}"
+                      CommandParameter="{Binding}" />
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <TextBlock Text="{Binding CategoryHint}"
+                   IsVisible="{Binding HasCategoryHint}"
+                   Classes="caption"
+                   FontSize="10.5"
+                   Foreground="{StaticResource TextMutedBrush}"
+                   Margin="2,0,0,10" />
+
         <ItemsControl ItemsSource="{Binding Cards}" Margin="0,0,-12,-12">
           <ItemsControl.ItemsPanel>
             <ItemsPanelTemplate>
@@ -130,11 +159,13 @@
             <DataTemplate>
               <!-- 卡身 = 填入输入框，可以改完再发；右上角箭头才是「直接开始」。
                    以前整张卡都是「点了就跑」，想改一个词都没机会。 -->
-              <Grid Margin="0,0,12,12">
+              <Grid Margin="0,0,12,12"
+                    PointerEntered="OnCardPointerEntered"
+                    PointerExited="OnCardPointerExited">
                 <Button Classes="card-button"
                         Command="{Binding $parent[ItemsControl].DataContext.FillCardCommand}"
                         CommandParameter="{Binding}"
-                        ToolTip.Tip="填入输入框，可以改完再发">
+                        ToolTip.Tip="悬停预览整段提示词 · 点一下填入输入框，可以改完再发">
                   <Border Classes="card" Padding="14" Height="96">
                     <Grid ColumnDefinitions="Auto,*">
                       <Border Width="34" Height="34" CornerRadius="10" Background="{StaticResource SurfaceMutedBrush}" VerticalAlignment="Top">

@@ -110,16 +110,22 @@ internal static class McpProber
 
         try
         {
-            await SendAsync(process, new
+            // JSON-RPC 报文用 JsonNode 直接拼：匿名类型在 Native AOT 下没有可生成的
+            // JsonTypeInfo，反射式 Serialize 会抛 missing native code。
+            await SendAsync(process, new JsonObject
             {
-                jsonrpc = "2.0",
-                id = 1,
-                method = "initialize",
-                @params = new
+                ["jsonrpc"] = "2.0",
+                ["id"] = 1,
+                ["method"] = "initialize",
+                ["params"] = new JsonObject
                 {
-                    protocolVersion = "2024-11-05",
-                    capabilities = new { },
-                    clientInfo = new { name = "AvaloniaAssistant", version = "1.0" },
+                    ["protocolVersion"] = "2024-11-05",
+                    ["capabilities"] = new JsonObject(),
+                    ["clientInfo"] = new JsonObject
+                    {
+                        ["name"] = "AvaloniaAssistant",
+                        ["version"] = "1.0",
+                    },
                 },
             }, timeout.Token);
 
@@ -129,8 +135,19 @@ internal static class McpProber
                 return McpProbeResult.Failed("进程起来了，但没有回 initialize" + Tail(stderr));
             }
 
-            await SendAsync(process, new { jsonrpc = "2.0", method = "notifications/initialized" }, timeout.Token);
-            await SendAsync(process, new { jsonrpc = "2.0", id = 2, method = "tools/list", @params = new { } }, timeout.Token);
+            await SendAsync(process, new JsonObject
+            {
+                ["jsonrpc"] = "2.0",
+                ["method"] = "notifications/initialized",
+            }, timeout.Token);
+
+            await SendAsync(process, new JsonObject
+            {
+                ["jsonrpc"] = "2.0",
+                ["id"] = 2,
+                ["method"] = "tools/list",
+                ["params"] = new JsonObject(),
+            }, timeout.Token);
 
             var list = await ReadResponseAsync(process, "2", timeout.Token);
             if (list is null)
@@ -174,9 +191,9 @@ internal static class McpProber
         }
     }
 
-    private static async Task SendAsync(Process process, object payload, CancellationToken cancellationToken)
+    private static async Task SendAsync(Process process, JsonObject payload, CancellationToken cancellationToken)
     {
-        var line = JsonSerializer.Serialize(payload);
+        var line = payload.ToJsonString();
         await process.StandardInput.WriteLineAsync(line.AsMemory(), cancellationToken);
         await process.StandardInput.FlushAsync(cancellationToken);
     }

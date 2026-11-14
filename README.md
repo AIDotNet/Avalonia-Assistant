@@ -2,12 +2,36 @@
 
 Windows 桌面 AI 助理。Agent 循环用 [pi.net](https://github.com/AIDotNet/pi.net) 的 **Pi.CodingAgent**，
 界面用 [TKCode.Arc](https://github.com/AIDotNet/TKCode.Arc)，交互参考 WorkBuddy：左侧任务与空间，
-中间对话，输入框里带模型、权限和工作区选择。
+中间对话，右侧结果区，输入框里带模型、权限、模式和工作区选择；首页按场景与类别切换提示词模板。
 
 ![首页](docs/images/home.png)
 
 ## 现在能做什么
 
+- **照 WorkBuddy 的三区骨架**：左侧任务与空间、中间对话、右侧「结果区」。结果区四栏——
+  「概览」看工作区与本次任务、「产物」看改过什么、「全部文件」是工作区目录树（顶层 + 一层，
+  可预览 / 打开 / 定位）、「变更」把所有逐行差异摊成一条连续的 diff；入口在顶栏常驻，
+  没改过文件也能打开看目录，输入框跟着收进中间那一栏，不横跨到结果区下面。
+- **侧栏**：助理 / 工作台 / 技能 / MCP / 插件五项。项目、专家、定时任务、资料库、设置与关于
+  是「工作台」这一个页面里的五个分区，由页内 tab 切换，侧栏不再重复铺一遍；每一项都是真页面：
+  - **项目**：按工作空间归类，显示任务数，可「在此新建任务」/ 打开 / 定位目录。
+  - **专家**：6 套内置办公角色（周报、纪要、数据分析、校对、汇报提纲、深度研究）+ 自定义，
+    选中的专家指令会注入之后每一轮提问。
+  - **定时任务**：本地调度器每 30 秒轮询，到点以配置的工作区新建任务并立即发送；单次 / 每天 /
+    每周（可多选星期）/ 每月（可多选日期）、有效期、模板预填、「从任务新建」、试跑一次、
+    启停、删除，以及「运行记录」页。每条任务可挂**项目**、指定**专用模型 / 专家 / 权限档位**
+    （由 `RunSettingsOverride` 派生设置副本，不动全局选择）、选择**结果推送**（系统提醒 /
+    写入工作区结果文件 / 不推送）；「设置与关于」分区可开启开机自启。
+  - **资料库**：登记本机文件 / 文件夹，可预览、打开、定位，或「引用到任务」——走和 @、拖放
+    完全同一条「发送时才读正文」的链路；移除不删磁盘文件。
+  - **设置与关于**：设置 / 数据目录 / 诊断信息直达 + 完整快捷键表。
+- **首页按场景与类别挑模板**（WorkBuddy 的欢迎页）：日常办公 / 代码开发 / 设计创意三个场景标签
+  各换一套模板，再按「文档处理 / 数据分析 / 幻灯片 / 深度研究 / 文件整理」切换下面四张卡片；
+  **悬停卡片会在输入框里用灰字预览整段提示词**（只是预览，不进草稿、不会被发出去），点卡片填入、
+  点右上角 ↗ 直接开始。「幻灯片」一栏会写明产出的是汇报大纲与讲稿（docx），不生成 pptx。
+- **模式真的会改行为**：输入框下面「执行 / 计划 / 仅问答」三态（WorkBuddy 的 Craft / Plan / Ask），
+  选「计划」先出分步计划等确认、选「仅问答」只读不动手，由 `PromptComposer` 作为一条
+  system-reminder 注入这一轮提问；和「场景」是两件事，也不是只换高亮的假开关。
 - **流式对话**：DeepSeek / OpenAI / Anthropic / 任意 OpenAI 兼容端点（Ollama、LM Studio、vLLM、One-API）。
 - **真的会动手**：自建 8 个日常办公 / 编码工具 + CodingAgent 内置的 read / grep / find / ls / edit。
 - **三个市场**：技能页搜 [skills.sh](https://skills.sh) 一键装技能（交给官方 CLI 解析仓库里那层任意路径，
@@ -68,7 +92,7 @@ Windows 桌面 AI 助理。Agent 循环用 [pi.net](https://github.com/AIDotNet/
   `pi-package`（和 pi 官方 gallery 同一份来源，分页加载），也可以手动填包名 / `npm:` 版本 / `git:` 地址 /
   本地目录；装用户级还是当前工作区（项目级）由页面上的开关决定。已装的能**停用**（包留在 `settings.json`，
   pi 不再加载它的资源）、能**检查更新并升级**、能一键卸载；扩展目录里手工放的 `.ts` / `.js` / `.dll`
-  也一并列出。pi.net 的进程内 JS 宿主（1.4.5 引入，当前依赖 1.5.2）直接加载 TypeScript 扩展，
+  也一并列出。pi.net 的进程内 JS 宿主（1.4.5 引入，当前依赖 1.5.2.1）直接加载 TypeScript 扩展，
   不用先编译成程序集。
   插件注册的工具会进会话，并在「技能」页单独列出来、可以逐个关掉；它们没有本地元数据，按「会改本机」对待——
   只读模式不执行，其它模式逐次确认（和 MCP 工具同一套策略）。
@@ -93,7 +117,7 @@ Windows 桌面 AI 助理。Agent 循环用 [pi.net](https://github.com/AIDotNet/
 | 层 | 框架 | 引用包 | 版本 |
 | --- | --- | --- | --- |
 | UI 框架 | [TKCode.Arc](https://github.com/AIDotNet/TKCode.Arc)（Arc 控件库） | `TKCode.Arc`、`TKCode.Arc.Fonts` | 1.1.0 |
-| Agent 框架 | [pi.net](https://github.com/AIDotNet/pi.net)（Pi 的 .NET 移植） | `Pi.CodingAgent`（传递引入 `Pi.Agent` / `Pi.Ai` / `Pi.Mcp` 等） | 1.5.2 |
+| Agent 框架 | [pi.net](https://github.com/AIDotNet/pi.net)（Pi 的 .NET 移植） | `Pi.CodingAgent`（传递引入 `Pi.Agent` / `Pi.Ai` / `Pi.Mcp` 等） | 1.5.2.1 |
 
 - **TKCode.Arc 负责界面**：控件、主题、图标字体全部来自 Arc，入口在 `Program.BuildAvaloniaApp`
   里一次装好——`WithArcFonts()` 加 `UseArc(arc => arc.UseArcControls())`，
@@ -196,12 +220,54 @@ dotnet publish src/AvaloniaAssistant.Desktop -c Release -r win-x64 --self-contai
 
 首次运行时内容文件会解到 `%TEMP%\.net\` 下，之后启动直接复用。
 
+### Native AOT（原生映像）
+
+pi.net 从 **1.5.2.1** 起支持 Native AOT，本项目跟着提供第三种发布方式：原生 PE 映像，
+不装 .NET 运行时、不带 JIT、启动更快。它是**可选的部署能力**，默认 Debug / Release
+构建与测试完全不走 AOT 配置。
+
+```bash
+dotnet publish src/AvaloniaAssistant.Desktop -c Release -r win-x64 \
+  -p:PublishAot=true -o dist/aot-win-x64
+```
+
+前置条件：.NET 10 SDK、Windows 上的 MSVC `link.exe` + Windows SDK（VS / Build Tools 里的
+「使用 C++ 的桌面开发」），ILCompiler 由 NuGet 自动还原。
+
+`-p:PublishAot=true` 会激活 [Directory.Build.props](Directory.Build.props) 的条件组和
+[Directory.Build.targets](Directory.Build.targets)：
+
+| 配置 | 作用 |
+| --- | --- |
+| `JsonSerializerIsReflectionEnabledByDefault=true` | AOT 下默认关闭反射 JSON，必须打开，Pi 包内与本项目 source-gen 上下文链尾的反射兜底才有效 |
+| `IlcGenerateCompleteTypeMetadata=true` + 18 个 `TrimmerRootAssembly` | 不裁剪任何代码 / 反射元数据，保住 Avalonia 经典绑定、DI、Jint 扩展宿主 |
+| `AssistantAotJsonContext`（`Abstractions/AotJson.cs`） | 本项目自己的 `AssistantSettings` / `ChatSession` 走 source-gen；只在 `RuntimeFeature.IsDynamicCodeSupported == false` 时挂上，JIT 行为不变 |
+| `NoWarn` IL2xxx / IL3xxx | 完整元数据配置下这些裁剪告警是假阳性，抑制范围仅限 AOT 条件组 |
+| `DebugType=none` | 避免 ILC 甩出几百 MB 的 pdb；需要符号用 `-p:DebugType=portable` 覆盖 |
+
+匿名类型在 AOT 下没有可生成的 `JsonTypeInfo`：连接测试与 MCP 握手的请求体改用 `JsonObject`
+直接拼（`ConnectionProbe` / `McpProber`），工具参数的动态序列化走 `AgentJson` 的 source-gen
+options。Pi 内部的反射式 JSON 由 1.5.2.1 自带的 `Aot/AotJson.cs` 覆盖，消费方无需改代码。
+
+产物是 `AvaloniaAssistant.exe`（约 148 MB 原生映像）+ SkiaSharp / HarfBuzz 等 native DLL
++ `Assets/` 目录——**不是单文件**，native 库无法静态链进原生映像。实测验证方式：
+
+```bash
+cd dist/aot-win-x64
+./AvaloniaAssistant.exe --screenshot aot-home.png --page home --data-dir .tmp/aot-verify
+```
+
+首页 / 设置 / 会话 / 工具页都能正常出图，写出的 `settings.json` 与 JIT 版格式一致。
+SDK 10.0.401 自带的 ILCompiler 10.0.12 会报 `NU1903`（GHSA-p3jp-9v83-76w9）审计告警，
+升级到捆绑 10.0.15 的 SDK 即可消除，不影响产物。
+
 ## 项目结构
 
 ```
 Avalonia-Assistant/
 ├── Avalonia.Assistant.slnx
-├── Directory.Build.props          # net10.0 / 语言版本 / 依赖版本变量
+├── Directory.Build.props          # net10.0 / 语言版本 / 依赖版本变量 + AOT 条件组
+├── Directory.Build.targets        # AOT 发布时的程序集整体 root
 ├── Directory.Packages.props       # 集中包版本
 ├── src/
 │   ├── AvaloniaAssistant.Abstractions/   # 契约与 DTO（零依赖）
@@ -211,7 +277,12 @@ Avalonia-Assistant/
 │   │   ├── AssistantSettings.cs          # 设置、provider 预设、权限、npm 镜像
 │   │   ├── AgentPlugins.cs               # 插件 / 市场 DTO 与 IPluginStore 契约
 │   │   ├── AgentSkills.cs                # 技能市场 DTO 与 ISkillMarket 契约
-│   │   └── McpMarket.cs                  # MCP 市场 DTO 与 IMcpMarket 契约
+│   │   ├── McpMarket.cs                  # MCP 市场 DTO 与 IMcpMarket 契约
+│   │   ├── WorkbenchData.cs              # 定时任务 / 项目 / 资料库 / 专家 DTO + TaskRunConfig
+│   │   ├── ScheduleMath.cs               # 定时任务的日期与时间窗判定（纯函数）
+│   │   ├── ExpertPack.cs                 # 专家包导入导出的数据结构
+│   │   ├── RunSettingsOverride.cs        # 专用模型 / 权限派生设置副本，纯函数
+│   │   └── AotJson.cs                    # Native AOT 的 source-gen JSON 上下文
 │   ├── AvaloniaAssistant.Agent/          # 唯一认识 pi.net 的项目
 │   │   ├── PiAgentRuntime.cs             # 会话缓存、事件映射、权限钩子、abort
 │   │   ├── CodingSessionFactory.cs       # ModelRuntime + Sdk 装配（技能 / MCP / 内置扩展）
@@ -221,17 +292,21 @@ Avalonia-Assistant/
 │   │   ├── SkillMarketStore.cs           # skills.sh 搜索与安装
 │   │   ├── McpMarketStore.cs             # ModelScope 接口 + mcp.so 目录兜底
 │   │   ├── ToolAccess.cs                 # 内置 / MCP / 插件工具的安全属性判定
+│   │   ├── AgentJson.cs                  # 动态 object 参数的 AOT-safe 序列化 options
 │   │   ├── PiStreamFactory.cs            # 测试可替换的 OpenAI / Anthropic 流式入口
 │   │   ├── AgentToolRegistry.cs          # 自建工具清单 → ToolDefinition
 │   │   └── Tools/                        # 8 个自建工具（读 / 列 / 搜走 CodingAgent 内置）
-│   ├── AvaloniaAssistant.Storage/        # settings.json / sessions/*.json / 技能导入
+│   ├── AvaloniaAssistant.Storage/        # settings.json / sessions/*.json / workbench.json / 技能导入
+│   │   └── JsonWorkbenchStore.cs         # 定时任务 / 资料库 / 专家的存档
 │   ├── AvaloniaAssistant.Speech/         # NAudio 录音 + 转写
 │   ├── AvaloniaAssistant.UI/             # 窗口、页面、VM、样式
-│   │   ├── Views/                        # MainWindow / Sidebar / Home / Chat / Tools / Mcp / Plugins / Settings
-│   │   ├── ViewModels/                   # 命令、会话状态、消息 VM、三个市场的 VM
+│   │   ├── Views/                        # MainWindow / Sidebar / Home / Chat / Workbench / Tools / Mcp / Plugins / Settings
+│   │   ├── ViewModels/                   # 命令、会话状态、消息 VM、市场 VM、WorkbenchViewModel
+│   │   ├── Services/ScheduledTaskRunner.cs # 本地定时任务调度器（30 秒轮询）
+│   │   ├── Services/AutoStartService.cs   # 开机自启（用户启动文件夹，可测试目录）
 │   │   └── Styles/                       # Tokens.axaml / AppStyles.axaml
 │   └── AvaloniaAssistant.Desktop/        # 入口、DI、Arc 初始化
-├── tests/AvaloniaAssistant.Agent.Tests/  # 228 个测试
+├── tests/AvaloniaAssistant.Agent.Tests/  # 253 个测试
 └── docs/
     ├── research.md               # 两个参考项目的结构与集成方式
     ├── migration.md              # 旧功能逐项盘点与取舍
@@ -350,7 +425,7 @@ CodingAgent 提供的内置工具（`tools` allowlist 里固定启用）：
 dotnet test Avalonia.Assistant.slnx
 ```
 
-228 个测试，覆盖：
+253 个测试，覆盖：
 
 - Faux 模型驱动的完整 agent 循环与工具调用；
 - 只读模式拦截、授权拒绝、缺 API Key；
@@ -365,7 +440,11 @@ dotnet test Avalonia.Assistant.slnx
 - 行级 diff 与计划文本解析：新增 / 删除行数、上下文折叠、大文件降级、三种步骤状态；
 - 插件市场：npm 镜像与干净进程环境、用户级 / 项目级安装、TypeScript 扩展由进程内 JS 宿主加载、
   插件工具进 allowlist，以及一遍真实的「安装 → 注册工具 → 分发 → 审批 → JS 执行」端到端链路；
-- 设置项往返：`NpmRegistry` 等新字段的克隆与持久化。
+- 设置项往返：`NpmRegistry`、`WorkStyle` 等新字段的克隆与持久化；
+- 工作台：`workbench.json` 存档往返与坏档降级、`ScheduleMath` 的每日 / 每周（多选星期）/
+  每月（多选日期）/ 单次 / 有效期 / 停用 / 非法时间判定，以及场景、模式、专家指令同时注入提示词；
+  `TaskRunConfig` 解析项目 / 模型 / 专家 / 权限 / 推送，`RunSettingsOverride` 派生副本不污染全局设置，
+  `ExpertPack` 只导出自定义档位并拒绝外来包，项目实体往返与定时任务解绑。
 
 ## 截图模式
 
@@ -420,6 +499,32 @@ dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --pag
 
 # 产物面板：文件卡 + 一段展开的逐行差异
 dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --page chat --artifacts
+
+# 结果区「全部文件」页：工作区目录树（没产物时也能打开）
+dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --page chat --results-files
+
+# 首页类别模板切换 / 悬停灰字预览
+dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --page home --home-category documents
+dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --page home --home-preview --home-category slides
+
+# 工作模式浮层（弹层是独立 TopLevel，单独出图）
+dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --page home --workstyle-flyout
+
+# 结果区四栏任意一页：overview / artifacts / files / changes
+dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --page chat --artifacts --results-tab overview
+
+# 工作台五个分区（项目 / 专家 / 定时任务 / 资料库 / 设置与关于）
+dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --page projects
+dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --page experts
+dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --page scheduled --workbench-demo
+dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --page library
+dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --page more
+
+# 定时调度链路端到端验收（隔离存档 + 假回调，不需要 API Key）
+dotnet run --project src/AvaloniaAssistant.Desktop -- --verify-scheduler --data-dir .tmp/verify
+
+# 任务配置 / 模型权限覆盖 / 专家包 / 开机自启 / 结果文件 全链路验收
+dotnet run --project src/AvaloniaAssistant.Desktop -- --verify-workbench --data-dir .tmp/verify
 
 # 消息编辑态：最后一条提问变成输入框 + 保存并重发
 dotnet run --project src/AvaloniaAssistant.Desktop -- --screenshot out.png --page chat --chat-edit
@@ -491,7 +596,7 @@ dotnet run --project src/AvaloniaAssistant.Desktop -- --run "用三句话介绍�
 - **API Key 明文保存**在 `settings.json`，目前没有接 DPAPI；不要在共享机器上使用生产密钥。
 - **语音转写依赖端点**支持 `/audio/transcriptions`；DeepSeek 官方端点不支持，会给出错误提示。
 - **MCP 工具要写 `exposure: "direct"`**：不写就只有 codemode / tool_search 能碰到，模型直接调不到。
-- **插件工具的 JS 宿主还有两处毛边**（pi.net 的进程内 JS 宿主，1.4.5 引入，当前依赖 1.5.2）：
+- **插件工具的 JS 宿主还有两处毛边**（pi.net 的进程内 JS 宿主，1.4.5 引入，当前依赖 1.5.2.1）：
   `fs` 读不存在的文件时抛的是 .NET 异常，JS 的 `try/catch` 接不住
   （`pi-memory` 首次写入就会踩到，先建好 `~/.pi/agent/memory/MEMORY.md` 可绕开）；
   插件在 `session_start` 之后**动态注册**的工具不会被 allowlist 收进来。两处都要上游修。
@@ -500,6 +605,10 @@ dotnet run --project src/AvaloniaAssistant.Desktop -- --run "用三句话介绍�
   这种情况「技能」页会明确写「有插件加载失败」和原因，不会只剩一个空清单。
 - **停用插件的语义是「一条资源都不加载」**：`settings.json` 里那条记录会从字符串改成对象，四类资源写空数组；
   想只关扩展、保留技能，得自己改 `settings.json`。
+- **Native AOT 下装不了外部 .NET 插件 DLL**：`AssemblyLoadContext` 需要 JIT，原生映像只能跑
+  编译进去的扩展；JavaScript（Jint）扩展、技能、MCP、三个市场都不受影响。默认 JIT 构建仍完整支持。
+- **AOT 产物不是单文件**：SkiaSharp / HarfBuzz 等 native DLL 和 `Assets/` 必须和 exe 放一起，
+  也不像自包含单文件那样解到 `%TEMP%`；这是原生映像的平台限制，不是打包参数没给全。
 - **会话存档仍是本项目自己的 JSON**：CodingAgent 的会话跑在内存里，压缩结果不跨进程保存；
   重启后由 `sessions/*.json` 的历史重建上下文，压缩收益会重新累计。
 - **上下文窗口读本地模型目录**：从 `~/.pi/agent/models-store.json` 取当前模型的 `contextWindow`，
@@ -516,9 +625,35 @@ dotnet run --project src/AvaloniaAssistant.Desktop -- --run "用三句话介绍�
 - **三个市场都依赖外部来源**：技能市场读 skills.sh、MCP 市场读 ModelScope（兜底 mcp.so）、
   插件市场读 npm registry；断网或对方改接口时只会得到空列表或失败提示，不做本地缓存。
   装进来的上游包按「别人写的代码」对待，兼容性不保证（技能页会明确写出加载失败的原因）。
-- **没有定时任务 / 专家市场**：导航里暂未提供入口，避免假按钮；插件、技能、MCP 三个市场已有入口，
-  扩展点见架构文档。
+- **定时任务随应用进程存活**：本地 30 秒轮询，「更多」页可开启开机自启（用户「启动」文件夹里的
+  隐藏窗口启动器，不改注册表、不装服务）；应用退出期间到点的任务不会补跑。
+- **定时任务可以给单条任务指定权限 / 模型 / 专家**：默认「沿用当前档位」，也可显式设只读或完全访问；
+  专用模型与权限由 `RunSettingsOverride` 从全局设置派生副本，不改动用户当前选择。
+- **专家是内置档位 + 自定义指令 + 本地专家包**：`导出 / 导入专家包` 是 JSON 文件，可在多台机器间搬；
+  自定义专家的指令作为 system-reminder 注入本轮提问，和场景、模式并列生效。
 - **Windows 优先**：代码里对 macOS/Linux 的路径和 shell 做了分支，但只在 Windows 上验证过。
+
+## 与 WorkBuddy 的对齐范围
+
+交互层面的对齐以「功能真跑通」为准，不做点进去没内容的空按钮。应用内「更多」页也放了同一张表。
+
+| WorkBuddy 区域 | 状态 | 说明 |
+| --- | --- | --- |
+| 三区布局 / 结果区四视图 | 已对齐 | 概览 / 产物 / 全部文件 / 变更，顶栏入口常驻，输入框收进中间栏 |
+| 场景 / 类别模板 / 悬停预览 | 已对齐 | 日常办公 / 代码开发 / 设计创意 + 六类模板，灰字预览只预览不发送 |
+| 执行 / 计划 / 仅问答 | 已对齐 | `PromptComposer` 注入本轮提问 |
+| 侧栏导航 | 已对齐 | 助理 / 工作台 / 技能 / MCP / 插件；工作台内用 tab 切项目 / 专家 / 定时任务 / 资料库 / 设置与关于 |
+| 权限两档 + 完全访问确认 | 已对齐 | 默认权限逐次确认，完全访问需二次确认 |
+| 定时任务 | 已对齐（本地） | 本地调度 + 项目来源 + 专用模型/专家/权限 + 结果推送 + 运行记录 + 开机自启 |
+| 专家 | 已对齐（本地） | 6 套内置 + 自定义 + 专家包 JSON 导入导出 |
+| 项目 | 已对齐（本地） | 独立项目实体，可挂定时任务、按项目新建任务 |
+| 资料库 | 已对齐（本地） | 登记本机路径，引用进任务走 @ 同一条链路 |
+| 云端沙箱 / 项目云端来源 | 明确不适用 | 需要账号体系与云端执行服务；本项目无服务端、无登录，全部数据留在本机 |
+| 消息推送到企业微信 | 明确不适用 | 需要企业微信应用凭证与服务端中转；本地以系统提醒 + 工作区结果文件替代 |
+| 云端专家市场 | 明确不适用 | 需要服务端目录与账号；本地以专家包导入导出替代 |
+| 概览内置浏览器 | 明确不适用 | Avalonia 无内置 WebView；引 WebView2 会带来大型 native 依赖，与单文件 / Native AOT 发布冲突，改用应用内文档预览 + 系统默认程序 |
+| 额度 / 积分 | 明确不适用 | 直连自建 OpenAI 兼容端点，没有平台账户与统一计费口径；界面显示 token 用量 |
+| 助理（手机 / 微信远程任务） | 明确不适用 | 需要账号与消息网关；本应用是单机办公助理 |
 
 ## 文档
 

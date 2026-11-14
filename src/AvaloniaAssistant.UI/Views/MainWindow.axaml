@@ -22,22 +22,38 @@
                        DataContext="{Binding}"
                        IsVisible="{Binding IsSidebarVisible}" />
 
-    <!-- 折叠态占一条窄轨，专门放「展开侧栏」。
-         以前这个按钮浮在内容区左上角，而页内 header 本身就有一个靠左的按钮
-         （返回箭头、刷新），两个图标叠在同一点，看着像多出来一个。
-         现在窄轨和页面各自一块地方：左边是「侧栏」，右边是「这一页」。 -->
+    <!-- 折叠态占一条窄轨：展开按钮 + 五个主导航图标。
+         以前窄轨只放「展开」，折起后想换页必须先展开；现在图标能直达。
+         窄轨和页面各自一块地方：左边是「侧栏」，右边是「这一页」。 -->
     <Border Grid.Column="0"
-            Width="40"
+            Width="48"
             IsVisible="{Binding !IsSidebarVisible}"
             Background="{StaticResource SidebarBrush}">
-      <Button Classes="icon"
-              HorizontalAlignment="Center"
-              VerticalAlignment="Top"
-              Margin="0,18,0,0"
-              Command="{Binding ToggleSidebarCommand}"
-              ToolTip.Tip="展开侧边栏">
-        <arc:ArcGlyph Data="{x:Static arc:ArcIcons.PanelLeft}" Size="15" />
-      </Button>
+      <StackPanel Margin="0,14,0,0" Spacing="4" HorizontalAlignment="Center">
+        <Button Classes="icon"
+                Command="{Binding ToggleSidebarCommand}"
+                ToolTip.Tip="展开侧边栏">
+          <arc:ArcGlyph Data="{x:Static arc:ArcIcons.PanelLeft}" Size="15" />
+        </Button>
+        <Border Height="1" Width="24" Margin="0,6"
+                Background="{StaticResource BorderBrush}" />
+
+        <Button Classes="icon" Command="{Binding OpenHomeCommand}" ToolTip.Tip="助理">
+          <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Sparkles}" Size="16" />
+        </Button>
+        <Button Classes="icon" Command="{Binding OpenWorkbenchCommand}" ToolTip.Tip="工作台">
+          <arc:ArcGlyph Data="{x:Static arc:ArcIcons.FolderOpen}" Size="16" />
+        </Button>
+        <Button Classes="icon" Command="{Binding OpenToolsCommand}" ToolTip.Tip="技能">
+          <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Zap}" Size="16" />
+        </Button>
+        <Button Classes="icon" Command="{Binding OpenMcpCommand}" ToolTip.Tip="MCP">
+          <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Server}" Size="16" />
+        </Button>
+        <Button Classes="icon" Command="{Binding OpenPluginsCommand}" ToolTip.Tip="插件">
+          <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Package}" Size="16" />
+        </Button>
+      </StackPanel>
     </Border>
 
     <!-- 侧栏宽度可拖：长任务名和深层目录不该只能靠悬停卡片看全 -->

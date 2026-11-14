@@ -241,6 +241,60 @@ public sealed class PromptComposerTests
     }
 
     [Fact]
+    public void WorkStylePlanReachesTheModel()
+    {
+        // WorkBuddy 的「计划」模式不能只是输入框里一颗换高亮的假开关。
+        var prompt = PromptComposer.Compose("重做这个页面", null, style: WorkStyleText.Plan);
+
+        Assert.Contains("本次工作模式：计划", prompt);
+        Assert.Contains("先给出一份分步计划", prompt);
+        Assert.Contains("不要写入文件", prompt);
+        Assert.Contains("重做这个页面", prompt);
+    }
+
+    [Fact]
+    public void WorkStyleAskReachesTheModel()
+    {
+        var prompt = PromptComposer.Compose("这文件夹里有什么", null, style: WorkStyleText.Ask);
+
+        Assert.Contains("本次工作模式：仅问答", prompt);
+        Assert.Contains("不要写入任何文件", prompt);
+        Assert.Contains("这文件夹里有什么", prompt);
+    }
+
+    [Fact]
+    public void CraftStyleIsTheDefaultAndInjectsNothing()
+    {
+        // 执行 = 默认态，不该给模型多塞一段指令，也不影响历史轮次。
+        Assert.Equal("原话", PromptComposer.Compose("原话", null, style: WorkStyleText.Craft));
+        Assert.Equal("原话", PromptComposer.Compose("原话", null, style: null));
+        Assert.Equal("原话", PromptComposer.Compose("原话", null, style: "unknown"));
+    }
+
+    [Fact]
+    public void SceneAndWorkStyleCanCoexistInOnePrompt()
+    {
+        var prompt = PromptComposer.Compose(
+            "整理下载目录",
+            null,
+            mode: WorkModeText.Office,
+            style: WorkStyleText.Plan);
+
+        Assert.Contains("当前工作模式：办公", prompt);
+        Assert.Contains("本次工作模式：计划", prompt);
+        Assert.Contains("整理下载目录", prompt);
+    }
+
+    [Fact]
+    public void UnknownWorkStyleNormalizesToCraft()
+    {
+        Assert.Equal(WorkStyleText.Craft, WorkStyleText.Normalize(null));
+        Assert.Equal(WorkStyleText.Craft, WorkStyleText.Normalize("whatever"));
+        Assert.Equal(WorkStyleText.Plan, WorkStyleText.Normalize("plan"));
+        Assert.Equal(WorkStyleText.Ask, WorkStyleText.Normalize("ask"));
+    }
+
+    [Fact]
     public void StoppedRunIsNotSerializedAsAnError()
     {
         // 用户按停不是故障：存档里单独记一个 stopped，重新打开不能画成红色错误。

@@ -348,7 +348,7 @@
                       Classes="composer"
                       Theme="{StaticResource ComposerTextarea}"
                       Text="{Binding Text, Mode=TwoWay}"
-                      Placeholder="{Binding Placeholder}"
+                      Placeholder="{Binding EffectivePlaceholder}"
                       AcceptsReturn="True"
                       IsResizable="False"
                       FrameMinHeight="64"
@@ -569,6 +569,16 @@
             <arc:ArcGlyph Data="{x:Static arc:ArcIcons.ChevronDown}" Size="11" />
           </StackPanel>
         </Button>
+
+        <!-- WorkBuddy 的「模式」：执行 / 计划 / 仅问答。和工作空间并列，都是本轮任务的设定。 -->
+        <Button x:Name="WorkStyleButton" Classes="pill" Click="OnWorkStyleClick" ToolTip.Tip="{Binding WorkStyleTooltip}">
+          <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+            <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Sparkles}" Size="12" />
+            <TextBlock Text="{Binding WorkStyleLabel}" FontSize="11.5" />
+            <arc:ArcGlyph Data="{x:Static arc:ArcIcons.ChevronDown}" Size="11" />
+          </StackPanel>
+        </Button>
+
         <TextBlock Text="本地运行" Classes="caption" VerticalAlignment="Center" Margin="6,0,0,0" />
       </StackPanel>
 

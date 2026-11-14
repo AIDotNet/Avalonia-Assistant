@@ -20,6 +20,7 @@ public sealed class StorageTests
         settings.ApiKey = "sk-test";
         settings.Model = "gpt-6.1-sol";
         settings.Permission = PermissionMode.FullAccess;
+        settings.WorkStyle = WorkStyleText.Plan;
         settings.DisabledTools.Add("run_command");
         await provider.SaveAsync(settings);
 
@@ -30,9 +31,27 @@ public sealed class StorageTests
         Assert.Equal("sk-test", reloaded.Current.ApiKey);
         Assert.Equal("gpt-6.1-sol", reloaded.Current.Model);
         Assert.Equal(PermissionMode.FullAccess, reloaded.Current.Permission);
+        Assert.Equal(WorkStyleText.Plan, reloaded.Current.WorkStyle);
         Assert.Contains("run_command", reloaded.Current.DisabledTools);
 
         Directory.Delete(directory, recursive: true);
+    }
+
+    [Fact]
+    public void SettingsCloneKeepsTheWorkStyle()
+    {
+        // 设置页用 Clone 做「有没有改动」的快照；漏拷字段会让基线永远认为有未保存改动。
+        var settings = new AssistantSettings
+        {
+            Mode = WorkModeText.Design,
+            WorkStyle = WorkStyleText.Ask,
+        };
+
+        var clone = settings.Clone();
+
+        Assert.Equal(WorkModeText.Design, clone.Mode);
+        Assert.Equal(WorkStyleText.Ask, clone.WorkStyle);
+        Assert.Equal(WorkStyleText.Craft, new AssistantSettings().WorkStyle);
     }
 
     [Fact]

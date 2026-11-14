@@ -34,6 +34,19 @@
     <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
     <Setter Property="FontWeight" Value="Medium" />
   </Style>
+  <!-- 主导航选中时给一条左侧竖条，只标「你在哪」，不额外叠一层底色块。
+       限定在 main 上：空间行 / 两区标题也复用 .nav，不该跟着长出竖条。 -->
+  <Style Selector="Button.nav.main.active">
+    <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+    <Setter Property="BorderThickness" Value="3,0,0,0" />
+    <Setter Property="Padding" Value="6,0,9,0" />
+    <!-- 左边两个角取直角：否则 9px 圆角会把 3px 指示条弯成一道弧线 -->
+    <Setter Property="CornerRadius" Value="0,9,9,0" />
+  </Style>
+  <Style Selector="Button.nav.main.active:pointerover">
+    <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+  </Style>
 
   <Style Selector="Button.task">
     <Setter Property="Transitions">
@@ -164,6 +177,12 @@
     <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
   </Style>
 
+  <!-- 结果区开着：顶栏入口给一层常驻浅底，一眼看得出右侧那一栏是当前展开的 -->
+  <Style Selector="Button.icon.artifact-toggle.active">
+    <Setter Property="Background" Value="{StaticResource SurfaceMutedBrush}" />
+    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+  </Style>
+
   <!-- 行内小图标（对话行的「⋯」、空间的「+」「⋯」）已经躺在一条高亮行里，
        自己再叠一层底色就成了两个圆角块套在一起，看着很脏。
        这一类只提亮图标，不加底。 -->
@@ -200,6 +219,14 @@
     <Setter Property="Padding" Value="0,0" />
     <Setter Property="HorizontalContentAlignment" Value="Center" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+
+  <!-- 首页类别胶囊：比场景芯片小一档，和快捷词同一排也不抢注意力 -->
+  <Style Selector="Button.category-chip">
+    <Setter Property="Height" Value="29" />
+    <Setter Property="Padding" Value="12,0" />
+    <Setter Property="CornerRadius" Value="15" />
+    <Setter Property="FontSize" Value="11.5" />
   </Style>
   <!-- 只动底色和文字色。原来连边框一起加深，底色和边框同时变，像框在闪。 -->
   <Style Selector="Button.chip:pointerover">

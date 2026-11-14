@@ -7,9 +7,37 @@
     <InvariantGlobalization>false</InvariantGlobalization>
     <AvaloniaVersion>12.1.6</AvaloniaVersion>
     <ArcVersion>1.1.0</ArcVersion>
-    <PiVersion>1.5.2</PiVersion>
+    <PiVersion>1.5.2.1</PiVersion>
 
     <!-- 应用版本的唯一来源：界面从程序集读，发版只改这一处 -->
     <Version>1.0.2</Version>
+  </PropertyGroup>
+
+  <!--
+    Native AOT 是可选的发布模式：dotnet publish ... -p:PublishAot=true
+    默认 JIT 构建 / 测试不进入这一组，行为完全不变。
+
+      * pi.net 1.5.2.1 起自带 source-gen JSON 上下文，AOT 下会自动接管 Pi 内部 DTO；
+      * JsonSerializerIsReflectionEnabledByDefault：PublishAot=true 时这个开关默认关闭，
+        会让上下文链尾的反射兜底解析器失效，必须显式打开；
+      * IlcGenerateCompleteTypeMetadata + 整体 root（见 Directory.Build.targets）保留全部代码
+        与反射元数据，Avalonia 的反射绑定、DI、动态工具参数才不会被裁掉；
+      * 本项目自己的 DTO 由 Abstractions/AotJson.cs 的 source-gen 上下文覆盖。
+  -->
+  <PropertyGroup Condition="'$(PublishAot)' == 'true'">
+    <JsonSerializerIsReflectionEnabledByDefault>true</JsonSerializerIsReflectionEnabledByDefault>
+    <IlcGenerateCompleteTypeMetadata>true</IlcGenerateCompleteTypeMetadata>
+    <SuppressTrimAnalysisWarnings>true</SuppressTrimAnalysisWarnings>
+    <TrimmerSingleWarn>false</TrimmerSingleWarn>
+    <!-- AOT 产物不需要托管 pdb；ILC 默认会甩出一个几百 MB 的符号文件。需要调试符号时用
+         -p:DebugType=portable 覆盖。 -->
+    <DebugType>none</DebugType>
+    <!--
+      IL2xxx / IL3xxx 是裁剪与运行时代码生成的静态告警。在本配置下它们由
+      「完整类型元数据 + 程序集整体 root + source-gen JSON」显式覆盖，属于假阳性
+      （与 pi.net 1.5.2.1 的 AOT 发布配置同理）。已用真实原生二进制跑过首页 /
+      设置 / 会话 / 工具页验证；默认 JIT 构建不进入这一组。
+    -->
+    <NoWarn>$(NoWarn);IL2026;IL2055;IL2060;IL2062;IL2067;IL2070;IL2072;IL2075;IL2077;IL2080;IL2090;IL2111;IL3000;IL3050</NoWarn>
   </PropertyGroup>
 </Project>

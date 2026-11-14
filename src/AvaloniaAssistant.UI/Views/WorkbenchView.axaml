@@ -1,0 +1,582 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:arc="https://github.com/AIDotNet/TKCode.Arc"
+             x:Class="AvaloniaAssistant.UI.Views.WorkbenchView">
+  <Grid RowDefinitions="Auto,*">
+    <Border Grid.Row="0"
+            BorderBrush="{StaticResource BorderBrush}"
+            BorderThickness="0,0,0,1"
+            Padding="26,16,26,12">
+      <StackPanel Spacing="11">
+        <Grid ColumnDefinitions="Auto,*">
+          <Button Classes="icon"
+                  Margin="0,0,8,0"
+                  Command="{Binding BackCommand}"
+                  ToolTip.Tip="返回">
+            <arc:ArcGlyph Data="{x:Static arc:ArcIcons.ChevronLeft}" Size="16" />
+          </Button>
+          <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+            <TextBlock Text="{Binding Title}" FontSize="17" FontWeight="SemiBold" />
+            <TextBlock Text="{Binding Subtitle}"
+                       Classes="caption"
+                       FontSize="11"
+                       TextWrapping="Wrap"
+                       Foreground="{StaticResource TextSecondaryBrush}" />
+          </StackPanel>
+        </Grid>
+
+        <!-- 侧栏和页内都能切区：进到这一页后不用退回侧栏再点一次 -->
+        <Border Classes="tabbar" Padding="3">
+          <StackPanel Orientation="Horizontal" Spacing="2">
+            <Button Classes="tab" Classes.active="{Binding IsProjects}" Content="项目"
+                    Command="{Binding SelectSectionCommand}" CommandParameter="projects" />
+            <Button Classes="tab" Classes.active="{Binding IsExperts}" Content="专家"
+                    Command="{Binding SelectSectionCommand}" CommandParameter="experts" />
+            <Button Classes="tab" Classes.active="{Binding IsScheduled}" Content="定时任务"
+                    Command="{Binding SelectSectionCommand}" CommandParameter="scheduled" />
+            <Button Classes="tab" Classes.active="{Binding IsLibrary}" Content="资料库"
+                    Command="{Binding SelectSectionCommand}" CommandParameter="library" />
+            <Button Classes="tab" Classes.active="{Binding IsMore}" Content="设置与关于"
+                    Command="{Binding SelectSectionCommand}" CommandParameter="more" />
+          </StackPanel>
+        </Border>
+
+        <Border IsVisible="{Binding HasNotice}"
+                Background="{StaticResource SurfaceMutedBrush}"
+                CornerRadius="9"
+                Padding="11,8">
+          <TextBlock Text="{Binding Notice}"
+                     FontSize="11"
+                     TextWrapping="Wrap"
+                     Foreground="{StaticResource TextSecondaryBrush}" />
+        </Border>
+      </StackPanel>
+    </Border>
+
+    <ScrollViewer Grid.Row="1"
+                  VerticalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Disabled">
+      <StackPanel MaxWidth="920"
+                  HorizontalAlignment="Left"
+                  Margin="26,18,26,28"
+                  Spacing="14">
+
+        <!-- ══ 项目 ══ -->
+        <StackPanel IsVisible="{Binding IsProjects}" Spacing="11">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Text="项目" Classes="section-title" VerticalAlignment="Center" />
+            <Button Grid.Column="1" Classes="ghost-action" Content="+ 新建项目"
+                    Command="{Binding ToggleProjectFormCommand}" />
+          </Grid>
+
+          <Border IsVisible="{Binding ShowProjectForm}" Classes="card" Padding="16,14">
+            <StackPanel Spacing="9">
+              <Grid ColumnDefinitions="*,*">
+                <arc:Input Label="项目名称" Placeholder="例如 Q4 预算"
+                           Text="{Binding NewProjectName, Mode=TwoWay}" />
+                <arc:Input Grid.Column="1" Label="说明（可空）" Placeholder="这个事项是做什么的"
+                           Text="{Binding NewProjectDescription, Mode=TwoWay}" />
+              </Grid>
+              <Grid ColumnDefinitions="*,Auto">
+                <arc:Input Label="工作目录" Placeholder="D:/work/Q4预算"
+                           Text="{Binding NewProjectWorkspace, Mode=TwoWay}" />
+                <Button Grid.Column="1" Classes="ghost-action" Content="选择…" VerticalAlignment="Bottom"
+                        Command="{Binding PickProjectWorkspaceCommand}" />
+              </Grid>
+              <Button Classes="ghost-action" HorizontalAlignment="Left" Content="创建项目"
+                      Command="{Binding CreateProjectCommand}" />
+            </StackPanel>
+          </Border>
+
+          <TextBlock Text="还没有项目。项目是独立的一条记录：有名称、说明和工作目录，定时任务可以挂到它下面。"
+                     Classes="caption"
+                     FontSize="11.5"
+                     IsVisible="{Binding !HasProjects}" />
+          <ItemsControl ItemsSource="{Binding Projects}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Border Classes="card" Padding="14,12" Margin="0,0,0,8">
+                  <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto">
+                    <StackPanel Spacing="3" Margin="0,0,12,0">
+                      <TextBlock Text="{Binding Name}" FontSize="13.5" FontWeight="Medium" />
+                      <TextBlock Text="{Binding Description}"
+                                 Classes="caption" FontSize="10.5" TextWrapping="Wrap"
+                                 IsVisible="{Binding HasDescription}"
+                                 Foreground="{StaticResource TextSecondaryBrush}" />
+                      <TextBlock Text="{Binding PathShort}"
+                                 Classes="caption"
+                                 FontSize="10"
+                                 TextTrimming="CharacterEllipsis"
+                                 ToolTip.Tip="{Binding Path}"
+                                 Foreground="{StaticResource TextMutedBrush}" />
+                      <TextBlock Text="{Binding TaskCountText}"
+                                 Classes="caption"
+                                 FontSize="10.5"
+                                 Foreground="{StaticResource TextSecondaryBrush}" />
+                    </StackPanel>
+                    <Button Grid.Column="1" Classes="ghost-action"
+                            Content="在此新建任务"
+                            Command="{Binding $parent[ItemsControl].DataContext.NewTaskInProjectCommand}"
+                            CommandParameter="{Binding}" />
+                    <Button Grid.Column="2" Classes="ghost-action"
+                            Content="打开目录"
+                            Command="{Binding $parent[ItemsControl].DataContext.OpenProjectCommand}"
+                            CommandParameter="{Binding}" />
+                    <Button Grid.Column="3" Classes="ghost-action"
+                            Content="定位"
+                            Command="{Binding $parent[ItemsControl].DataContext.RevealProjectCommand}"
+                            CommandParameter="{Binding}" />
+                    <Button Grid.Column="4" Classes="ghost-action"
+                            Content="删除"
+                            Command="{Binding $parent[ItemsControl].DataContext.DeleteProjectCommand}"
+                            CommandParameter="{Binding}" />
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <TextBlock Text="一个事项一个目录，输入和产出分开放。任务仍会按空间归到侧栏里；删项目只删这条记录，不动磁盘上的文件。"
+                     Classes="caption"
+                     FontSize="10.5"
+                     TextWrapping="Wrap"
+                     Foreground="{StaticResource TextMutedBrush}" />
+        </StackPanel>
+
+        <!-- ══ 专家 ══ -->
+        <StackPanel IsVisible="{Binding IsExperts}" Spacing="11">
+            <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto">
+            <TextBlock Text="{Binding ActiveExpertLabel}" FontSize="13" FontWeight="Medium" VerticalAlignment="Center" />
+            <Button Grid.Column="1" Classes="ghost-action"
+                    Content="取消专家设定" Command="{Binding ClearExpertCommand}" />
+            <Button Grid.Column="2" Classes="ghost-action"
+                    Content="+ 自定义专家" Command="{Binding ToggleExpertFormCommand}" />
+            <Button Grid.Column="3" Classes="ghost-action"
+                    Content="导出专家包" Command="{Binding ExportExpertPackCommand}" />
+            <Button Grid.Column="4" Classes="ghost-action"
+                    Content="导入专家包" Command="{Binding ImportExpertPackCommand}" />
+          </Grid>
+          <TextBlock Text="专家是一套会注入本轮提问的角色指令；和首页的「场景」、输入框的「模式」并列生效，只作用于之后的提问。"
+                     Classes="caption"
+                     FontSize="10.5"
+                     TextWrapping="Wrap"
+                     Foreground="{StaticResource TextMutedBrush}" />
+
+          <Border IsVisible="{Binding ShowExpertForm}" Classes="card" Padding="16,14">
+            <StackPanel Spacing="9">
+              <TextBlock Text="自定义专家" Classes="section-title" FontSize="11" />
+              <Grid ColumnDefinitions="*,*">
+                <arc:Input Label="名称" Placeholder="例如 合同审阅"
+                           Text="{Binding NewExpertName, Mode=TwoWay}" />
+                <arc:Input Grid.Column="1" Label="一句话说明" Placeholder="这套专家擅长什么"
+                           Text="{Binding NewExpertDescription, Mode=TwoWay}" />
+              </Grid>
+              <TextBlock Text="专家指令（发给模型的内容）" Classes="caption" FontSize="10.5" />
+              <Border Background="{StaticResource SurfaceMutedBrush}"
+                      BorderBrush="{StaticResource BorderBrush}"
+                      BorderThickness="1"
+                      CornerRadius="10"
+                      Padding="10,7">
+                <arc:Textarea Classes="composer"
+                              AcceptsReturn="True"
+                              IsResizable="False"
+                              MinHeight="78"
+                              MaxHeight="120"
+                              FontSize="11.5"
+                              Foreground="{StaticResource TextPrimaryBrush}"
+                              CaretBrush="{StaticResource TextPrimaryBrush}"
+                              Placeholder="例如：你是合同审阅助手，逐条列出风险条款并给出修改建议…"
+                              Text="{Binding NewExpertDirective, Mode=TwoWay}" />
+              </Border>
+              <Button Classes="ghost-action" HorizontalAlignment="Left"
+                      Content="添加" Command="{Binding AddExpertCommand}" />
+            </StackPanel>
+          </Border>
+
+          <ItemsControl ItemsSource="{Binding Experts}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <UniformGrid Columns="2" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Border Classes="card" Padding="14,12" Margin="0,0,10,10">
+                  <StackPanel Spacing="7">
+                    <Grid ColumnDefinitions="*,Auto">
+                      <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="Medium" />
+                      <Border Grid.Column="2" Classes="tag" Padding="5,1"
+                              IsVisible="{Binding BuiltIn}">
+                        <TextBlock Text="内置" FontSize="9.5" Foreground="{StaticResource TextMutedBrush}" />
+                      </Border>
+                    </Grid>
+                    <TextBlock Text="{Binding Description}"
+                               Classes="caption"
+                               FontSize="10.5"
+                               TextWrapping="Wrap"
+                               Foreground="{StaticResource TextSecondaryBrush}" />
+                    <TextBlock Text="{Binding Directive}"
+                               FontSize="10.5"
+                               TextWrapping="Wrap"
+                               MaxLines="3"
+                               Foreground="{StaticResource TextMutedBrush}" />
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <Button Classes="ghost-action"
+                              Content="启用"
+                              Command="{Binding $parent[ItemsControl].DataContext.SelectExpertCommand}"
+                              CommandParameter="{Binding}" />
+                      <Button Classes="ghost-action"
+                              IsVisible="{Binding !BuiltIn}"
+                              Content="删除"
+                              Command="{Binding $parent[ItemsControl].DataContext.DeleteExpertCommand}"
+                              CommandParameter="{Binding}" />
+                    </StackPanel>
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+
+        <!-- ══ 定时任务 ══ -->
+        <StackPanel IsVisible="{Binding IsScheduled}" Spacing="11">
+          <Border Classes="tabbar" Padding="3">
+            <StackPanel Orientation="Horizontal" Spacing="2">
+              <Button Classes="tab" Classes.active="{Binding IsScheduledTasksTab}" Content="定时任务"
+                      Command="{Binding ShowScheduledTabCommand}" CommandParameter="tasks" />
+              <Button Classes="tab" Classes.active="{Binding IsScheduledRunsTab}" Content="运行记录"
+                      Command="{Binding ShowScheduledTabCommand}" CommandParameter="runs" />
+            </StackPanel>
+          </Border>
+
+          <StackPanel IsVisible="{Binding IsScheduledTasksTab}" Spacing="11">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Button Classes="ghost-action" Content="+ 新建" Command="{Binding ToggleTaskFormCommand}" />
+              <Button Classes="ghost-action" Content="从任务新建" Command="{Binding CreateFromTaskCommand}"
+                      ToolTip.Tip="回首页，在输入框里用一句话描述要创建的定时任务" />
+            </StackPanel>
+
+            <TextBlock Text="常用模板（点一下预填表单，不会直接建任务）" Classes="section-title" FontSize="11" />
+            <ItemsControl ItemsSource="{Binding Templates}">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <UniformGrid Columns="3" />
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Button Classes="card-button"
+                          Margin="0,0,10,0"
+                          Command="{Binding $parent[ItemsControl].DataContext.ApplyTemplateCommand}"
+                          CommandParameter="{Binding}">
+                    <Border Classes="card" Padding="12,10" Height="92">
+                      <StackPanel Spacing="4">
+                        <TextBlock Text="{Binding Name}" FontSize="12.5" FontWeight="Medium" />
+                        <TextBlock Text="{Binding Description}"
+                                   Classes="caption"
+                                   FontSize="10.5"
+                                   TextWrapping="Wrap" />
+                        <TextBlock Text="{Binding FrequencyText}"
+                                   Classes="caption"
+                                   FontSize="10"
+                                   Foreground="{StaticResource TextMutedBrush}" />
+                      </StackPanel>
+                    </Border>
+                  </Button>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <Border IsVisible="{Binding ShowTaskForm}" Classes="card" Padding="16,14">
+              <StackPanel Spacing="10">
+                <TextBlock Text="新建定时任务" Classes="section-title" FontSize="11" />
+                <Grid ColumnDefinitions="*,*">
+                  <arc:Input Label="名称" Placeholder="例如 每日简报"
+                             Text="{Binding TaskName, Mode=TwoWay}" />
+                  <arc:Input Grid.Column="1" Label="工作空间（留空=沿用当前）" Placeholder="D:/work/日报"
+                             Text="{Binding TaskWorkspace, Mode=TwoWay}" />
+                </Grid>
+
+                <TextBlock Text="提示词（到点后真正发给模型的内容）" Classes="caption" FontSize="10.5" />
+                <Border Background="{StaticResource SurfaceMutedBrush}"
+                        BorderBrush="{StaticResource BorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="10"
+                        Padding="10,7">
+                  <arc:Textarea Classes="composer"
+                                AcceptsReturn="True"
+                                IsResizable="False"
+                                MinHeight="72"
+                                MaxHeight="120"
+                                FontSize="11.5"
+                                Foreground="{StaticResource TextPrimaryBrush}"
+                                CaretBrush="{StaticResource TextPrimaryBrush}"
+                                Placeholder="例如：汇总工作区里最近一天新增或改动的文件…"
+                                Text="{Binding TaskPrompt, Mode=TwoWay}" />
+                </Border>
+
+                <TextBlock Text="频率" Classes="caption" FontSize="10.5" />
+                <StackPanel Orientation="Horizontal" Spacing="7">
+                  <Button Classes="chip" Classes.active="{Binding IsFreqOnce}" Content="单次"
+                          Command="{Binding SetFrequencyCommand}" CommandParameter="0" />
+                  <Button Classes="chip" Classes.active="{Binding IsFreqDaily}" Content="每天"
+                          Command="{Binding SetFrequencyCommand}" CommandParameter="1" />
+                  <Button Classes="chip" Classes.active="{Binding IsFreqWeekly}" Content="每周"
+                          Command="{Binding SetFrequencyCommand}" CommandParameter="2" />
+                  <Button Classes="chip" Classes.active="{Binding IsFreqMonthly}" Content="每月"
+                          Command="{Binding SetFrequencyCommand}" CommandParameter="3" />
+                </StackPanel>
+
+                <Grid ColumnDefinitions="*,*,*">
+                  <arc:Input Label="时（0–23）" Text="{Binding TaskHourText, Mode=TwoWay}" />
+                  <arc:Input Grid.Column="1" Label="分（0–59）" Text="{Binding TaskMinuteText, Mode=TwoWay}" />
+                  <arc:Input Grid.Column="2" Label="有效期至 yyyy-MM-dd（可空）"
+                             Text="{Binding TaskValidTo, Mode=TwoWay}" />
+                </Grid>
+                <Grid ColumnDefinitions="*,*,*">
+                  <arc:Input Label="单次日期 yyyy-MM-dd" Text="{Binding TaskOnceDate, Mode=TwoWay}" />
+                  <arc:Input Grid.Column="1" Label="每周几（0=周日，逗号分隔）"
+                             Text="{Binding TaskWeekdays, Mode=TwoWay}" />
+                  <arc:Input Grid.Column="2" Label="每月几号（逗号分隔）"
+                             Text="{Binding TaskMonthDays, Mode=TwoWay}" />
+                </Grid>
+
+                <!-- 附加配置：项目来源 / 专用模型 / 专用专家 / 权限 / 结果推送 -->
+                <TextBlock Text="附加配置" Classes="section-title" FontSize="11" Margin="0,4,0,0" />
+                <ItemsControl ItemsSource="{Binding TaskChoiceGroups}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <StackPanel Spacing="4" Margin="0,0,0,6">
+                        <TextBlock Text="{Binding Label}" Classes="caption" FontSize="10.5"
+                                   Foreground="{StaticResource TextMutedBrush}" />
+                        <ItemsControl ItemsSource="{Binding Choices}">
+                          <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                              <WrapPanel ItemSpacing="6" LineSpacing="6" />
+                            </ItemsPanelTemplate>
+                          </ItemsControl.ItemsPanel>
+                          <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                              <Button Classes="chip" Classes.active="{Binding IsSelected}"
+                                      Height="27" Padding="10,0" CornerRadius="14" FontSize="11"
+                                      Content="{Binding Label}"
+                                      Command="{Binding $parent[UserControl].DataContext.SelectTaskChoiceCommand}"
+                                      CommandParameter="{Binding}" />
+                            </DataTemplate>
+                          </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                      </StackPanel>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <Button Classes="ghost-action" HorizontalAlignment="Left"
+                        Content="创建" Command="{Binding CreateTaskCommand}" />
+              </StackPanel>
+            </Border>
+
+            <TextBlock Text="已配置" Classes="section-title" FontSize="11" />
+            <TextBlock Text="还没有定时任务。选一个模板，或者点「从任务新建」用一句话描述。"
+                       Classes="caption"
+                       FontSize="11.5"
+                       IsVisible="{Binding !HasScheduledTasks}" />
+            <ItemsControl ItemsSource="{Binding ScheduledTasks}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Border Classes="card" Padding="14,12" Margin="0,0,0,8">
+                    <Grid ColumnDefinitions="*,Auto,Auto,Auto">
+                      <StackPanel Spacing="3" Margin="0,0,12,0">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                          <Border Classes="tag" Padding="5,1">
+                            <TextBlock Text="{Binding SourceText}" FontSize="9.5"
+                                       Foreground="{StaticResource TextMutedBrush}" />
+                          </Border>
+                          <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="Medium"
+                                     VerticalAlignment="Center" />
+                        </StackPanel>
+                        <TextBlock Text="{Binding PromptPreview}"
+                                   Classes="caption"
+                                   FontSize="10.5"
+                                   TextWrapping="Wrap"
+                                   Foreground="{StaticResource TextSecondaryBrush}" />
+                        <TextBlock Text="{Binding ScheduleText}" FontSize="10.5"
+                                   Foreground="{StaticResource TextSecondaryBrush}" />
+                        <TextBlock Text="{Binding WorkspaceText}" Classes="caption" FontSize="10"
+                                   Foreground="{StaticResource TextMutedBrush}" />
+                        <TextBlock Text="{Binding ConfigText}" Classes="caption" FontSize="10"
+                                   TextWrapping="Wrap"
+                                   Foreground="{StaticResource TextMutedBrush}" />
+                        <TextBlock Text="{Binding LastRunText}" Classes="caption" FontSize="10"
+                                   Foreground="{StaticResource TextMutedBrush}" />
+                      </StackPanel>
+                      <Button Grid.Column="1" Classes="ghost-action" Content="试跑一次"
+                              Command="{Binding $parent[ItemsControl].DataContext.RunNowCommand}"
+                              CommandParameter="{Binding}" />
+                      <Button Grid.Column="2" Classes="ghost-action" Content="{Binding ToggleLabel}"
+                              Command="{Binding $parent[ItemsControl].DataContext.ToggleTaskCommand}"
+                              CommandParameter="{Binding}" />
+                      <Button Grid.Column="3" Classes="ghost-action" Content="删除"
+                              Command="{Binding $parent[ItemsControl].DataContext.DeleteTaskCommand}"
+                              CommandParameter="{Binding}" />
+                    </Grid>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock Text="执行权限沿用设置里的档位。无人值守时若用默认权限，遇到需要确认的工具调用会停在等待确认，直到你回来；重要任务建议先「试跑一次」再放开频率。"
+                       Classes="caption"
+                       FontSize="10.5"
+                       TextWrapping="Wrap"
+                       Foreground="{StaticResource TextMutedBrush}" />
+          </StackPanel>
+
+          <StackPanel IsVisible="{Binding IsScheduledRunsTab}" Spacing="11">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Text="每次触发都记一条，点不了也没关系，新任务本身在侧栏里。" Classes="caption" FontSize="10.5" />
+              <Button Grid.Column="1" Classes="ghost-action" Content="清空记录"
+                      Command="{Binding ClearRunsCommand}" />
+            </Grid>
+            <TextBlock Text="还没有运行记录。"
+                       Classes="caption"
+                       FontSize="11.5"
+                       IsVisible="{Binding !HasRunRecords}" />
+            <ItemsControl ItemsSource="{Binding RunRecords}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Border Classes="card" Padding="13,10" Margin="0,0,0,7">
+                    <Grid ColumnDefinitions="Auto,*,Auto">
+                      <Border Width="7" Height="7" CornerRadius="4"
+                              Background="{StaticResource AccentBrush}"
+                              VerticalAlignment="Center" Margin="0,0,10,0" />
+                      <StackPanel Grid.Column="1" Spacing="2">
+                        <TextBlock Text="{Binding TaskName}" FontSize="12.5" FontWeight="Medium" />
+                        <TextBlock Text="{Binding Detail}" Classes="caption" FontSize="10.5"
+                                   TextWrapping="Wrap" Foreground="{StaticResource TextMutedBrush}" />
+                      </StackPanel>
+                      <StackPanel Grid.Column="2" Spacing="2" HorizontalAlignment="Right">
+                        <TextBlock Text="{Binding Status}" FontSize="10.5" />
+                        <TextBlock Text="{Binding StartedAt, StringFormat='{}{0:MM-dd HH:mm}'}"
+                                   Classes="caption" FontSize="10"
+                                   Foreground="{StaticResource TextMutedBrush}" />
+                      </StackPanel>
+                    </Grid>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </StackPanel>
+
+        <!-- ══ 资料库 ══ -->
+        <StackPanel IsVisible="{Binding IsLibrary}" Spacing="11">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Button Classes="ghost-action" Content="+ 添加文件" Command="{Binding AddLibraryFilesCommand}" />
+            <Button Classes="ghost-action" Content="+ 添加文件夹" Command="{Binding AddLibraryFolderCommand}" />
+          </StackPanel>
+          <TextBlock Text="只登记本机路径，不复制文件；移除资料库不会删磁盘上的文件。「引用到任务」走和 @、拖放完全同一条链路，发送时才读正文。"
+                     Classes="caption"
+                     FontSize="10.5"
+                     TextWrapping="Wrap"
+                     Foreground="{StaticResource TextMutedBrush}" />
+          <TextBlock Text="还没有资料。点上面「添加文件」，或把常用文档、表格、PDF 加进来统一管理。"
+                     Classes="caption"
+                     FontSize="11.5"
+                     IsVisible="{Binding !HasLibraryItems}" />
+          <ItemsControl ItemsSource="{Binding LibraryItems}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Border Classes="card" Padding="14,11" Margin="0,0,0,8">
+                  <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto">
+                    <arc:ArcGlyph Data="{x:Static arc:ArcIcons.FileText}" Size="14"
+                                  Margin="0,1,10,0" VerticalAlignment="Top"
+                                  Foreground="{StaticResource TextSecondaryBrush}" />
+                    <StackPanel Grid.Column="1" Spacing="2" Margin="0,0,12,0">
+                      <TextBlock Text="{Binding Name}" FontSize="12.5" FontWeight="Medium" />
+                      <TextBlock Text="{Binding PathShort}" Classes="caption" FontSize="10"
+                                 TextTrimming="CharacterEllipsis"
+                                 ToolTip.Tip="{Binding Item.Path}"
+                                 Foreground="{StaticResource TextMutedBrush}" />
+                      <TextBlock Text="{Binding AddedText, StringFormat='{}{0} 添加'}"
+                                 Classes="caption" FontSize="9.5"
+                                 Foreground="{StaticResource TextMutedBrush}" />
+                    </StackPanel>
+                    <TextBlock Grid.Column="2" Text="{Binding TypeText}" Classes="caption" FontSize="10"
+                               VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <Button Grid.Column="3" Classes="ghost-action" Content="引用到任务"
+                            IsVisible="{Binding Exists}"
+                            Command="{Binding $parent[ItemsControl].DataContext.ReferenceLibraryItemCommand}"
+                            CommandParameter="{Binding}" />
+                    <Button Grid.Column="4" Classes="ghost-action" Content="预览"
+                            IsVisible="{Binding CanPreview}"
+                            Command="{Binding $parent[ItemsControl].DataContext.PreviewLibraryItemCommand}"
+                            CommandParameter="{Binding}" />
+                    <Button Grid.Column="5" Classes="ghost-action" Content="删除"
+                            Command="{Binding $parent[ItemsControl].DataContext.RemoveLibraryItemCommand}"
+                            CommandParameter="{Binding}" />
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+
+        <!-- ══ 更多 ══ -->
+        <StackPanel IsVisible="{Binding IsMore}" Spacing="12">
+          <Border Classes="card" Padding="16,14">
+            <Grid ColumnDefinitions="*,Auto,Auto,Auto">
+              <StackPanel Spacing="4">
+                <TextBlock Text="Avalonia Assistant" FontSize="14" FontWeight="SemiBold" />
+                <TextBlock Text="{Binding VersionText, StringFormat='版本 {0}'}"
+                           Classes="caption" FontSize="10.5" />
+                <TextBlock Text="{Binding DataFolderText, StringFormat='数据目录：{0}'}"
+                           Classes="caption" FontSize="10.5"
+                           TextTrimming="CharacterEllipsis"
+                           Foreground="{StaticResource TextMutedBrush}" />
+              </StackPanel>
+              <Button Grid.Column="1" Classes="ghost-action" Content="设置"
+                      Command="{Binding OpenSettingsCommand}" />
+              <Button Grid.Column="2" Classes="ghost-action" Content="打开数据目录"
+                      Command="{Binding OpenDataFolderCommand}" />
+              <Button Grid.Column="3" Classes="ghost-action" Content="复制诊断信息"
+                      Command="{Binding CopyDiagnosticsCommand}" />
+            </Grid>
+          </Border>
+
+          <TextBlock Text="快捷键" Classes="section-title" FontSize="11" />
+          <Border Classes="card" Padding="16,10">
+            <ItemsControl ItemsSource="{Binding Shortcuts}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Grid ColumnDefinitions="200,*" Margin="0,4">
+                    <TextBlock Text="{Binding Keys}" FontFamily="{StaticResource MonoFontFamily}"
+                               FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" />
+                    <TextBlock Grid.Column="1" Text="{Binding Description}" FontSize="11.5" />
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </Border>
+          <Border Classes="card" Padding="16,12">
+            <Grid ColumnDefinitions="*,Auto,Auto">
+              <StackPanel Spacing="3">
+                <TextBlock Text="{Binding AutoStartLabel}" FontSize="12.5" FontWeight="Medium" />
+                <TextBlock Text="开启后在用户「启动」文件夹放一个隐藏窗口的启动器，定时任务到点才有机会跑；关闭即删除，不改注册表、不装服务。"
+                           Classes="caption" FontSize="10.5" TextWrapping="Wrap"
+                           Foreground="{StaticResource TextMutedBrush}" />
+              </StackPanel>
+              <Button Grid.Column="1" Classes="ghost-action" Content="开启 / 关闭"
+                      Command="{Binding ToggleAutoStartCommand}" />
+              <TextBlock Grid.Column="2" Text="默认关闭" Classes="caption" FontSize="10"
+                         VerticalAlignment="Center" Margin="8,0,0,0"
+                         Foreground="{StaticResource TextMutedBrush}" />
+            </Grid>
+          </Border>
+
+          <TextBlock Text="会话内容与模型密钥只存在本机，不上传云端。"
+                     Classes="caption" FontSize="10.5" TextWrapping="Wrap"
+                     Foreground="{StaticResource TextMutedBrush}" />
+        </StackPanel>
+
+      </StackPanel>
+    </ScrollViewer>
+  </Grid>
+</UserControl>

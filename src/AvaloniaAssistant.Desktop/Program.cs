@@ -231,6 +231,30 @@ internal static class Program
                 case "--composer-hint":
                     AppLaunchOptions.ComposerHint = true;
                     break;
+                case "--home-preview":
+                    AppLaunchOptions.HomePreview = true;
+                    break;
+                case "--home-category" when index + 1 < args.Length:
+                    AppLaunchOptions.HomeCategory = args[++index];
+                    break;
+                case "--workstyle-flyout":
+                    AppLaunchOptions.WorkStyleFlyout = true;
+                    break;
+                case "--results-files":
+                    AppLaunchOptions.ResultsFilesTab = true;
+                    break;
+                case "--results-tab" when index + 1 < args.Length:
+                    AppLaunchOptions.ResultsTab = args[++index];
+                    break;
+                case "--workbench-demo":
+                    AppLaunchOptions.WorkbenchDemo = true;
+                    break;
+                case "--verify-scheduler":
+                    AppLaunchOptions.VerifyScheduler = true;
+                    break;
+                case "--verify-workbench":
+                    AppLaunchOptions.VerifyWorkbench = true;
+                    break;
                 case "--mcp-delete":
                     AppLaunchOptions.McpDelete = true;
                     break;

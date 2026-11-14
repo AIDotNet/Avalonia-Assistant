@@ -1,0 +1,37 @@
+<Project>
+  <!--
+    Native AOT：把依赖图里的 Pi 程序集和本项目自身程序集整体 root。
+    配合 Directory.Build.props 的 IlcGenerateCompleteTypeMetadata=true，
+    等于「不裁剪任何代码 / 反射元数据」——这是 AOT 下保持功能无损的关键：
+
+      * Pi 侧 12 个程序集：与 pi.net 的 AOT 发布配置保持一致，保住它内部
+        Jint 扩展宿主、RPC 事件、模型目录等反射路径；
+      * 本项目 6 个程序集：Avalonia 经典绑定（AvaloniaUseCompiledBindingsByDefault=false）
+        靠运行时反射找属性，DI 也靠反射构造服务，裁掉任一块都会在运行期静默失效。
+
+    OutputType 在 .targets 里才确定，所以这段必须放在 targets 而不是 props。
+  -->
+  <ItemGroup Condition="'$(PublishAot)' == 'true' and ('$(OutputType)' == 'Exe' or '$(OutputType)' == 'WinExe')">
+    <TrimmerRootAssembly Include="Pi.Agent" />
+    <TrimmerRootAssembly Include="Pi.Ai" />
+    <TrimmerRootAssembly Include="Pi.Chord" />
+    <TrimmerRootAssembly Include="Pi.Client" />
+    <TrimmerRootAssembly Include="Pi.Codemode" />
+    <TrimmerRootAssembly Include="Pi.CodingAgent" />
+    <TrimmerRootAssembly Include="Pi.Durable" />
+    <TrimmerRootAssembly Include="Pi.Mcp" />
+    <TrimmerRootAssembly Include="Pi.Protocol" />
+    <TrimmerRootAssembly Include="Pi.Server" />
+    <TrimmerRootAssembly Include="Pi.Telemetry" />
+    <TrimmerRootAssembly Include="Pi.Tui" />
+
+    <TrimmerRootAssembly Include="AvaloniaAssistant.Abstractions" />
+    <TrimmerRootAssembly Include="AvaloniaAssistant.Agent" />
+    <TrimmerRootAssembly Include="AvaloniaAssistant.Storage" />
+    <TrimmerRootAssembly Include="AvaloniaAssistant.Speech" />
+    <TrimmerRootAssembly Include="AvaloniaAssistant.UI" />
+    <!-- 入口项目单独指定了 AssemblyName，程序集名不是项目名；写错会让 ILC 直接报
+         Failed to load assembly。入口本身已完整 root，这里按实际程序集名写。 -->
+    <TrimmerRootAssembly Include="AvaloniaAssistant" />
+  </ItemGroup>
+</Project>
