@@ -25,14 +25,10 @@ public partial class ImageViewer : UserControl
     private double _scale = 1;
     private bool _dragging;
     private bool _wired;
-
-    /// <summary>刚铺开还没量出视口尺寸：等布局落定后再算 fit 比例。</summary>
     private bool _fitPending;
-
-    /// <summary>当前视口下「整张都看得见」的比例，用来判断操作提示该不该露。</summary>
     private double _fitScale = 1;
 
-    /// <summary>用户自己缩放过。之后视口尺寸变化就别再改他的比例和位置。</summary>
+    // 用户自己缩放过：之后视口尺寸变化就别再改他的比例和位置
     private bool _userZoomed;
     private Point _dragOrigin;
     private double _offsetX;
@@ -44,10 +40,8 @@ public partial class ImageViewer : UserControl
 
     public ImageViewer()
     {
-        // 必须走生成的 InitializeComponent：只有它会在 Load 之后把 x:Name 字段
-        // （Preview / Viewport / CaptionText / ZoomText / HintText）填上。
-        // 直接写 AvaloniaXamlLoader.Load(this) 只加载 XAML，字段全是 null，
-        // Show() 里一碰就是空引用。
+        // 必须走生成的 InitializeComponent：x:Name 字段只在它里面赋值，
+        // AvaloniaXamlLoader.Load 只加载 XAML，字段全是 null。
         InitializeComponent();
 
         EnsureWired();
@@ -56,10 +50,7 @@ public partial class ImageViewer : UserControl
         Loaded += (_, _) => EnsureWired();
     }
 
-    /// <summary>
-    /// 接线：变换组、指针事件、尺寸变化。命名控件由 <see cref="InitializeComponent"/> 保证，
-    /// 这里再判一次空只是为了把「控件没加载出来」当成静默失败，而不是崩在用户脸上。
-    /// </summary>
+    /// <summary>接线：变换组、指针事件、尺寸变化。</summary>
     private void EnsureWired()
     {
         if (_wired || Preview is null || Viewport is null)
@@ -77,8 +68,7 @@ public partial class ImageViewer : UserControl
         Viewport.PointerReleased += OnViewportPointerReleased;
         Viewport.PointerCaptureLost += (_, _) => EndDrag();
 
-        // 视口和图片谁先量出来都行：哪边变了就重摆一次。
-        // 只挂 Viewport 不够——换一张尺寸不同的图时，视口尺寸没变，是图片自己在变。
+        // 换图时视口尺寸没变、变的是图片自己，两边都得挂
         Viewport.SizeChanged += (_, _) => RefitIfUntouched();
         Preview.SizeChanged += (_, _) => RefitIfUntouched();
     }
@@ -93,7 +83,7 @@ public partial class ImageViewer : UserControl
     {
         EnsureWired();
 
-        // 命名控件没拿到就什么都不做：宁可不弹，也不要抛空引用打断用户点图
+        // 命名控件没拿到就什么都不做，别为了点图抛空引用
         if (Preview is null || CaptionText is null || Viewport is null || ZoomText is null || HintText is null)
         {
             return;
@@ -115,7 +105,7 @@ public partial class ImageViewer : UserControl
         Place();
         UpdateChrome();
 
-        // 布局要等这一帧走完才落定：那一刻的 Bounds 才是真的，再补一次
+        // 布局要这一帧走完才落定，那时的 Bounds 才是真的
         Dispatcher.UIThread.Post(RefitIfUntouched, DispatcherPriority.Loaded);
         Focus();
     }
@@ -138,11 +128,7 @@ public partial class ImageViewer : UserControl
         Closed?.Invoke(this, EventArgs.Empty);
     }
 
-    /// <summary>
-    /// 摆位置：按视口尺寸和图片的实际布局尺寸算 fit 比例与居中位移。
-    /// <paramref name="refit"/> 或「还没做过首次 fit」时重算比例，否则只重摆、保留当前缩放。
-    /// 视口还没量出来就先不管，等布局落定后的 SizeChanged / Post 再进来。
-    /// </summary>
+    /// <summary>按视口和图片的实际布局尺寸算 fit 比例与居中位移；<paramref name="refit"/> 为 true 时重算比例。</summary>
     private void Place(bool refit = false)
     {
         if (Preview is null || Viewport is null)
@@ -154,12 +140,10 @@ public partial class ImageViewer : UserControl
         var height = Viewport.Bounds.Height;
         if (width <= 0 || height <= 0)
         {
-            // 还没量出来，等布局落定后 SizeChanged / Post 会再进来一次
             return;
         }
 
-        // 用布局尺寸而不是位图尺寸：DPI 元数据、四舍五入都可能让两者差几个像素，
-        // 差出来的这一截会直接表现成「没居中」。
+        // 用布局尺寸而不是位图尺寸：DPI 元数据、取整差几像素就表现成「没居中」
         var image = LayoutSize(Preview);
         if (image.Width <= 0 || image.Height <= 0)
         {
@@ -174,7 +158,7 @@ public partial class ImageViewer : UserControl
             _scaleTransform.ScaleX = _scaleTransform.ScaleY = _scale;
         }
 
-        // 顶部有尺寸标签、底部有操作提示，图就摆在两者之间的带子里，别让标签压在图角上
+        // 顶部有尺寸标签、底部有操作提示，图摆在两者之间的带子里
         var bandTop = ChromeTop;
         var bandHeight = Math.Max(1, height - ChromeTop - ChromeBottom);
         _translate.X = (width - image.Width * _scale) / 2;
@@ -183,7 +167,7 @@ public partial class ImageViewer : UserControl
         UpdateChrome();
     }
 
-    /// <summary>图片在布局里的实际尺寸。还没排完版时 Bounds 是空的，退回位图自身的尺寸。</summary>
+    /// <summary>图片在布局里的实际尺寸，还没排完版时退回位图尺寸。</summary>
     private static Size LayoutSize(Image preview)
     {
         var bounds = preview.Bounds.Size;
@@ -195,7 +179,7 @@ public partial class ImageViewer : UserControl
         return preview.Source?.Size ?? default;
     }
 
-    /// <summary>视口或图片尺寸变了就重摆；用户没自己缩放过，就顺手重新 fit。</summary>
+    /// <summary>视口或图片尺寸变了就重摆；用户没缩放过就顺带重新 fit。</summary>
     private void RefitIfUntouched()
     {
         if (!IsVisible || _dragging)
@@ -206,10 +190,7 @@ public partial class ImageViewer : UserControl
         Place(refit: !_userZoomed);
     }
 
-    /// <summary>
-    /// 「整张都看得见」的比例：左右各留 <see cref="ChromeSide"/>，上下让开工具条和提示，
-    /// 小图不放大（不把 120px 的图糊成大块）。
-    /// </summary>
+    /// <summary>「整张都看得见」的比例：让开工具条和边距，小图不放大。</summary>
     private static double FitScale(Size image, double viewportWidth, double viewportHeight)
     {
         if (image.Width <= 0 || image.Height <= 0)
@@ -256,7 +237,7 @@ public partial class ImageViewer : UserControl
 
     private void Reset()
     {
-        // 硬回到 100% 对 4K 截图等于又跑到左上角去了；「适应窗口」才是还原的本意
+        // 硬回到 100% 对 4K 截图等于又跑到左上角，「适应窗口」才是还原的本意
         _userZoomed = false;
         _fitPending = true;
         Place();

@@ -149,8 +149,7 @@ public sealed partial class UserMessageViewModel : MessageViewModel
 }
 
 /// <summary>
-/// 气泡里的一张图。<see cref="Bitmap"/> 是 120px 的缩略图，只够在气泡里显示；
-/// 点开看大图要按 <see cref="Source"/> 里的原文件重新解码——把缩略图拉大只会糊成一片。
+/// 气泡里的一张图。<see cref="Bitmap"/> 只够在气泡里显示，点开看大图要按 <see cref="Source"/> 重新解码原文件。
 /// </summary>
 public sealed class ChatImageThumbnail
 {

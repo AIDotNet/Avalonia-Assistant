@@ -54,13 +54,12 @@ public partial class ChatView : UserControl
 
     public ChatView()
     {
-        // 用生成的 InitializeComponent 而不是 AvaloniaXamlLoader.Load：
-        // 前者才会把 x:Name 字段（ImageViewerLayer 等）填上，后者只加载 XAML。
-        // 之前点缩略图抛的 NullReferenceException 就是 ImageViewerLayer 为 null。
+        // 用生成的 InitializeComponent：x:Name 字段只在它里面赋值，
+        // AvaloniaXamlLoader.Load 只加载 XAML。
         InitializeComponent();
         AttachedToVisualTree += OnAttachedToVisualTree;
 
-        // 查看层关掉就把它正在显示的整图放掉
+        // 查看层关掉就把它手里的整图放掉
         this.FindControl<Controls.ImageViewer>("ImageViewerLayer")?.Closed += (_, _) => ReleaseViewerImage();
 
         // 审批卡的键盘回答走隧道：输入框在同一个页面里，先于它拿到按键。
@@ -69,8 +68,7 @@ public partial class ChatView : UserControl
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
-        // 离开这一页时把查看层收掉：它手里那张整图要跟着释放，
-        // 不能让已释放的位图还挂在 Preview.Source 上等着下一次渲染。
+        // 离开这一页时收掉查看层并释放它手里的整图
         this.FindControl<Controls.ImageViewer>("ImageViewerLayer")?.Close();
         ReleaseViewerImage();
 
@@ -184,8 +182,7 @@ public partial class ChatView : UserControl
             return;
         }
 
-        // 命名控件可能还没就绪（视图复用、XAML 没走 InitializeComponent 等），
-        // 这里再退一步用 FindControl，拿不到就静默——点图不该崩。
+        // 命名控件异常时退回 FindControl，拿不到就静默，点图不该崩
         var viewer = ImageViewerLayer ?? this.FindControl<Controls.ImageViewer>("ImageViewerLayer");
         if (viewer is null)
         {
@@ -202,11 +199,7 @@ public partial class ChatView : UserControl
         e.Handled = true;
     }
 
-    /// <summary>
-    /// 按原文件解码整图给查看层用。文件被删或格式坏了返回 null，调用方退回缩略图。
-    /// 解出来的位图由 <see cref="_viewerImage"/> 持有、关闭查看层时释放——
-    /// 一张 4K 截图三十来兆，不释放的话每点一次就多留一份。
-    /// </summary>
+    /// <summary>按原文件解码整图给查看层用，文件被删或格式坏了返回 null。位图由 <see cref="_viewerImage"/> 持有。</summary>
     private Bitmap? LoadViewerImage(ChatImageThumbnail thumbnail)
     {
         ReleaseViewerImage();
