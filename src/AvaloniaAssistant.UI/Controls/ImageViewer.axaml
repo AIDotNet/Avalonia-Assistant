@@ -35,9 +35,13 @@
             ClipToBounds="True"
             Cursor="Hand">
       <!-- 缩放 / 平移两个变换在 code-behind 里建：ScaleTransform 不是控件，
-           x:Name 不会生成字段，写在这里也拿不到。顺序是「先缩放再平移」。 -->
+           x:Name 不会生成字段，写在这里也拿不到。顺序是「先缩放再平移」。
+           Left/Top 对齐是必须的：Image 默认拉伸填满 Border，内容会在控件里先被居中一次，
+           再叠加 code-behind 的居中位移，图就跑到右下角去了。 -->
       <Image x:Name="Preview"
              Stretch="None"
+             HorizontalAlignment="Left"
+             VerticalAlignment="Top"
              RenderTransformOrigin="0%,0%" />
     </Border>
 
@@ -62,7 +66,7 @@
         <Button Classes="viewer-action" Click="OnZoomOutClick" ToolTip.Tip="缩小">
           <arc:ArcGlyph Data="{x:Static arc:ArcIcons.Minus}" Size="13" />
         </Button>
-        <Button Classes="viewer-action" Click="OnResetClick" ToolTip.Tip="还原到 100%">
+        <Button Classes="viewer-action" Click="OnResetClick" ToolTip.Tip="适应窗口（滚轮可放大）">
           <TextBlock x:Name="ZoomText" Text="100%" />
         </Button>
         <Button Classes="viewer-action" Click="OnZoomInClick" ToolTip.Tip="放大">

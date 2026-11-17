@@ -60,12 +60,20 @@ public partial class ChatView : UserControl
         InitializeComponent();
         AttachedToVisualTree += OnAttachedToVisualTree;
 
+        // 查看层关掉就把它正在显示的整图放掉
+        this.FindControl<Controls.ImageViewer>("ImageViewerLayer")?.Closed += (_, _) => ReleaseViewerImage();
+
         // 审批卡的键盘回答走隧道：输入框在同一个页面里，先于它拿到按键。
         AddHandler(KeyDownEvent, OnChatKeyDown, RoutingStrategies.Tunnel);
     }
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
+        // 离开这一页时把查看层收掉：它手里那张整图要跟着释放，
+        // 不能让已释放的位图还挂在 Preview.Source 上等着下一次渲染。
+        this.FindControl<Controls.ImageViewer>("ImageViewerLayer")?.Close();
+        ReleaseViewerImage();
+
         if (_viewModel is not null)
         {
             _viewModel.ScrollToEndRequested -= OnScrollToEndRequested;
@@ -171,7 +179,7 @@ public partial class ChatView : UserControl
     /// <summary>点一下用户贴的缩略图，铺开看大图。</summary>
     private void OnThumbnailPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (sender is not Control { DataContext: Bitmap bitmap })
+        if (sender is not Control { DataContext: ChatImageThumbnail thumbnail })
         {
             return;
         }
@@ -184,8 +192,50 @@ public partial class ChatView : UserControl
             return;
         }
 
-        viewer.Show(bitmap, $"{bitmap.PixelSize.Width}×{bitmap.PixelSize.Height}");
+        // 气泡里挂的是 120px 缩略图，直接拿去放大只会糊：按原文件重新解一张整的
+        var full = LoadViewerImage(thumbnail);
+        var caption = full is not null
+            ? $"{full.PixelSize.Width}×{full.PixelSize.Height} · {thumbnail.Source.DisplaySize}"
+            : $"{thumbnail.Bitmap.PixelSize.Width}×{thumbnail.Bitmap.PixelSize.Height}（原图已不可用）";
+
+        viewer.Show(full ?? thumbnail.Bitmap, caption);
         e.Handled = true;
+    }
+
+    /// <summary>
+    /// 按原文件解码整图给查看层用。文件被删或格式坏了返回 null，调用方退回缩略图。
+    /// 解出来的位图由 <see cref="_viewerImage"/> 持有、关闭查看层时释放——
+    /// 一张 4K 截图三十来兆，不释放的话每点一次就多留一份。
+    /// </summary>
+    private Bitmap? LoadViewerImage(ChatImageThumbnail thumbnail)
+    {
+        ReleaseViewerImage();
+
+        try
+        {
+            var path = thumbnail.Source.Path;
+            if (!File.Exists(path))
+            {
+                return null;
+            }
+
+            using var stream = File.OpenRead(path);
+            var bitmap = new Bitmap(stream);
+            _viewerImage = bitmap;
+            return bitmap;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return null;
+        }
+    }
+
+    private Bitmap? _viewerImage;
+
+    private void ReleaseViewerImage()
+    {
+        _viewerImage?.Dispose();
+        _viewerImage = null;
     }
 
     private void OnAttachedToVisualTree(object? sender, VisualTreeAttachmentEventArgs e)

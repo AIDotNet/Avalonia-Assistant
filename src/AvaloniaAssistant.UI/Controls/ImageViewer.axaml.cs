@@ -12,13 +12,19 @@ namespace AvaloniaAssistant.UI.Controls;
 /// </summary>
 public partial class ImageViewer : UserControl
 {
-    private const double MinScale = 0.25;
+    private const double MinScale = 0.05;
     private const double MaxScale = 8;
     private const double Step = 1.25;
 
     private double _scale = 1;
     private bool _dragging;
     private bool _centerPending;
+
+    /// <summary>刚铺开还没量出视口尺寸：等 SizeChanged 时再算 fit 比例。</summary>
+    private bool _fitPending;
+
+    /// <summary>当前视口下「整张都看得见」的比例，用来判断操作提示该不该露。</summary>
+    private double _fitScale = 1;
     private Point _dragOrigin;
     private double _offsetX;
     private double _offsetY;
@@ -63,8 +69,17 @@ public partial class ImageViewer : UserControl
         Viewport.PointerCaptureLost += (_, _) => EndDrag();
         Viewport.SizeChanged += (_, _) =>
         {
+            // 视口刚量出来（Show 时 Bounds 还是 0）：补一次 fit + 居中
             if (_centerPending)
             {
+                CenterImage();
+                return;
+            }
+
+            // 窗口被拉着改大改小：还在 fit 状态就重新 fit；用户已经缩放过就别动他的视角
+            if (IsVisible && Math.Abs(_scale - _fitScale) < 0.001)
+            {
+                _fitPending = true;
                 CenterImage();
             }
         };
@@ -92,8 +107,13 @@ public partial class ImageViewer : UserControl
         Preview.Source = source;
         CaptionText.Text = caption ?? string.Empty;
 
+        // 打开时按视口 fit：4K 原图一进来就 100% 的话，用户只能看到左上角一块
+        _fitPending = true;
         _scale = 1;
+        _fitScale = 1;
         _scaleTransform.ScaleX = _scaleTransform.ScaleY = 1;
+        _translate.X = 0;
+        _translate.Y = 0;
         _centerPending = true;
         CenterImage();
         UpdateChrome();
@@ -145,9 +165,37 @@ public partial class ImageViewer : UserControl
             return;
         }
 
+        // 首次铺开（或点了「适应窗口」）：先按视口定比例，再算居中位移
+        if (_fitPending)
+        {
+            _fitPending = false;
+            _fitScale = FitScale(source.Size, width, height);
+            _scale = _fitScale;
+            _scaleTransform.ScaleX = _scaleTransform.ScaleY = _scale;
+            UpdateChrome();
+        }
+
         _centerPending = false;
         _translate.X = (width - source.Size.Width * _scale) / 2;
         _translate.Y = (height - source.Size.Height * _scale) / 2;
+    }
+
+    /// <summary>
+    /// 「整张都看得见」的比例：四周留 24px 边距，小图不放大（不把 120px 的图糊成大块）。
+    /// </summary>
+    private static double FitScale(Size image, double viewportWidth, double viewportHeight)
+    {
+        if (image.Width <= 0 || image.Height <= 0)
+        {
+            return 1;
+        }
+
+        const double padding = 24;
+        var width = Math.Max(1, viewportWidth - padding * 2);
+        var height = Math.Max(1, viewportHeight - padding * 2);
+        var scale = Math.Min(width / image.Width, height / image.Height);
+
+        return Math.Clamp(Math.Min(scale, 1), MinScale, MaxScale);
     }
 
     /// <summary>
@@ -181,13 +229,13 @@ public partial class ImageViewer : UserControl
 
     private void Reset()
     {
-        _scale = 1;
-        _scaleTransform.ScaleX = _scaleTransform.ScaleY = 1;
+        // 硬回到 100% 对 4K 截图等于又跑到左上角去了；「适应窗口」才是还原的本意
+        _fitPending = true;
         CenterImage();
         UpdateChrome();
     }
 
-    /// <summary>100% 时给一句操作提示，放大之后收起来，别一直压在图下面。</summary>
+    /// <summary>正好「整张都看得见」时给一句操作提示，放大之后收起来，别一直压在图下面。</summary>
     private void UpdateChrome()
     {
         if (ZoomText is null || HintText is null)
@@ -196,7 +244,7 @@ public partial class ImageViewer : UserControl
         }
 
         ZoomText.Text = $"{Math.Round(_scale * 100):0}%";
-        HintText.IsVisible = Math.Abs(_scale - 1) < 0.001;
+        HintText.IsVisible = Math.Abs(_scale - _fitScale) < 0.001;
     }
 
     private void EndDrag()

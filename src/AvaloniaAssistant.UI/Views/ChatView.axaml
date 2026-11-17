@@ -177,7 +177,7 @@
                         Cursor="Hand"
                         ToolTip.Tip="点开看大图"
                         PointerPressed="OnThumbnailPressed">
-                  <Image Source="{Binding}" Width="120" Stretch="Uniform" />
+                  <Image Source="{Binding Bitmap}" Width="120" Stretch="Uniform" />
                 </Border>
               </DataTemplate>
             </ItemsControl.ItemTemplate>
