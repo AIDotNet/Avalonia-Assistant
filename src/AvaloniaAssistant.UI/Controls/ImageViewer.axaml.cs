@@ -2,8 +2,8 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
-using Avalonia.Markup.Xaml;
 using Avalonia.Media;
+using Avalonia.Threading;
 
 namespace AvaloniaAssistant.UI.Controls;
 
@@ -13,13 +13,23 @@ namespace AvaloniaAssistant.UI.Controls;
 /// </summary>
 public partial class ImageViewer : UserControl
 {
-    private const double MinScale = 0.25;
+    private const double MinScale = 0.05;
     private const double MaxScale = 8;
     private const double Step = 1.25;
 
+    // 遮罩上下有工具条和操作提示、左右留白：fit 只在这块带子里算，标签不会压到图角
+    private const double ChromeTop = 56;
+    private const double ChromeBottom = 40;
+    private const double ChromeSide = 32;
+
     private double _scale = 1;
     private bool _dragging;
-    private bool _centerPending;
+    private bool _wired;
+    private bool _fitPending;
+    private double _fitScale = 1;
+
+    // 用户自己缩放过：之后视口尺寸变化就别再改他的比例和位置
+    private bool _userZoomed;
     private Point _dragOrigin;
     private double _offsetX;
     private double _offsetY;
@@ -30,17 +40,17 @@ public partial class ImageViewer : UserControl
 
     public ImageViewer()
     {
-        AvaloniaXamlLoader.Load(this);
+        // 必须走生成的 InitializeComponent：x:Name 字段只在它里面赋值，
+        // AvaloniaXamlLoader.Load 只加载 XAML，字段全是 null。
+        InitializeComponent();
 
-        // 从别的 XAML 实例化时，构造函数里拿不到命名控件；Loaded 是最后一个可靠的时机。
+        EnsureWired();
+
+        // 兜底：控件被重新挂到别的树上时再确认一次接线（幂等）
         Loaded += (_, _) => EnsureWired();
     }
 
-    /// <summary>
-    /// 控件是从别的 XAML 里实例化的，这种情形下 <c>AvaloniaXamlLoader.Load</c> 的命名控件
-    /// 要等外层填充完才有值，构造函数里读 <c>Preview</c> 会拿到 null。
-    /// 所以接线推迟到进可视树之后再做一次。
-    /// </summary>
+    /// <summary>接线：变换组、指针事件、尺寸变化。</summary>
     private void EnsureWired()
     {
         if (_wired || Preview is null || Viewport is null)
@@ -57,17 +67,11 @@ public partial class ImageViewer : UserControl
         Viewport.PointerMoved += OnViewportPointerMoved;
         Viewport.PointerReleased += OnViewportPointerReleased;
         Viewport.PointerCaptureLost += (_, _) => EndDrag();
-        Viewport.SizeChanged += (_, _) =>
-        {
-            if (_centerPending)
-            {
-                CenterImage();
-            }
-        };
+
+        // 换图时视口尺寸没变、变的是图片自己，两边都得挂
+        Viewport.SizeChanged += (_, _) => RefitIfUntouched();
+        Preview.SizeChanged += (_, _) => RefitIfUntouched();
     }
-
-    private bool _wired;
-
 
     /// <summary>关闭之后触发，宿主可以据此把焦点还给对话。</summary>
     public event EventHandler? Closed;
@@ -78,7 +82,9 @@ public partial class ImageViewer : UserControl
     public void Show(IImage source, string? caption = null)
     {
         EnsureWired();
-        if (Preview is null)
+
+        // 命名控件没拿到就什么都不做，别为了点图抛空引用
+        if (Preview is null || CaptionText is null || Viewport is null || ZoomText is null || HintText is null)
         {
             return;
         }
@@ -86,13 +92,21 @@ public partial class ImageViewer : UserControl
         Preview.Source = source;
         CaptionText.Text = caption ?? string.Empty;
 
+        _dragging = false;
+        _userZoomed = false;
+        _fitPending = true;
         _scale = 1;
+        _fitScale = 1;
         _scaleTransform.ScaleX = _scaleTransform.ScaleY = 1;
-        _centerPending = true;
-        CenterImage();
-        UpdateChrome();
+        _translate.X = 0;
+        _translate.Y = 0;
 
         IsVisible = true;
+        Place();
+        UpdateChrome();
+
+        // 布局要这一帧走完才落定，那时的 Bounds 才是真的
+        Dispatcher.UIThread.Post(RefitIfUntouched, DispatcherPriority.Loaded);
         Focus();
     }
 
@@ -105,18 +119,19 @@ public partial class ImageViewer : UserControl
 
         IsVisible = false;
         EndDrag();
-        Preview.Source = null;
+
+        if (Preview is not null)
+        {
+            Preview.Source = null;
+        }
+
         Closed?.Invoke(this, EventArgs.Empty);
     }
 
-    /// <summary>
-    /// 把图摆到视口中间。视口还没量出尺寸时先记一笔，等 SizeChanged 再补——
-    /// Show 的时候控件刚变可见，Bounds 往往还是 0。
-    /// </summary>
-    private void CenterImage()
+    /// <summary>按视口和图片的实际布局尺寸算 fit 比例与居中位移；<paramref name="refit"/> 为 true 时重算比例。</summary>
+    private void Place(bool refit = false)
     {
-        var source = Preview.Source;
-        if (source is null)
+        if (Preview is null || Viewport is null)
         {
             return;
         }
@@ -125,13 +140,69 @@ public partial class ImageViewer : UserControl
         var height = Viewport.Bounds.Height;
         if (width <= 0 || height <= 0)
         {
-            _centerPending = true;
             return;
         }
 
-        _centerPending = false;
-        _translate.X = (width - source.Size.Width * _scale) / 2;
-        _translate.Y = (height - source.Size.Height * _scale) / 2;
+        // 用布局尺寸而不是位图尺寸：DPI 元数据、取整差几像素就表现成「没居中」
+        var image = LayoutSize(Preview);
+        if (image.Width <= 0 || image.Height <= 0)
+        {
+            return;
+        }
+
+        if (refit || _fitPending)
+        {
+            _fitPending = false;
+            _fitScale = FitScale(image, width, height);
+            _scale = _fitScale;
+            _scaleTransform.ScaleX = _scaleTransform.ScaleY = _scale;
+        }
+
+        // 顶部有尺寸标签、底部有操作提示，图摆在两者之间的带子里
+        var bandTop = ChromeTop;
+        var bandHeight = Math.Max(1, height - ChromeTop - ChromeBottom);
+        _translate.X = (width - image.Width * _scale) / 2;
+        _translate.Y = bandTop + (bandHeight - image.Height * _scale) / 2;
+
+        UpdateChrome();
+    }
+
+    /// <summary>图片在布局里的实际尺寸，还没排完版时退回位图尺寸。</summary>
+    private static Size LayoutSize(Image preview)
+    {
+        var bounds = preview.Bounds.Size;
+        if (bounds.Width > 0 && bounds.Height > 0)
+        {
+            return bounds;
+        }
+
+        return preview.Source?.Size ?? default;
+    }
+
+    /// <summary>视口或图片尺寸变了就重摆；用户没缩放过就顺带重新 fit。</summary>
+    private void RefitIfUntouched()
+    {
+        if (!IsVisible || _dragging)
+        {
+            return;
+        }
+
+        Place(refit: !_userZoomed);
+    }
+
+    /// <summary>「整张都看得见」的比例：让开工具条和边距，小图不放大。</summary>
+    private static double FitScale(Size image, double viewportWidth, double viewportHeight)
+    {
+        if (image.Width <= 0 || image.Height <= 0)
+        {
+            return 1;
+        }
+
+        var width = Math.Max(1, viewportWidth - ChromeSide * 2);
+        var height = Math.Max(1, viewportHeight - ChromeTop - ChromeBottom);
+        var scale = Math.Min(width / image.Width, height / image.Height);
+
+        return Math.Clamp(Math.Min(scale, 1), MinScale, MaxScale);
     }
 
     /// <summary>
@@ -140,6 +211,11 @@ public partial class ImageViewer : UserControl
     /// </summary>
     private void SetScale(double target, Point? anchor = null)
     {
+        if (Viewport is null)
+        {
+            return;
+        }
+
         var next = Math.Clamp(target, MinScale, MaxScale);
         if (Math.Abs(next - _scale) < 0.0001)
         {
@@ -154,23 +230,29 @@ public partial class ImageViewer : UserControl
         _translate.Y = centerY - (centerY - _translate.Y) * factor;
         _scale = next;
         _scaleTransform.ScaleX = _scaleTransform.ScaleY = _scale;
+        _userZoomed = true;
 
         UpdateChrome();
     }
 
     private void Reset()
     {
-        _scale = 1;
-        _scaleTransform.ScaleX = _scaleTransform.ScaleY = 1;
-        CenterImage();
-        UpdateChrome();
+        // 硬回到 100% 对 4K 截图等于又跑到左上角，「适应窗口」才是还原的本意
+        _userZoomed = false;
+        _fitPending = true;
+        Place();
     }
 
-    /// <summary>100% 时给一句操作提示，放大之后收起来，别一直压在图下面。</summary>
+    /// <summary>正好「整张都看得见」时给一句操作提示，放大之后收起来，别一直压在图下面。</summary>
     private void UpdateChrome()
     {
+        if (ZoomText is null || HintText is null)
+        {
+            return;
+        }
+
         ZoomText.Text = $"{Math.Round(_scale * 100):0}%";
-        HintText.IsVisible = Math.Abs(_scale - 1) < 0.001;
+        HintText.IsVisible = Math.Abs(_scale - _fitScale) < 0.001;
     }
 
     private void EndDrag()
@@ -181,7 +263,10 @@ public partial class ImageViewer : UserControl
         }
 
         _dragging = false;
-        Viewport.Cursor = new Cursor(StandardCursorType.Hand);
+        if (Viewport is not null)
+        {
+            Viewport.Cursor = new Cursor(StandardCursorType.Hand);
+        }
     }
 
     private void OnViewportPointerPressed(object? sender, PointerPressedEventArgs e)
@@ -229,7 +314,7 @@ public partial class ImageViewer : UserControl
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
     {
         base.OnPointerWheelChanged(e);
-        if (!IsVisible || e.Delta.Y == 0)
+        if (!IsVisible || e.Delta.Y == 0 || Viewport is null)
         {
             return;
         }

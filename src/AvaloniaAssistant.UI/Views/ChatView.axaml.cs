@@ -3,7 +3,6 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
-using Avalonia.Markup.Xaml;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -55,8 +54,13 @@ public partial class ChatView : UserControl
 
     public ChatView()
     {
-        AvaloniaXamlLoader.Load(this);
+        // 用生成的 InitializeComponent：x:Name 字段只在它里面赋值，
+        // AvaloniaXamlLoader.Load 只加载 XAML。
+        InitializeComponent();
         AttachedToVisualTree += OnAttachedToVisualTree;
+
+        // 查看层关掉就把它手里的整图放掉
+        this.FindControl<Controls.ImageViewer>("ImageViewerLayer")?.Closed += (_, _) => ReleaseViewerImage();
 
         // 审批卡的键盘回答走隧道：输入框在同一个页面里，先于它拿到按键。
         AddHandler(KeyDownEvent, OnChatKeyDown, RoutingStrategies.Tunnel);
@@ -64,6 +68,10 @@ public partial class ChatView : UserControl
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
+        // 离开这一页时收掉查看层并释放它手里的整图
+        this.FindControl<Controls.ImageViewer>("ImageViewerLayer")?.Close();
+        ReleaseViewerImage();
+
         if (_viewModel is not null)
         {
             _viewModel.ScrollToEndRequested -= OnScrollToEndRequested;
@@ -169,11 +177,58 @@ public partial class ChatView : UserControl
     /// <summary>点一下用户贴的缩略图，铺开看大图。</summary>
     private void OnThumbnailPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (sender is Control { DataContext: Bitmap bitmap })
+        if (sender is not Control { DataContext: ChatImageThumbnail thumbnail })
         {
-            ImageViewerLayer.Show(bitmap, $"{bitmap.PixelSize.Width}×{bitmap.PixelSize.Height}");
-            e.Handled = true;
+            return;
         }
+
+        // 命名控件异常时退回 FindControl，拿不到就静默，点图不该崩
+        var viewer = ImageViewerLayer ?? this.FindControl<Controls.ImageViewer>("ImageViewerLayer");
+        if (viewer is null)
+        {
+            return;
+        }
+
+        // 气泡里挂的是 120px 缩略图，直接拿去放大只会糊：按原文件重新解一张整的
+        var full = LoadViewerImage(thumbnail);
+        var caption = full is not null
+            ? $"{full.PixelSize.Width}×{full.PixelSize.Height} · {thumbnail.Source.DisplaySize}"
+            : $"{thumbnail.Bitmap.PixelSize.Width}×{thumbnail.Bitmap.PixelSize.Height}（原图已不可用）";
+
+        viewer.Show(full ?? thumbnail.Bitmap, caption);
+        e.Handled = true;
+    }
+
+    /// <summary>按原文件解码整图给查看层用，文件被删或格式坏了返回 null。位图由 <see cref="_viewerImage"/> 持有。</summary>
+    private Bitmap? LoadViewerImage(ChatImageThumbnail thumbnail)
+    {
+        ReleaseViewerImage();
+
+        try
+        {
+            var path = thumbnail.Source.Path;
+            if (!File.Exists(path))
+            {
+                return null;
+            }
+
+            using var stream = File.OpenRead(path);
+            var bitmap = new Bitmap(stream);
+            _viewerImage = bitmap;
+            return bitmap;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return null;
+        }
+    }
+
+    private Bitmap? _viewerImage;
+
+    private void ReleaseViewerImage()
+    {
+        _viewerImage?.Dispose();
+        _viewerImage = null;
     }
 
     private void OnAttachedToVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
