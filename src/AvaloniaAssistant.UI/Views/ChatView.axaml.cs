@@ -3,7 +3,6 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
-using Avalonia.Markup.Xaml;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -55,7 +54,10 @@ public partial class ChatView : UserControl
 
     public ChatView()
     {
-        AvaloniaXamlLoader.Load(this);
+        // 用生成的 InitializeComponent 而不是 AvaloniaXamlLoader.Load：
+        // 前者才会把 x:Name 字段（ImageViewerLayer 等）填上，后者只加载 XAML。
+        // 之前点缩略图抛的 NullReferenceException 就是 ImageViewerLayer 为 null。
+        InitializeComponent();
         AttachedToVisualTree += OnAttachedToVisualTree;
 
         // 审批卡的键盘回答走隧道：输入框在同一个页面里，先于它拿到按键。
@@ -169,11 +171,21 @@ public partial class ChatView : UserControl
     /// <summary>点一下用户贴的缩略图，铺开看大图。</summary>
     private void OnThumbnailPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (sender is Control { DataContext: Bitmap bitmap })
+        if (sender is not Control { DataContext: Bitmap bitmap })
         {
-            ImageViewerLayer.Show(bitmap, $"{bitmap.PixelSize.Width}×{bitmap.PixelSize.Height}");
-            e.Handled = true;
+            return;
         }
+
+        // 命名控件可能还没就绪（视图复用、XAML 没走 InitializeComponent 等），
+        // 这里再退一步用 FindControl，拿不到就静默——点图不该崩。
+        var viewer = ImageViewerLayer ?? this.FindControl<Controls.ImageViewer>("ImageViewerLayer");
+        if (viewer is null)
+        {
+            return;
+        }
+
+        viewer.Show(bitmap, $"{bitmap.PixelSize.Width}×{bitmap.PixelSize.Height}");
+        e.Handled = true;
     }
 
     private void OnAttachedToVisualTree(object? sender, VisualTreeAttachmentEventArgs e)

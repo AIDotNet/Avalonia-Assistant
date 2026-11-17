@@ -2,7 +2,6 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
-using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 
 namespace AvaloniaAssistant.UI.Controls;
@@ -30,16 +29,21 @@ public partial class ImageViewer : UserControl
 
     public ImageViewer()
     {
-        AvaloniaXamlLoader.Load(this);
+        // 必须走生成的 InitializeComponent：只有它会在 Load 之后把 x:Name 字段
+        // （Preview / Viewport / CaptionText / ZoomText / HintText）填上。
+        // 直接写 AvaloniaXamlLoader.Load(this) 只加载 XAML，字段全是 null，
+        // Show() 里一碰就是空引用。
+        InitializeComponent();
 
-        // 从别的 XAML 实例化时，构造函数里拿不到命名控件；Loaded 是最后一个可靠的时机。
+        EnsureWired();
+
+        // 兜底：控件被重新挂到别的树上时再确认一次接线（幂等）
         Loaded += (_, _) => EnsureWired();
     }
 
     /// <summary>
-    /// 控件是从别的 XAML 里实例化的，这种情形下 <c>AvaloniaXamlLoader.Load</c> 的命名控件
-    /// 要等外层填充完才有值，构造函数里读 <c>Preview</c> 会拿到 null。
-    /// 所以接线推迟到进可视树之后再做一次。
+    /// 接线：变换组、指针事件、尺寸变化。命名控件由 <see cref="InitializeComponent"/> 保证，
+    /// 这里再判一次空只是为了把「控件没加载出来」当成静默失败，而不是崩在用户脸上。
     /// </summary>
     private void EnsureWired()
     {
@@ -78,7 +82,9 @@ public partial class ImageViewer : UserControl
     public void Show(IImage source, string? caption = null)
     {
         EnsureWired();
-        if (Preview is null)
+
+        // 命名控件没拿到就什么都不做：宁可不弹，也不要抛空引用打断用户点图
+        if (Preview is null || CaptionText is null || Viewport is null || ZoomText is null || HintText is null)
         {
             return;
         }
@@ -105,7 +111,12 @@ public partial class ImageViewer : UserControl
 
         IsVisible = false;
         EndDrag();
-        Preview.Source = null;
+
+        if (Preview is not null)
+        {
+            Preview.Source = null;
+        }
+
         Closed?.Invoke(this, EventArgs.Empty);
     }
 
@@ -115,6 +126,11 @@ public partial class ImageViewer : UserControl
     /// </summary>
     private void CenterImage()
     {
+        if (Preview is null || Viewport is null)
+        {
+            return;
+        }
+
         var source = Preview.Source;
         if (source is null)
         {
@@ -140,6 +156,11 @@ public partial class ImageViewer : UserControl
     /// </summary>
     private void SetScale(double target, Point? anchor = null)
     {
+        if (Viewport is null)
+        {
+            return;
+        }
+
         var next = Math.Clamp(target, MinScale, MaxScale);
         if (Math.Abs(next - _scale) < 0.0001)
         {
@@ -169,6 +190,11 @@ public partial class ImageViewer : UserControl
     /// <summary>100% 时给一句操作提示，放大之后收起来，别一直压在图下面。</summary>
     private void UpdateChrome()
     {
+        if (ZoomText is null || HintText is null)
+        {
+            return;
+        }
+
         ZoomText.Text = $"{Math.Round(_scale * 100):0}%";
         HintText.IsVisible = Math.Abs(_scale - 1) < 0.001;
     }
@@ -181,7 +207,10 @@ public partial class ImageViewer : UserControl
         }
 
         _dragging = false;
-        Viewport.Cursor = new Cursor(StandardCursorType.Hand);
+        if (Viewport is not null)
+        {
+            Viewport.Cursor = new Cursor(StandardCursorType.Hand);
+        }
     }
 
     private void OnViewportPointerPressed(object? sender, PointerPressedEventArgs e)
@@ -229,7 +258,7 @@ public partial class ImageViewer : UserControl
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
     {
         base.OnPointerWheelChanged(e);
-        if (!IsVisible || e.Delta.Y == 0)
+        if (!IsVisible || e.Delta.Y == 0 || Viewport is null)
         {
             return;
         }
