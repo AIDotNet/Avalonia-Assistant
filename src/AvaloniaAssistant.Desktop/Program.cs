@@ -71,7 +71,7 @@ internal static class Program
                   .UsePlatformDetect()
                   .WithInterFont()
                   .WithArcFonts()
-                  .UseArc(arc => arc.UseArcControls())
+                  .UseArc(arc => arc.UseArcControls().UseArcMarkdown().UseArcHighlighting())
                   .LogToTrace();
 
         // LogToTrace 会装自己的 sink，要在它之后再覆盖，否则看不到绑定告警。

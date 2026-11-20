@@ -8,6 +8,8 @@
     <PackageVersion Include="Avalonia.Fonts.Inter" Version="$(AvaloniaVersion)" />
     <PackageVersion Include="TKCode.Arc" Version="$(ArcVersion)" />
     <PackageVersion Include="TKCode.Arc.Fonts" Version="$(ArcVersion)" />
+    <PackageVersion Include="TKCode.Arc.Markdown" Version="$(ArcVersion)" />
+    <PackageVersion Include="TKCode.Arc.Highlighting" Version="$(ArcVersion)" />
     <PackageVersion Include="Pi.Agent" Version="$(PiVersion)" />
     <PackageVersion Include="Pi.CodingAgent" Version="$(PiVersion)" />
     <PackageVersion Include="NAudio" Version="2.2.1" />

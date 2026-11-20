@@ -9,7 +9,7 @@
 | 项目 | 调研时 | 当前（2026-11-14） |
 | --- | --- | --- |
 | pi.net | 1.4.4，只取 `Pi.Agent` | **1.5.2.1**（Native AOT 补丁版），改用 `Pi.CodingAgent` 的 `Sdk.CreateAgentSessionAsync` 装配完整 `AgentSession` |
-| TKCode.Arc | 0.3.1-preview.3（AtomUI 生态） | **1.1.0 正式版**，自带控件体系，不再引用 `AtomUI.Desktop.Controls` |
+| TKCode.Arc | 0.3.1-preview.3（AtomUI 生态） | **1.3.0-preview.3**，自带控件体系，不再引用 `AtomUI.Desktop.Controls`；Markdown 与代码高亮另装 `TKCode.Arc.Markdown` / `.Highlighting` |
 | Avalonia | 12.1.4 | 12.1.6 |
 | CommunityToolkit.Mvvm | 8.4.0 | 8.4.2 |
 
@@ -30,7 +30,7 @@
 | 项目 | 本地路径 | 本次使用方式 | 调研时版本 |
 | --- | --- | --- | --- |
 | pi.net | `D:\AI\参考项目\pi.net` | NuGet 包 `Pi.CodingAgent`（传递引入 `Pi.Agent`、`Pi.Ai`、`Pi.Mcp`） | 1.4.4 |
-| TKCode.Arc | `D:\AI\参考项目\TKCode.Arc` | NuGet 包 `TKCode.Arc`、`TKCode.Arc.Fonts` | 0.3.1-preview.3 |
+| TKCode.Arc | `D:\AI\参考项目\TKCode.Arc` | NuGet 包 `TKCode.Arc`、`TKCode.Arc.Fonts`、`TKCode.Arc.Markdown`、`TKCode.Arc.Highlighting` | 1.3.0-preview.3 |
 
 > 包和本地源码在少数地方不完全一致，下面单独标注。实现以**包实际暴露的 API**为准，本地源码用来理解行为和边界。
 
@@ -137,18 +137,18 @@ new AgentTool(
 
 ### 2.1 结构
 
-Arc 0.x 是 AtomUI 之上的 Arc 风格组件库，依赖版本当时是精确锁定的（**下表只对 0.x 有效**）：
+Arc 1.x 自带控件体系，不再单独引用 `AtomUI.Desktop.Controls`；包对 Avalonia 的版本是区间约束：
 
 | 依赖 | 版本 |
 | --- | --- |
-| Avalonia | 12.1.4 |
-| AtomUI.Desktop.Controls | 6.2.8 |
-| StreamMark（Markdown / TextMate 高亮） | 0.1.0-alpha.25 |
+| Avalonia | 12.1.6（包要求 `[12.1.6, 13.0.0)`） |
+| AtomUI 主题系统 | 由 Arc 传递引入，本项目不再直接引用 |
+| StreamMark（Markdown / TextMate 高亮） | 1.1.1 起走 `TKCode.Arc.Markdown` / `.Highlighting`；1.3.0 起引擎并入 `TKCode.Arc.StreamMark*`（StreamMark 0.1.2） |
 
 组件按 Arc 侧边栏分类组织：`Buttons`、`Cards`、`Content`、`Editors`、`Messages`、`Navigation`、`Selects`、`TextFields`、`Toggles`、`Activity` 等。
 本项目主要用到：
 
-- `Content/Markdown`：流式 Markdown 与代码高亮；
+- `Markdown`（`TKCode.Arc.Markdown`）：流式 Markdown，围栏代码的高亮由 `TKCode.Arc.Highlighting` 提供；
 - `TextFields/Textarea`：输入框；
 - `TextFields/Input`：设置表单；
 - `Buttons/Button` 与 `ArcGlyph`：图标按钮；
@@ -162,31 +162,15 @@ AppBuilder.Configure<AssistantApp>()
     .UsePlatformDetect()
     .WithInterFont()
     .WithArcFonts()
-    .UseAtomUI(builder =>
-    {
-        builder.UseDesktopControls();
-        builder.UseArc();
-    });
+    .UseArc(arc => arc.UseArcControls().UseArcMarkdown().UseArcHighlighting());
 ```
 
-`UseArc()` 会把 Arc 的 ControlTheme 注册进 AtomUI 的主题系统；
-`UseAtomUI` 之后**不需要**再手动 `StyleInclude` Arc 的主题。
+`UseArc(...)` 一次装好控件与主题（1.x 起不再经 `UseAtomUI`），三个注册器各管一段：
+`UseArcControls()` 是控件，`UseArcMarkdown()` 是 `Markdown` / `ChatThread`，
+`UseArcHighlighting()` 是 TextMate 代码高亮。之后**不需要**再手动 `StyleInclude` 主题。
+0.x 时代这三样都在 `UseArcControls()` 里，1.1.1 之后要各自显式注册（见 2.3 第 4 条）。
 
-> **2026-11-14 补注**：上面是 Arc 0.x 的写法。1.x 起 Arc 自带控件体系，
-> 「两个核心框架」不再经 `UseAtomUI`，当前 `Program.BuildAvaloniaApp()` 是：
->
-> ```csharp
-> AppBuilder.Configure<AssistantApp>()
->     .UsePlatformDetect()
->     .WithInterFont()
->     .WithArcFonts()
->     .UseArc(arc => arc.UseArcControls())
->     .LogToTrace();
-> ```
->
-> `UseArcControls()` 一次装好控件与主题，同样不需要手动 `StyleInclude`。
-
-### 2.3 包与本地源码的三个差异（踩过的坑）
+### 2.3 包与本地源码的四个差异（踩过的坑）
 
 1. **XAML 命名空间变过一次。**
    preview.1 的包里是 `https://github.com/AtomUICommunity/TKCode.Arc`，
@@ -200,8 +184,16 @@ AppBuilder.Configure<AssistantApp>()
    `Zap` / `FolderOpen` / `Shield` / `Sparkles` / `Monitor`。
 
 3. **标准 Avalonia 控件没有主题。**
-   只调用 `UseAtomUI` 时，`Avalonia.Controls.TextBox` 能找到类型但**没有模板**，运行起来是隐形的。
+   只调用 `UseArcControls()` 时，`Avalonia.Controls.TextBox` 能找到类型但**没有模板**，运行起来是隐形的。
    因此输入框统一改用 Arc 的 `Input` / `Textarea`，不要混用标准 `TextBox`。
+
+4. **1.1.1 起 Markdown 和代码高亮搬出了主包。**
+   `Markdown`、`MarkdownHighlightPlugin`、`ChatThread`、`ChatComposer` 进了新包 `TKCode.Arc.Markdown`，
+   代码块的 TextMate 高亮进了 `TKCode.Arc.Highlighting`；`TKCode.Arc` 不再传递引入 StreamMark、Markdig、TextMate，
+   单包瘦了约 8.5 MiB。升级时只改版本号会编译不过
+   （`CS0234: 命名空间“TKCode.Arc”中不存在类型或命名空间名“Markdown”`），要补这两个包引用，
+   并在 `UseArc(...)` 里加 `UseArcMarkdown()` 和 `UseArcHighlighting()`。少了后者不报错，
+   只是围栏代码块退化成纯文本——实测加上后关键字是橙红、字符串是深绿。
 
 > 也试过加 `FluentTheme` 来补标准控件模板，但它会覆盖侧边栏导航按钮的背景（实测“助理”和“添加工作区”变成灰色块），
 > 所以最终没有引入 FluentTheme，而是全部使用 Arc 控件。

@@ -116,13 +116,15 @@ Windows 桌面 AI 助理。Agent 循环用 [pi.net](https://github.com/AIDotNet/
 
 | 层 | 框架 | 引用包 | 版本 |
 | --- | --- | --- | --- |
-| UI 框架 | [TKCode.Arc](https://github.com/AIDotNet/TKCode.Arc)（Arc 控件库） | `TKCode.Arc`、`TKCode.Arc.Fonts` | 1.1.0 |
+| UI 框架 | [TKCode.Arc](https://github.com/AIDotNet/TKCode.Arc)（Arc 控件库） | `TKCode.Arc`、`TKCode.Arc.Fonts`、`TKCode.Arc.Markdown`、`TKCode.Arc.Highlighting` | 1.3.0-preview.3 |
 | Agent 框架 | [pi.net](https://github.com/AIDotNet/pi.net)（Pi 的 .NET 移植） | `Pi.CodingAgent`（传递引入 `Pi.Agent` / `Pi.Ai` / `Pi.Mcp` 等） | 1.5.2.1 |
 
 - **TKCode.Arc 负责界面**：控件、主题、图标字体全部来自 Arc，入口在 `Program.BuildAvaloniaApp`
-  里一次装好——`WithArcFonts()` 加 `UseArc(arc => arc.UseArcControls())`，
+  里一次装好——`WithArcFonts()` 加
+  `UseArc(arc => arc.UseArcControls().UseArcMarkdown().UseArcHighlighting())`，
   页面、样式、VM 都在 `AvaloniaAssistant.UI`。Arc 1.x 起自带控件体系，
-  不再单独引用 `AtomUI.Desktop.Controls`。
+  不再单独引用 `AtomUI.Desktop.Controls`；1.1.1 起 Markdown 与代码高亮也不再在主包里，
+  要各自加包并显式注册，否则围栏代码块退化成纯文本。
 - **pi.net 负责 Agent**：`Sdk.CreateAgentSessionAsync` 装配出 `AgentSession`，技能、MCP、
   上下文压缩、自动重试都由它带着；模型出入仍由本项目自己的 provider 设置决定，
   通过 `ProviderConfigInput.StreamSimple` 直连 `Pi.Ai` 的流式实现，不读 `~/.pi/agent/auth.json`。

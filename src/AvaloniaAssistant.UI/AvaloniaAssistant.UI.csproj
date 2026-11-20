@@ -9,6 +9,8 @@
     <PackageReference Include="Avalonia.Fonts.Inter" />
     <PackageReference Include="TKCode.Arc" />
     <PackageReference Include="TKCode.Arc.Fonts" />
+    <PackageReference Include="TKCode.Arc.Markdown" />
+    <PackageReference Include="TKCode.Arc.Highlighting" />
     <PackageReference Include="CommunityToolkit.Mvvm" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
   </ItemGroup>
