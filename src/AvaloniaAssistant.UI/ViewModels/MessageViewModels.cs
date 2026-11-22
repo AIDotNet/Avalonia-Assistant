@@ -48,18 +48,18 @@ public sealed partial class UserMessageViewModel : MessageViewModel
     public IReadOnlyList<ChatImage> SourceImages { get; }
 
     /// <summary>气泡里显示的小图。解码时就缩到 120px 宽，几张 4K 截图也不会把内存吃穿。</summary>
-    public IReadOnlyList<Bitmap> Thumbnails { get; }
+    public IReadOnlyList<ChatImageThumbnail> Thumbnails { get; }
 
     public bool HasImages => Thumbnails.Count > 0;
 
-    private static IReadOnlyList<Bitmap> LoadThumbnails(IReadOnlyList<ChatImage> images)
+    private static IReadOnlyList<ChatImageThumbnail> LoadThumbnails(IReadOnlyList<ChatImage> images)
     {
         if (images.Count == 0)
         {
             return [];
         }
 
-        var thumbnails = new List<Bitmap>(images.Count);
+        var thumbnails = new List<ChatImageThumbnail>(images.Count);
         foreach (var image in images)
         {
             try
@@ -70,7 +70,7 @@ public sealed partial class UserMessageViewModel : MessageViewModel
                 }
 
                 using var stream = File.OpenRead(image.Path);
-                thumbnails.Add(Bitmap.DecodeToWidth(stream, 120));
+                thumbnails.Add(new ChatImageThumbnail(image, Bitmap.DecodeToWidth(stream, 120)));
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
             {
@@ -146,6 +146,22 @@ public sealed partial class UserMessageViewModel : MessageViewModel
         IsEditing = false;
         await EditRequested(text);
     }
+}
+
+/// <summary>
+/// 气泡里的一张图。<see cref="Bitmap"/> 只够在气泡里显示，点开看大图要按 <see cref="Source"/> 重新解码原文件。
+/// </summary>
+public sealed class ChatImageThumbnail
+{
+    public ChatImageThumbnail(ChatImage source, Bitmap bitmap)
+    {
+        Source = source;
+        Bitmap = bitmap;
+    }
+
+    public ChatImage Source { get; }
+
+    public Bitmap Bitmap { get; }
 }
 
 public sealed partial class ToolCallViewModel : ObservableObject
